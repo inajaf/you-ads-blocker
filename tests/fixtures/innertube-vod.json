@@ -1,0 +1,43 @@
+{
+  "playabilityStatus": { "status": "OK" },
+  "videoDetails": {
+    "title": "Never Gonna Give You Up",
+    "shortDescription": "Official video",
+    "author": "Rick Astley",
+    "channelId": "UCuAXFkgsw1L7xaCfnd5JJOw",
+    "lengthSeconds": "213",
+    "viewCount": "1000",
+    "isLiveContent": false,
+    "thumbnail": {
+      "thumbnails": [{ "url": "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg" }]
+    }
+  },
+  "streamingData": {
+    "formats": [
+      {
+        "url": "https://googlevideo.com/videoplayback?id=muxed360",
+        "mimeType": "video/mp4; codecs=\"avc1.42001E, mp4a.40.2\"",
+        "qualityLabel": "360p",
+        "width": 640,
+        "height": 360,
+        "bitrate": 500000
+      }
+    ],
+    "adaptiveFormats": [
+      {
+        "url": "https://googlevideo.com/videoplayback?id=video720",
+        "mimeType": "video/mp4; codecs=\"avc1.64001F\"",
+        "qualityLabel": "720p",
+        "width": 1280,
+        "height": 720,
+        "bitrate": 2000000
+      },
+      {
+        "url": "https://googlevideo.com/videoplayback?id=audio",
+        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+        "audioQuality": "AUDIO_QUALITY_MEDIUM",
+        "bitrate": 128000
+      }
+    ]
+  }
+}

@@ -1,0 +1,39 @@
+/* Hide common YouTube ad chrome when present */
+.ytp-ad-module,
+.ytp-ad-overlay-slot,
+.ytp-ad-overlay-container,
+.ytp-ad-text-overlay,
+.ytp-ad-player-overlay,
+.ytp-ad-player-overlay-layout,
+.ytp-ad-image-overlay,
+.ytp-ad-progress,
+.ytp-ad-progress-list,
+.video-ads,
+.ytp-ad-action-interstitial,
+ytd-ad-slot-renderer,
+ytd-banner-promo-renderer,
+ytd-player-legacy-desktop-watch-ads-renderer,
+ytd-action-companion-ad-renderer,
+ytd-promoted-sparkles-web-renderer,
+ytd-in-feed-ad-layout-renderer,
+ytd-engagement-panel-section-list-renderer[target-id='engagement-panel-ads'],
+#player-ads,
+#masthead-ad,
+#offer-module,
+.ytd-movie-offer-module-renderer,
+tp-yt-paper-dialog.ytd-popup-container,
+ytd-popup-container tp-yt-paper-dialog {
+  display: none !important;
+  visibility: hidden !important;
+  height: 0 !important;
+  max-height: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+}
+
+/* Premium / trial nags */
+ytd-mealbar-promo-renderer,
+yt-mealbar-promo-renderer,
+ytd-statement-banner-renderer {
+  display: none !important;
+}

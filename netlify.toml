@@ -1,0 +1,21 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+  functions = "netlify/functions"
+
+[[redirects]]
+  from = "/api/proxy"
+  to = "/.netlify/functions/proxy"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/media"
+  to = "/.netlify/functions/media"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
