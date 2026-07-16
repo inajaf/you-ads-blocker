@@ -37,3 +37,50 @@ yt-mealbar-promo-renderer,
 ytd-statement-banner-renderer {
   display: none !important;
 }
+
+/* Chrome App Mode navigation: visible only when content.js sees ?tube_app=1. */
+#tube-desktop-back {
+  display: inline-grid !important;
+  width: 44px !important;
+  min-width: 44px !important;
+  height: 44px !important;
+  margin: 0 4px !important;
+  padding: 0 !important;
+  place-items: center !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: transparent !important;
+  color: var(--yt-spec-text-primary, #0f0f0f) !important;
+  cursor: pointer !important;
+  touch-action: manipulation;
+  transition: background-color 180ms ease, transform 120ms ease !important;
+}
+
+#tube-desktop-back:hover {
+  background: var(--yt-spec-10-percent-layer, rgba(0, 0, 0, 0.1)) !important;
+}
+
+#tube-desktop-back:active {
+  transform: scale(0.94);
+}
+
+#tube-desktop-back:focus-visible {
+  outline: 3px solid #3ea6ff !important;
+  outline-offset: 2px !important;
+}
+
+#tube-desktop-back svg {
+  width: 26px !important;
+  height: 26px !important;
+  fill: none !important;
+  stroke: currentColor !important;
+  stroke-width: 2 !important;
+  stroke-linecap: round !important;
+  stroke-linejoin: round !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #tube-desktop-back {
+    transition: none !important;
+  }
+}

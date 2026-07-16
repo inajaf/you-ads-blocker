@@ -30,6 +30,31 @@ Developer mode, choose **Load unpacked**, and select `dist-extension/`.
 `npm run dev` is an alias for `npm run dev:local`. Port 5173 is strict so the
 extension/tunnel always talk to the same address.
 
+## Native wrappers
+
+- `desktop/` runs YouTube in Chrome App Mode with the unpacked Shield extension
+  and a persistent Google profile. See [`desktop/README.md`](desktop/README.md).
+- `android/` contains a native WebView wrapper backed by the shared ad-block
+  core in `adblock/`. See [`android/README.md`](android/README.md).
+
+## Testing install on a phone
+
+```bash
+npm run dev:phone
+```
+
+Starts Vite plus a Cloudflare quick tunnel (`cloudflared` must be installed,
+e.g. `brew install cloudflared`), prints the `https://*.trycloudflare.com`
+URL, and regenerates `phone-install-qr.png` for it on every run. Scan the QR
+shown in the terminal (or the PNG) with the phone, then install from the
+browser.
+
+Use this command — not `dev:ngrok` — for phone installs. ngrok's free tier
+serves an interstitial warning page to mobile browsers that replaces the
+manifest and service worker responses with HTML, so Chrome never offers the
+PWA install prompt. Quick tunnels have no interstitial and no auth wall; the
+random tunnel URL only lives while the command runs.
+
 ## Protected ngrok development
 
 Install/configure ngrok once:
@@ -65,8 +90,8 @@ npm run build:extension
 
 The catalog/media proxy accepts only fixed HTTPS Piped/Invidious origins and
 anchored media CDN hostnames. Redirects are manually revalidated, HTML/script
-responses are rejected, response sizes are capped, and direct InnerTube client
-impersonation is not used by the active resolver.
+responses are rejected, response sizes are capped, and the stream resolver
+limits direct InnerTube requests to YouTube's fixed HTTPS endpoints.
 
 History, likes, and watch-later data stay in the current browser profile.
 

@@ -1,0 +1,16 @@
+{
+  "name": "tube-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Desktop YouTube app window with supported Google sign-in and the Tube ad blocker.",
+  "main": "main.js",
+  "scripts": {
+    "prestart": "cd .. && npm run build:extension",
+    "start": "node start-chrome-app.mjs",
+    "login": "node login-and-start.mjs",
+    "start:electron": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^43.1.1"
+  }
+}

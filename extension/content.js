@@ -24,6 +24,55 @@ const SELECTORS_AD_STATE = [
 const STATE_EVENT = 'yt-ads-shield:state'
 let shieldEnabled = false
 
+const DESKTOP_APP_KEY = 'tube.desktopAppMode'
+const DESKTOP_BACK_ID = 'tube-desktop-back'
+
+function isDesktopAppMode() {
+  if (new URLSearchParams(location.search).get('tube_app') === '1') {
+    try {
+      sessionStorage.setItem(DESKTOP_APP_KEY, '1')
+    } catch {
+      /* ignore */
+    }
+    return true
+  }
+  try {
+    return sessionStorage.getItem(DESKTOP_APP_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function createBackButton() {
+  const button = document.createElement('button')
+  button.id = DESKTOP_BACK_ID
+  button.type = 'button'
+  button.setAttribute('aria-label', 'Go back')
+  button.title = 'Back (⌘[ or Alt+Left)'
+  button.innerHTML = `
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M15 18l-6-6 6-6" />
+    </svg>
+  `
+  button.addEventListener('click', () => {
+    if (history.length > 1) history.back()
+    else location.assign('https://www.youtube.com/')
+  })
+  return button
+}
+
+function ensureDesktopNavigation() {
+  if (!isDesktopAppMode() || document.getElementById(DESKTOP_BACK_ID)) return
+
+  const mastheadStart = document.querySelector('ytd-masthead #start')
+  if (!mastheadStart) return
+
+  const button = createBackButton()
+  const guideButton = mastheadStart.querySelector('#guide-button')
+  if (guideButton) guideButton.insertAdjacentElement('afterend', button)
+  else mastheadStart.prepend(button)
+}
+
 function publishState() {
   window.dispatchEvent(
     new CustomEvent(STATE_EVENT, {
@@ -154,6 +203,7 @@ const startObs = () => {
     attributes: true,
     attributeFilter: ['class'],
   })
+  ensureDesktopNavigation()
 }
 
 if (document.documentElement) startObs()
@@ -162,6 +212,7 @@ else document.addEventListener('DOMContentLoaded', startObs)
 // Also on SPA navigations
 let lastHref = location.href
 setInterval(() => {
+  ensureDesktopNavigation()
   if (location.href !== lastHref) {
     lastHref = location.href
     setTimeout(tick, 300)

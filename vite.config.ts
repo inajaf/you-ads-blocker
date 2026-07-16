@@ -12,17 +12,23 @@ export default defineConfig({
     host: '127.0.0.1',
     port: 5173,
     strictPort: true,
-    // dev:ngrok injects the one active tunnel host through Vite's supported env.
+    // dev:ngrok/dev:phone inject the one active tunnel host through Vite's supported env.
     allowedHosts: [],
   },
   plugins: [
     react(),
     pipedProxyPlugin(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // Prompt instead of silently auto-updating: the app shows a "new version
+      // available" toast and reloads only when the user taps it. We register the
+      // SW ourselves via virtual:pwa-register (src/pwa/updatePrompt.ts), so the
+      // plugin must not also inject its own registration script.
+      registerType: 'prompt',
+      injectRegister: null,
       // The ngrok tunnel uses HTTP Basic Auth. Manifest requests omit
       // credentials by default, so explicitly opt in or Chrome cannot verify
-      // installability behind the protected tunnel.
+      // installability behind the protected tunnel. (Phone installs go
+      // through dev:phone — ngrok's free-tier interstitial blocks them.)
       useCredentials: true,
       includeAssets: ['favicon.svg', 'media-sw-fetch.js'],
       // Dev: enable SW so /__tube_media works for max-quality MSE locally

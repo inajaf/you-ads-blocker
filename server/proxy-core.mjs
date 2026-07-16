@@ -1,4 +1,4 @@
-import { videoIdFromStreamsPath } from './innertube.mjs'
+import { fetchYouTubeStreams, videoIdFromStreamsPath } from './innertube.mjs'
 import { fetchInvidiousStreams } from './invidious.mjs'
 import {
   browserPlayScore,
@@ -24,6 +24,20 @@ export const DEFAULT_INSTANCES = [
 
 /** Strong enough to return without waiting remaining backends. */
 const FAST_SCORE = 100
+
+/**
+ * Prefer direct extractors over public proxies. InnerTube (the NewPipe/Brave
+ * approach) returns fresh googlevideo URLs with a full adaptive ladder + audio;
+ * Invidious often returns direct googlevideo too; Piped proxies are the last
+ * resort (frequently 360p-only or dead LBRY/odycdn fallbacks). This dominates
+ * the raw play-score, which over-rewards Piped's proxied /videoplayback URLs.
+ */
+function sourceRank(source) {
+  const s = String(source || '')
+  if (s.startsWith('innertube')) return 3
+  if (s.startsWith('invidious')) return 2
+  return 1
+}
 const ALLOWED_API_ORIGINS = new Set(DEFAULT_INSTANCES.map((base) => new URL(base).origin))
 const ALLOWED_API_PATHS = [
   /^\/trending(?:\?|$)/,
@@ -157,8 +171,18 @@ async function resolveStreams(videoId, bases) {
 
   const tryAdd = (c) => {
     add(c)
-    if (c && c.score >= FAST_SCORE) resolveFirstStrong(c)
+    // Only short-circuit on a strong *direct* extractor. A strong Piped score is
+    // usually an inflated proxied-URL score hiding a 360p-only result, so let the
+    // direct backends finish before settling for it.
+    if (c && c.score >= FAST_SCORE && sourceRank(c.source) >= 2) resolveFirstStrong(c)
   }
+
+  const innertubeJob = fetchYouTubeStreams(videoId, { deadlineMs: 12000 })
+    .then((r) => {
+      tryAdd(toCandidate(r, r?._source || 'innertube'))
+      return r
+    })
+    .catch(() => null)
 
   const pipedJob = racePiped(bases, path)
     .then((r) => {
@@ -176,7 +200,7 @@ async function resolveStreams(videoId, bases) {
     })
     .catch(() => null)
 
-  const allDone = Promise.all([pipedJob, invJob])
+  const allDone = Promise.all([innertubeJob, pipedJob, invJob])
 
   // Wait for first strong candidate OR all backends finished (max ~16s wall)
   await Promise.race([
@@ -187,7 +211,9 @@ async function resolveStreams(videoId, bases) {
 
   // If we already have a strong winner, don't block; otherwise wait briefly for stragglers
   const bestNow = () => {
-    candidates.sort((a, b) => b.score - a.score)
+    candidates.sort(
+      (a, b) => sourceRank(b.source) - sourceRank(a.source) || b.score - a.score,
+    )
     return candidates.find((c) => c.score >= 40) || candidates[0] || null
   }
 

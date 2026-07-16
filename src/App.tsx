@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { BottomNav } from './components/BottomNav'
 import { InstallBanner } from './components/InstallBanner'
+import { UpdateToast } from './components/UpdateToast'
 
 const HomePage = lazy(() => import('./pages/HomePage').then((m) => ({ default: m.HomePage })))
 const SearchPage = lazy(() => import('./pages/SearchPage').then((m) => ({ default: m.SearchPage })))
@@ -42,6 +43,7 @@ function Shell() {
         </Suspense>
       </main>
       {!hide && <BottomNav />}
+      <UpdateToast />
     </div>
   )
 }
