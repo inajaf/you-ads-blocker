@@ -10,6 +10,7 @@
     "dev:ngrok": "node scripts/dev-ngrok.mjs",
     "dev:phone": "node scripts/dev-phone.mjs",
     "build": "tsc -b && vite build",
+    "build:sites": "npm run build && node scripts/build-sites-worker.mjs",
     "test": "node --experimental-strip-types --test tests/**/*.test.mjs",
     "preview": "vite preview",
     "build:extension": "node scripts/pack-extension.mjs"
