@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "YT Ads Shield",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Blocks YouTube ads like browser ad blockers — runs on youtube.com. No API keys.",
   "permissions": [
     "declarativeNetRequest",
@@ -46,7 +46,7 @@
         "*://*.youtube.com/*",
         "*://*.youtube-nocookie.com/*"
       ],
-      "js": ["content.js"],
+      "js": ["desktop-guide.js", "content.js"],
       "css": ["content.css"],
       "run_at": "document_start",
       "all_frames": true
