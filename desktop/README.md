@@ -41,6 +41,18 @@ cd desktop
 npm start
 ```
 
+## First-use guide
+
+On the first app launch, Tube opens a four-step guide over YouTube that explains:
+
+1. how to browse, search, and play videos in the dedicated window;
+2. that YT Ads Shield runs automatically;
+3. how to use Tube's Back button when Chrome's toolbar is hidden; and
+4. where the dedicated profile keeps the Google sign-in.
+
+Finish or skip the guide to dismiss it. Use the question-mark button beside
+Tube's Back button in the YouTube header whenever you want to reopen it.
+
 Set `TUBE_PROFILE_DIR` to use a different persistent Chrome profile directory.
 The Electron implementation remains available as the development fallback via
 `npm run start:electron`.
