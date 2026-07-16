@@ -15,6 +15,10 @@ dev-dist
 .playwright-mcp
 *.local
 
+# Generated local verification artifacts
+phone-install-qr.png
+desktop/screenshot.png
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

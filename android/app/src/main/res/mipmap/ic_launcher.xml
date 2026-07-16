@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fallback launcher icon for API 24-25 (which ignore mipmap-anydpi-v26).
+     A layer-list is valid on every API level: a dark background with the same
+     white play triangle inset toward the centre. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <color android:color="@color/ic_launcher_background" />
+    </item>
+    <item
+        android:drawable="@drawable/ic_launcher_foreground"
+        android:left="12dp"
+        android:top="12dp"
+        android:right="12dp"
+        android:bottom="12dp" />
+</layer-list>
