@@ -1,0 +1,40 @@
+import { describe, it } from 'node:test'
+import assert from 'node:assert/strict'
+import { EventEmitter } from 'node:events'
+
+import { waitForChromeStartup } from '../desktop/chrome-launch.mjs'
+
+class FakeChild extends EventEmitter {}
+
+describe('Chrome launcher lifecycle', () => {
+  it('accepts a process that remains alive through the startup grace period', async () => {
+    const child = new FakeChild()
+    const startup = waitForChromeStartup(child, { graceMs: 1 })
+    child.emit('spawn')
+    assert.deepEqual(await startup, { forwarded: false })
+  })
+
+  it('accepts a successful request forwarded to an existing profile', async () => {
+    const child = new FakeChild()
+    const startup = waitForChromeStartup(child, {
+      graceMs: 50,
+      isProfileRunning: async () => true,
+    })
+    child.emit('spawn')
+    child.emit('exit', 0, null)
+    assert.deepEqual(await startup, { forwarded: true })
+  })
+
+  it('rejects spawn errors and early process exits', async () => {
+    const spawnErrorChild = new FakeChild()
+    const spawnError = waitForChromeStartup(spawnErrorChild, { graceMs: 1 })
+    spawnErrorChild.emit('error', new Error('EACCES'))
+    await assert.rejects(spawnError, /EACCES/)
+
+    const exitedChild = new FakeChild()
+    const exited = waitForChromeStartup(exitedChild, { graceMs: 50 })
+    exitedChild.emit('spawn')
+    exitedChild.emit('exit', 1, null)
+    await assert.rejects(exited, /exit code 1/)
+  })
+})

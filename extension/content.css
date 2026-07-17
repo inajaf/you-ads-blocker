@@ -20,9 +20,7 @@ ytd-engagement-panel-section-list-renderer[target-id='engagement-panel-ads'],
 #player-ads,
 #masthead-ad,
 #offer-module,
-.ytd-movie-offer-module-renderer,
-tp-yt-paper-dialog.ytd-popup-container,
-ytd-popup-container tp-yt-paper-dialog {
+.ytd-movie-offer-module-renderer {
   display: none !important;
   visibility: hidden !important;
   height: 0 !important;
@@ -95,7 +93,7 @@ ytd-statement-banner-renderer {
   max-height: min(680px, calc(100dvh - 32px)) !important;
   margin: auto !important;
   padding: 0 !important;
-  overflow: hidden !important;
+  overflow: auto !important;
   border: 1px solid rgba(129, 140, 248, 0.35) !important;
   border-radius: 24px !important;
   background: #101018 !important;
@@ -365,12 +363,23 @@ ytd-statement-banner-renderer {
 }
 
 #tube-desktop-guide .tube-guide-next {
-  background: linear-gradient(135deg, #f43f5e, #e11d48) !important;
+  background: linear-gradient(135deg, #be123c, #9f1239) !important;
   box-shadow: 0 8px 26px rgba(225, 29, 72, 0.24) !important;
 }
 
 #tube-desktop-guide .tube-guide-next:hover {
-  background: linear-gradient(135deg, #fb7185, #f43f5e) !important;
+  background: linear-gradient(135deg, #e11d48, #be123c) !important;
+}
+
+@media (max-height: 560px) and (min-width: 681px) {
+  #tube-desktop-guide .tube-guide-shell {
+    min-height: 0 !important;
+  }
+
+  #tube-desktop-guide .tube-guide-visual,
+  #tube-desktop-guide .tube-guide-content {
+    min-height: 520px !important;
+  }
 }
 
 @media (max-width: 680px) {

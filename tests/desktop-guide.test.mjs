@@ -81,4 +81,22 @@ describe('desktop first-run guide model', () => {
     assert.match(preload, /tube\.electronDesktopGuideVersion/)
     assert.doesNotMatch(guideUI, /\.innerHTML\s*=/)
   })
+
+  it('carries completed onboarding across the Electron to Chrome handoff', () => {
+    const content = fs.readFileSync(
+      new URL('../extension/content.js', import.meta.url),
+      'utf8',
+    )
+    assert.match(content, /tube_guide/)
+    assert.match(content, /setCompletedVersion\(desktopGuide\.VERSION\)/)
+    assert.match(content, /history\.replaceState/)
+  })
+
+  it('keeps the guide usable in short windows with an accessible CTA', () => {
+    const css = fs.readFileSync(new URL('../extension/content.css', import.meta.url), 'utf8')
+    assert.match(css, /max-height:\s*560px/)
+    assert.match(css, /overflow:\s*auto/)
+    assert.doesNotMatch(css, /ytd-popup-container tp-yt-paper-dialog/)
+    assert.doesNotMatch(css, /#fb7185/)
+  })
 })
