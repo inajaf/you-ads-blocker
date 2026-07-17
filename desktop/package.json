@@ -8,6 +8,7 @@
     "prestart": "cd .. && npm run build:extension",
     "start": "node start-chrome-app.mjs",
     "login": "node login-and-start.mjs",
+    "prestart:electron": "cd .. && npm run build:extension",
     "start:electron": "electron ."
   },
   "devDependencies": {

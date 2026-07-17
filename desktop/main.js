@@ -55,8 +55,8 @@ let chromeHandoffStarted = false
 
 function findExtensionDir() {
   const candidates = [
-    path.join(__dirname, '..', 'extension'),
     path.join(__dirname, '..', 'dist-extension'),
+    path.join(__dirname, '..', 'extension'),
   ]
   return candidates.find((dir) => fs.existsSync(path.join(dir, 'manifest.json')))
 }
