@@ -1,8 +1,10 @@
 import { before, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
 
 before(async () => {
   await import('../extension/desktop-guide.js')
+  await import('../extension/desktop-guide-ui.js')
 })
 
 describe('desktop first-run guide model', () => {
@@ -20,6 +22,15 @@ describe('desktop first-run guide model', () => {
     }
   })
 
+  it('explains the supported Chrome handoff only in Electron', () => {
+    const guide = globalThis.TubeDesktopGuide
+    const electronGuide = guide.forEnvironment('electron')
+    assert.notEqual(electronGuide, guide)
+    assert.match(electronGuide.STEPS[0].description, /supported Chrome app window/)
+    assert.match(electronGuide.STEPS[0].points[0], /blocks account sign-in inside Electron/)
+    assert.doesNotMatch(guide.STEPS[0].description, /Electron/)
+  })
+
   it('shows again only when the stored guide version is behind', () => {
     const guide = globalThis.TubeDesktopGuide
     assert.equal(guide.isFirstRun(undefined), true)
@@ -35,5 +46,39 @@ describe('desktop first-run guide model', () => {
     assert.equal(guide.clampStep(999), guide.STEPS.length - 1)
     assert.equal(guide.hasNextStep(0), true)
     assert.equal(guide.hasNextStep(guide.STEPS.length - 1), false)
+  })
+
+  it('adapts persistent Web Storage for the Electron guide', async () => {
+    const values = new Map()
+    const webStorage = {
+      getItem(key) {
+        return values.has(key) ? values.get(key) : null
+      },
+      setItem(key, value) {
+        values.set(key, value)
+      },
+    }
+    const storage = globalThis.TubeDesktopGuideUI.createWebStorageAdapter(
+      webStorage,
+      'guide-version',
+    )
+
+    assert.equal(await storage.getCompletedVersion(), 0)
+    await storage.setCompletedVersion(globalThis.TubeDesktopGuide.VERSION)
+    assert.equal(await storage.getCompletedVersion(), globalThis.TubeDesktopGuide.VERSION)
+  })
+
+  it('loads the shared guide model, UI, and styles from Electron preload', () => {
+    const preload = fs.readFileSync(new URL('../desktop/preload.js', import.meta.url), 'utf8')
+    const guideUI = fs.readFileSync(
+      new URL('../extension/desktop-guide-ui.js', import.meta.url),
+      'utf8',
+    )
+    assert.match(preload, /extension.*desktop-guide\.js/s)
+    assert.match(preload, /extension.*desktop-guide-ui\.js/s)
+    assert.match(preload, /extension.*content\.css/s)
+    assert.match(preload, /TubeDesktopGuideUI\.install/)
+    assert.match(preload, /tube\.electronDesktopGuideVersion/)
+    assert.doesNotMatch(guideUI, /\.innerHTML\s*=/)
   })
 })

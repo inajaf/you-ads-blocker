@@ -1,11 +1,11 @@
 import { spawn } from 'node:child_process'
+import chromeAuth from './chrome-auth.js'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromePath, ensureChromeRuntime, profileDir } from './runtime-paths.mjs'
 
 const desktopDir = path.dirname(fileURLToPath(import.meta.url))
-const loginUrl =
-  'https://accounts.google.com/ServiceLogin?service=youtube&continue=https%3A%2F%2Fwww.youtube.com%2F'
+const { GOOGLE_LOGIN_URL } = chromeAuth
 
 ensureChromeRuntime()
 
@@ -20,7 +20,7 @@ const login = spawn(
     '--no-default-browser-check',
     '--disable-background-mode',
     '--disable-infobars',
-    `--app=${loginUrl}`,
+    `--app=${GOOGLE_LOGIN_URL}`,
   ],
   { stdio: 'inherit' },
 )

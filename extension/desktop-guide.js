@@ -1,5 +1,5 @@
 /**
- * Shared, dependency-free model for the Chrome App Mode first-run guide.
+ * Shared, dependency-free model for the Tube desktop first-run guide.
  *
  * This file is loaded before content.js as a classic content script. Keeping
  * the step data and navigation rules here also lets Node exercise them without
@@ -24,7 +24,7 @@
       eyebrow: 'Automatic protection',
       title: 'YT Ads Shield is already running',
       description:
-        'The bundled Shield extension starts with the app and filters known YouTube ad requests automatically.',
+        'Tube starts its built-in Shield protection with the app and filters known YouTube ad requests automatically.',
       points: Object.freeze([
         'There is nothing to enable on each video.',
         'Keep Tube updated because YouTube changes its player regularly.',
@@ -35,7 +35,7 @@
       eyebrow: 'App navigation',
       title: 'Use the Tube Back button when you need it',
       description:
-        'Chrome App Mode hides the normal browser toolbar, so Tube adds its own Back control to the YouTube header.',
+        'Tube hides the normal browser toolbar, so it adds its own Back control to the YouTube header.',
       points: Object.freeze([
         'Select the left arrow beside the YouTube menu.',
         'Keyboard alternatives: Command + [ on Mac or Alt + Left on Windows.',
@@ -55,25 +55,46 @@
     }),
   ])
 
-  function clampStep(index) {
-    const number = Number.isFinite(index) ? Math.trunc(index) : 0
-    return Math.min(Math.max(number, 0), STEPS.length - 1)
+  const ELECTRON_STEPS = Object.freeze(
+    STEPS.map((step, index) => {
+      if (index !== 0) return step
+      return Object.freeze({
+        ...step,
+        description:
+          'Browse as a guest here. When you choose Sign in, Tube switches to a supported Chrome app window.',
+        points: Object.freeze([
+          'Google blocks account sign-in inside Electron, so Tube never asks you to bypass that warning.',
+          'The private Tube Chrome profile remembers your Google session.',
+        ]),
+      })
+    }),
+  )
+
+  function createGuide(steps) {
+    function clampStep(index) {
+      const number = Number.isFinite(index) ? Math.trunc(index) : 0
+      return Math.min(Math.max(number, 0), steps.length - 1)
+    }
+
+    function hasNextStep(index) {
+      return clampStep(index) < steps.length - 1
+    }
+
+    function isFirstRun(completedVersion) {
+      const version = Number(completedVersion)
+      return !Number.isFinite(version) || version < VERSION
+    }
+
+    return Object.freeze({ VERSION, STEPS: steps, clampStep, hasNextStep, isFirstRun })
   }
 
-  function hasNextStep(index) {
-    return clampStep(index) < STEPS.length - 1
-  }
-
-  function isFirstRun(completedVersion) {
-    const version = Number(completedVersion)
-    return !Number.isFinite(version) || version < VERSION
-  }
+  const chromeGuide = createGuide(STEPS)
+  const electronGuide = createGuide(ELECTRON_STEPS)
 
   global.TubeDesktopGuide = Object.freeze({
-    VERSION,
-    STEPS,
-    clampStep,
-    hasNextStep,
-    isFirstRun,
+    ...chromeGuide,
+    forEnvironment(environment) {
+      return environment === 'electron' ? electronGuide : chromeGuide
+    },
   })
 })(globalThis)

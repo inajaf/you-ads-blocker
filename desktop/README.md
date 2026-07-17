@@ -55,4 +55,7 @@ Tube's Back button in the YouTube header whenever you want to reopen it.
 
 Set `TUBE_PROFILE_DIR` to use a different persistent Chrome profile directory.
 The Electron implementation remains available as the development fallback via
-`npm run start:electron`.
+`npm run start:electron`. It loads the same guide and keeps its dismissal state
+in the persistent Electron profile. Google does not support account sign-in
+inside Electron: when you choose **Sign in**, Tube opens a separate supported
+Chrome App window with the private Tube profile and closes the Electron window.

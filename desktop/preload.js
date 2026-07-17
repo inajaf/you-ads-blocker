@@ -14,17 +14,42 @@ const fs = require('fs')
 const path = require('path')
 const { webFrame } = require('electron')
 
-try {
-  const injectPath = path.join(__dirname, '..', 'adblock', 'inject.js')
-  const code = fs.readFileSync(injectPath, 'utf8')
-  webFrame
-    .executeJavaScript(code)
-    .then(() => {
-      console.log('[Tube] preload injected adblock/inject.js into page world')
-    })
-    .catch((err) => {
-      console.error('[Tube] preload executeJavaScript failed:', err)
-    })
-} catch (err) {
-  console.error('[Tube] preload failed to read inject.js:', err)
+const ELECTRON_GUIDE_STORAGE_KEY = 'tube.electronDesktopGuideVersion'
+
+function readProjectFile(...segments) {
+  return fs.readFileSync(path.join(__dirname, '..', ...segments), 'utf8')
 }
+
+async function executeProjectScript(segments, label) {
+  await webFrame.executeJavaScript(readProjectFile(...segments))
+  console.log(`[Tube] preload injected ${label} into page world`)
+}
+
+async function initializePage() {
+  await executeProjectScript(['adblock', 'inject.js'], 'adblock/inject.js')
+
+  webFrame.insertCSS(readProjectFile('extension', 'content.css'))
+  await executeProjectScript(
+    ['extension', 'desktop-guide.js'],
+    'extension/desktop-guide.js',
+  )
+  await executeProjectScript(
+    ['extension', 'desktop-guide-ui.js'],
+    'extension/desktop-guide-ui.js',
+  )
+
+  await webFrame.executeJavaScript(`
+    globalThis.TubeDesktopGuideUI.install({
+      guide: globalThis.TubeDesktopGuide.forEnvironment('electron'),
+      storage: globalThis.TubeDesktopGuideUI.createWebStorageAdapter(
+        globalThis.localStorage,
+        ${JSON.stringify(ELECTRON_GUIDE_STORAGE_KEY)}
+      ),
+    })
+  `)
+  console.log('[Tube] Electron first-run guide initialized')
+}
+
+initializePage().catch((error) => {
+  console.error('[Tube] preload initialization failed:', error)
+})
