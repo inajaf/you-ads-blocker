@@ -38,7 +38,7 @@ ytd-statement-banner-renderer {
   display: none !important;
 }
 
-/* Chrome App Mode navigation: visible only when content.js sees ?tube_app=1. */
+/* Tube desktop navigation, shared by Chrome App Mode and Electron. */
 #tube-desktop-back,
 #tube-desktop-help {
   display: inline-grid !important;

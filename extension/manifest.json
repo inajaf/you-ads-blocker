@@ -46,7 +46,7 @@
         "*://*.youtube.com/*",
         "*://*.youtube-nocookie.com/*"
       ],
-      "js": ["desktop-guide.js", "content.js"],
+      "js": ["desktop-guide.js", "desktop-guide-ui.js", "content.js"],
       "css": ["content.css"],
       "run_at": "document_start",
       "all_frames": true

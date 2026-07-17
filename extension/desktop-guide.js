@@ -1,5 +1,5 @@
 /**
- * Shared, dependency-free model for the Chrome App Mode first-run guide.
+ * Shared, dependency-free model for the Tube desktop first-run guide.
  *
  * This file is loaded before content.js as a classic content script. Keeping
  * the step data and navigation rules here also lets Node exercise them without
@@ -24,7 +24,7 @@
       eyebrow: 'Automatic protection',
       title: 'YT Ads Shield is already running',
       description:
-        'The bundled Shield extension starts with the app and filters known YouTube ad requests automatically.',
+        'Tube starts its built-in Shield protection with the app and filters known YouTube ad requests automatically.',
       points: Object.freeze([
         'There is nothing to enable on each video.',
         'Keep Tube updated because YouTube changes its player regularly.',
@@ -35,7 +35,7 @@
       eyebrow: 'App navigation',
       title: 'Use the Tube Back button when you need it',
       description:
-        'Chrome App Mode hides the normal browser toolbar, so Tube adds its own Back control to the YouTube header.',
+        'Tube hides the normal browser toolbar, so it adds its own Back control to the YouTube header.',
       points: Object.freeze([
         'Select the left arrow beside the YouTube menu.',
         'Keyboard alternatives: Command + [ on Mac or Alt + Left on Windows.',
