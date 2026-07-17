@@ -22,6 +22,15 @@ describe('desktop first-run guide model', () => {
     }
   })
 
+  it('explains the supported Chrome handoff only in Electron', () => {
+    const guide = globalThis.TubeDesktopGuide
+    const electronGuide = guide.forEnvironment('electron')
+    assert.notEqual(electronGuide, guide)
+    assert.match(electronGuide.STEPS[0].description, /supported Chrome app window/)
+    assert.match(electronGuide.STEPS[0].points[0], /blocks account sign-in inside Electron/)
+    assert.doesNotMatch(guide.STEPS[0].description, /Electron/)
+  })
+
   it('shows again only when the stored guide version is behind', () => {
     const guide = globalThis.TubeDesktopGuide
     assert.equal(guide.isFirstRun(undefined), true)

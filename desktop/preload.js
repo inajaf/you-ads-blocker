@@ -40,7 +40,7 @@ async function initializePage() {
 
   await webFrame.executeJavaScript(`
     globalThis.TubeDesktopGuideUI.install({
-      guide: globalThis.TubeDesktopGuide,
+      guide: globalThis.TubeDesktopGuide.forEnvironment('electron'),
       storage: globalThis.TubeDesktopGuideUI.createWebStorageAdapter(
         globalThis.localStorage,
         ${JSON.stringify(ELECTRON_GUIDE_STORAGE_KEY)}

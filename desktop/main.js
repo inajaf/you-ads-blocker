@@ -1,13 +1,15 @@
 'use strict'
 
-const { app, BrowserWindow, Menu, session } = require('electron')
+const { spawn } = require('child_process')
+const { app, BrowserWindow, dialog, Menu, session } = require('electron')
 const path = require('path')
 const fs = require('fs')
+const { createChromeHandoffArgs, isGoogleSignInUrl } = require('./chrome-auth')
 
-// Google rejects Electron's default `Electron/x.y` browser token during sign-in.
-// Use the exact Chromium engine bundled with this Electron build while keeping
-// the normal desktop Chrome UA shape. This is applied before any window or
-// network session is created so accounts.google.com sees one consistent UA.
+// Keep YouTube rendering consistent with the Chromium engine bundled in this
+// Electron build. Google account authentication is handled separately in a
+// supported Chrome window because changing the UA cannot make Electron an
+// accepted Google sign-in client.
 const chromeVersion = process.versions.chrome
 const chromeUserAgent = [
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
@@ -49,6 +51,63 @@ function registerNetworkBlocking(sess) {
 }
 
 let mainWindow = null
+let chromeHandoffStarted = false
+
+function findExtensionDir() {
+  const candidates = [
+    path.join(__dirname, '..', 'extension'),
+    path.join(__dirname, '..', 'dist-extension'),
+  ]
+  return candidates.find((dir) => fs.existsSync(path.join(dir, 'manifest.json')))
+}
+
+function showChromeHandoffError(error) {
+  chromeHandoffStarted = false
+  console.error('[Tube] failed to open supported Chrome sign-in:', error)
+  mainWindow?.show()
+  dialog.showErrorBox(
+    'Chrome sign-in is unavailable',
+    `${error.message}\n\nInstall the Tube Chrome runtime or set TUBE_CHROME_PATH and try again.`,
+  )
+}
+
+async function openSupportedChromeSignIn() {
+  if (chromeHandoffStarted) return
+  chromeHandoffStarted = true
+
+  try {
+    const { chromePath, profileDir } = await import('./runtime-paths.mjs')
+    if (!fs.existsSync(chromePath)) {
+      throw new Error(`Chrome for Testing was not found at ${chromePath}`)
+    }
+
+    const extensionDir = findExtensionDir()
+    if (!extensionDir) {
+      throw new Error('The Tube Chrome extension is not available')
+    }
+
+    const chrome = spawn(
+      chromePath,
+      createChromeHandoffArgs({ profileDir, extensionDir }),
+      { detached: true, stdio: 'ignore' },
+    )
+    chrome.once('error', showChromeHandoffError)
+    chrome.once('spawn', () => {
+      chrome.unref()
+      console.log('[Tube] Google sign-in handed off to supported Chrome')
+      app.quit()
+    })
+  } catch (error) {
+    showChromeHandoffError(error)
+  }
+}
+
+function redirectGoogleSignIn(event, url) {
+  if (!isGoogleSignInUrl(url)) return false
+  event.preventDefault()
+  void openSupportedChromeSignIn()
+  return true
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -72,9 +131,20 @@ function createWindow() {
     console.log('[renderer]', message)
   })
 
-  // Also pin the top-level webContents UA. The default session is persistent,
-  // so Google cookies survive normal application restarts after sign-in.
+  // Also pin the top-level webContents UA for normal YouTube browsing.
   mainWindow.webContents.setUserAgent(chromeUserAgent)
+
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    redirectGoogleSignIn(event, url)
+  })
+  mainWindow.webContents.on('will-redirect', (event, url) => {
+    redirectGoogleSignIn(event, url)
+  })
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (!isGoogleSignInUrl(url)) return { action: 'allow' }
+    void openSupportedChromeSignIn()
+    return { action: 'deny' }
+  })
 
   mainWindow.loadURL('https://www.youtube.com')
 
@@ -99,7 +169,8 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
-  // Use the default (persistent) session so Google login/cookies persist.
+  // Keep normal renderer state persistent. Google authentication itself is
+  // redirected to the dedicated Chrome profile above.
   registerNetworkBlocking(session.defaultSession)
 
   createWindow()

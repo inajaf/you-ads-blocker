@@ -55,25 +55,46 @@
     }),
   ])
 
-  function clampStep(index) {
-    const number = Number.isFinite(index) ? Math.trunc(index) : 0
-    return Math.min(Math.max(number, 0), STEPS.length - 1)
+  const ELECTRON_STEPS = Object.freeze(
+    STEPS.map((step, index) => {
+      if (index !== 0) return step
+      return Object.freeze({
+        ...step,
+        description:
+          'Browse as a guest here. When you choose Sign in, Tube switches to a supported Chrome app window.',
+        points: Object.freeze([
+          'Google blocks account sign-in inside Electron, so Tube never asks you to bypass that warning.',
+          'The private Tube Chrome profile remembers your Google session.',
+        ]),
+      })
+    }),
+  )
+
+  function createGuide(steps) {
+    function clampStep(index) {
+      const number = Number.isFinite(index) ? Math.trunc(index) : 0
+      return Math.min(Math.max(number, 0), steps.length - 1)
+    }
+
+    function hasNextStep(index) {
+      return clampStep(index) < steps.length - 1
+    }
+
+    function isFirstRun(completedVersion) {
+      const version = Number(completedVersion)
+      return !Number.isFinite(version) || version < VERSION
+    }
+
+    return Object.freeze({ VERSION, STEPS: steps, clampStep, hasNextStep, isFirstRun })
   }
 
-  function hasNextStep(index) {
-    return clampStep(index) < STEPS.length - 1
-  }
-
-  function isFirstRun(completedVersion) {
-    const version = Number(completedVersion)
-    return !Number.isFinite(version) || version < VERSION
-  }
+  const chromeGuide = createGuide(STEPS)
+  const electronGuide = createGuide(ELECTRON_STEPS)
 
   global.TubeDesktopGuide = Object.freeze({
-    VERSION,
-    STEPS,
-    clampStep,
-    hasNextStep,
-    isFirstRun,
+    ...chromeGuide,
+    forEnvironment(environment) {
+      return environment === 'electron' ? electronGuide : chromeGuide
+    },
   })
 })(globalThis)
