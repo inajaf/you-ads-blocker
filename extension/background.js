@@ -1,6 +1,31 @@
 /** Service worker — owns the effective Shield + DNR state. */
 
+importScripts('desktop-window-guard.js')
+
+const {
+  createDesktopWindowGuard,
+  DESKTOP_APP_WINDOW_MESSAGE,
+} = globalThis.NoirvaDesktopWindowGuard
+
 const DEFAULTS = { enabled: true }
+
+const desktopWindowGuard = createDesktopWindowGuard({
+  tabs: chrome.tabs,
+  windows: chrome.windows,
+  sessionStorage: chrome.storage.session,
+})
+
+chrome.windows.onCreated.addListener((createdWindow) => {
+  desktopWindowGuard.handleWindowCreated(createdWindow).catch((error) => {
+    console.error('[Noirva] failed to handle the Chrome reopen window:', error)
+  })
+})
+
+chrome.windows.onRemoved.addListener((windowId) => {
+  desktopWindowGuard.handleWindowRemoved(windowId).catch((error) => {
+    console.error('[Noirva] failed to clear the desktop app window:', error)
+  })
+})
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.storage.sync.get(DEFAULTS, (cfg) => {
@@ -17,7 +42,15 @@ async function getStatus() {
   }
 }
 
-chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg?.type === DESKTOP_APP_WINDOW_MESSAGE) {
+    desktopWindowGuard
+      .registerAppWindow(sender)
+      .then((registered) => sendResponse({ registered }))
+      .catch((error) => sendResponse({ registered: false, error: String(error) }))
+    return true
+  }
+
   if (msg?.type === 'GET_STATUS') {
     getStatus()
       .then(sendResponse)
