@@ -27,9 +27,13 @@ let shieldEnabled = false
 const DESKTOP_APP_KEY = 'tube.desktopAppMode'
 const DESKTOP_GUIDE_STORAGE_KEY = 'tube.desktopGuideVersion'
 const DESKTOP_GUIDE_HANDOFF_PARAM = 'tube_guide'
+const DESKTOP_APP_WINDOW_MESSAGE = 'REGISTER_DESKTOP_APP_WINDOW'
+const DESKTOP_APP_HEARTBEAT_MS = 15_000
 const desktopGuide = globalThis.TubeDesktopGuide
 const desktopGuideUI = globalThis.TubeDesktopGuideUI
 let desktopGuideInstalled = false
+let desktopWindowRegistrationPending = false
+let desktopWindowLastConfirmedAt = 0
 
 function isDesktopAppMode() {
   if (new URLSearchParams(location.search).get('tube_app') === '1') {
@@ -45,6 +49,45 @@ function isDesktopAppMode() {
   } catch {
     return false
   }
+}
+
+function registerDesktopAppWindow() {
+  if (
+    desktopWindowRegistrationPending ||
+    window.top !== window ||
+    !isDesktopAppMode() ||
+    Date.now() - desktopWindowLastConfirmedAt < DESKTOP_APP_HEARTBEAT_MS
+  ) {
+    return
+  }
+
+  desktopWindowRegistrationPending = true
+  let registrationTimeoutId
+  Promise.race([
+    chrome.runtime.sendMessage({ type: DESKTOP_APP_WINDOW_MESSAGE }),
+    new Promise((_, reject) => {
+      registrationTimeoutId = setTimeout(
+        () => reject(new Error('desktop app window registration timed out')),
+        600,
+      )
+    }),
+  ])
+    .then((response) => {
+      if (response?.registered) {
+        desktopWindowLastConfirmedAt = Date.now()
+        return
+      }
+      desktopWindowLastConfirmedAt = 0
+      console.error('[Noirva] desktop app window registration was rejected')
+    })
+    .catch((error) => {
+      desktopWindowLastConfirmedAt = 0
+      console.error('[Noirva] failed to register the desktop app window:', error)
+    })
+    .finally(() => {
+      clearTimeout(registrationTimeoutId)
+      desktopWindowRegistrationPending = false
+    })
 }
 
 function ensureDesktopGuide() {
@@ -217,6 +260,7 @@ const startObs = () => {
     attributes: true,
     attributeFilter: ['class'],
   })
+  registerDesktopAppWindow()
   ensureDesktopGuide()
 }
 
@@ -226,6 +270,7 @@ else document.addEventListener('DOMContentLoaded', startObs)
 // Also on SPA navigations
 let lastHref = location.href
 setInterval(() => {
+  registerDesktopAppWindow()
   ensureDesktopGuide()
   if (location.href !== lastHref) {
     lastHref = location.href
