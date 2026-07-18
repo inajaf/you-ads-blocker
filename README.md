@@ -1,4 +1,4 @@
-# TubePWA
+# Noirva
 
 Cinema-dark React PWA for browsing videos and opening a protected player from
 localhost or a password-protected ngrok URL.
@@ -6,14 +6,14 @@ localhost or a password-protected ngrok URL.
 ## Playback policy
 
 - **Desktop Chrome/Chromium:** the official YouTube embed is created only after
-  the companion **YT Ads Shield** extension reports that its DNR ruleset is
+  the companion **Noirva Shield** extension reports that its DNR ruleset is
   active.
 - **Mobile browsers/PWA:** playback uses the in-app stream player because a
   mobile website cannot remove ads from a cross-origin YouTube iframe.
 - Videos that require sign-in, payment, DRM, age/region access, or disallow
   embedding are not bypassed.
 
-YT Ads Shield is best-effort filtering. YouTube changes its player regularly,
+Noirva Shield is best-effort filtering. YouTube changes its player regularly,
 so no extension can promise permanent ad blocking without updates.
 
 ## Local development

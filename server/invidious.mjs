@@ -33,7 +33,7 @@ export async function fetchInvidiousStreams(videoId) {
             redirect: 'error',
             headers: {
               Accept: 'application/json',
-              'User-Agent': 'TubePWA-Proxy/1.2',
+              'User-Agent': 'Noirva-Proxy/1.2',
             },
           },
         )

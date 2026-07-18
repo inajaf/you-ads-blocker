@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "YT Ads Shield",
-  "version": "1.2.0",
-  "description": "Blocks YouTube ads like browser ad blockers — runs on youtube.com. No API keys.",
+  "name": "Noirva Shield",
+  "version": "1.3.0",
+  "description": "Noirva filters known YouTube ad requests while you watch. No API keys.",
   "permissions": [
     "declarativeNetRequest",
     "declarativeNetRequestWithHostAccess",
@@ -28,18 +28,27 @@
   },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "YT Ads Shield",
+    "default_title": "Noirva Shield",
     "default_icon": {
-      "16": "icons/icon16.png",
-      "48": "icons/icon48.png",
-      "128": "icons/icon128.png"
+      "16": "icons/noirva-logo-v2-16.png",
+      "48": "icons/noirva-logo-v2-48.png",
+      "128": "icons/noirva-logo-v2-128.png"
     }
   },
   "icons": {
-    "16": "icons/icon16.png",
-    "48": "icons/icon48.png",
-    "128": "icons/icon128.png"
+    "16": "icons/noirva-logo-v2-16.png",
+    "48": "icons/noirva-logo-v2-48.png",
+    "128": "icons/noirva-logo-v2-128.png"
   },
+  "web_accessible_resources": [
+    {
+      "resources": ["icons/noirva-logo-v2-128.png"],
+      "matches": [
+        "*://*.youtube.com/*",
+        "*://*.youtube-nocookie.com/*"
+      ]
+    }
+  ],
   "content_scripts": [
     {
       "matches": [

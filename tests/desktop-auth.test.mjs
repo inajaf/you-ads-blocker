@@ -65,7 +65,7 @@ describe('Electron Google sign-in handoff', () => {
     assert.equal(classifyElectronNavigation('javascript:alert(1)'), 'block')
   })
 
-  it('opens Chrome with the private profile, extension, and Tube app return URL', () => {
+  it('opens Chrome with the private profile, extension, and Noirva app return URL', () => {
     const args = createChromeHandoffArgs({
       profileDir: '/tmp/tube-profile',
       extensionDir: '/tmp/tube-extension',

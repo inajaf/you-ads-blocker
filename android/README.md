@@ -1,4 +1,4 @@
-# Tube — Android WebView wrapper
+# Noirva — Android WebView wrapper
 
 A minimal native Android app that loads the **real** `m.youtube.com` full-screen
 (no browser chrome — looks like the YouTube app) and blocks ads **Brave-style**,
@@ -12,7 +12,7 @@ Two layers of blocking, both consumed from `/adblock` (single source of truth):
 2. **Page layer** — `assets/inject.js` runs in the page's main world at
    **document-start** and strips `adPlacements` / `playerAds` / `adSlots` out of
    the player responses (patching `JSON.parse` / `fetch` / `XHR`) before ads can
-   be scheduled. It logs `[Tube Shield] page hooks active`.
+   be scheduled. It logs `[Noirva Shield] page hooks active`.
 
 You stay logged into your Google account; subscriptions, history and
 recommendations are untouched.
@@ -97,10 +97,10 @@ The APK lands at `app/build/outputs/apk/debug/app-debug.apk`.
 1. Connect the device and watch logcat filtered to the page console:
 
    ```sh
-   adb logcat -s chromium:I | grep "Tube Shield"
+   adb logcat -s chromium:I | grep "Noirva Shield"
    ```
 
-   You should see `[Tube Shield] page hooks active` shortly after the app opens
+   You should see `[Noirva Shield] page hooks active` shortly after the app opens
    a page. (WebView routes `console.info` through the `chromium` logcat tag.)
 
 2. Open an ad-heavy video (music videos and long uploads are good tests). There
@@ -181,9 +181,10 @@ android/
   The json-prune approach here is robust against most rollouts but any given day
   a new format can slip an ad through until `/adblock/inject.js` is updated. When
   that happens, update the shared core and re-run `scripts/sync-adblock.mjs`.
-- **Neutral naming for trademark reasons.** The app is named "Tube" and the
-  package is `app.tube` deliberately — it is an unofficial personal wrapper, not
-  affiliated with or endorsed by YouTube/Google, and must not use their marks.
+- **Neutral naming for trademark reasons.** The app is named "Noirva". The
+  legacy package remains `app.tube` so upgrades keep existing application data.
+  It is an unofficial personal wrapper, not affiliated with or endorsed by
+  YouTube/Google, and does not use their marks.
 - **Personal use.** This wrapper is intended for your own device. It is not
   suitable for distribution on Google Play (both the trademark and the
   ad-block-on-YouTube policy make that a non-starter).

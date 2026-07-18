@@ -154,5 +154,5 @@
     return XS.apply(this, arguments)
   }
 
-  console.info('[Tube Shield] page hooks active')
+  console.info('[Noirva Shield] page hooks active')
 })()

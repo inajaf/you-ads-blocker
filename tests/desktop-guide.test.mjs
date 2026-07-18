@@ -10,6 +10,8 @@ before(async () => {
 describe('desktop first-run guide model', () => {
   it('contains a short ordered walkthrough', () => {
     const guide = globalThis.TubeDesktopGuide
+    assert.equal(guide.VERSION, 2)
+    assert.equal(guide.PRODUCT_NAME, 'Noirva')
     assert.equal(guide.STEPS.length, 4)
     assert.deepEqual(
       guide.STEPS.map((step) => step.icon),
@@ -79,7 +81,26 @@ describe('desktop first-run guide model', () => {
     assert.match(preload, /extension.*content\.css/s)
     assert.match(preload, /TubeDesktopGuideUI\.install/)
     assert.match(preload, /tube\.electronDesktopGuideVersion/)
+    assert.match(preload, /noirva-logo-v2-128\.png/)
     assert.doesNotMatch(guideUI, /\.innerHTML\s*=/)
+  })
+
+  it('publishes the Noirva logo to the Chrome guide', () => {
+    const manifest = JSON.parse(
+      fs.readFileSync(new URL('../extension/manifest.json', import.meta.url), 'utf8'),
+    )
+    const content = fs.readFileSync(
+      new URL('../extension/content.js', import.meta.url),
+      'utf8',
+    )
+    assert.equal(manifest.name, 'Noirva Shield')
+    assert.equal(manifest.icons['128'], 'icons/noirva-logo-v2-128.png')
+    assert.ok(
+      manifest.web_accessible_resources.some((entry) =>
+        entry.resources.includes('icons/noirva-logo-v2-128.png'),
+      ),
+    )
+    assert.match(content, /chrome\.runtime\.getURL\('icons\/noirva-logo-v2-128\.png'\)/)
   })
 
   it('carries completed onboarding across the Electron to Chrome handoff', () => {

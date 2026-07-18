@@ -18,6 +18,7 @@ const chromeUserAgent = [
   'Safari/537.36',
 ].join(' ')
 app.userAgentFallback = chromeUserAgent
+app.setName('Noirva')
 
 // --- Load the shared ad-host blocklist (single source of truth in ../adblock) ---
 const hostsPath = path.join(__dirname, '..', 'adblock', 'hosts.json')
@@ -25,9 +26,9 @@ let blockList = []
 try {
   const parsed = JSON.parse(fs.readFileSync(hostsPath, 'utf8'))
   blockList = Array.isArray(parsed.block) ? parsed.block : []
-  console.log(`[Tube] loaded ${blockList.length} block substrings from ${hostsPath}`)
+  console.log(`[Noirva] loaded ${blockList.length} block substrings from ${hostsPath}`)
 } catch (err) {
-  console.error('[Tube] failed to load hosts.json:', err)
+  console.error('[Noirva] failed to load hosts.json:', err)
 }
 
 // Module-level counter so blocking is observable in stdout.
@@ -63,11 +64,11 @@ function findExtensionDir() {
 
 function showChromeHandoffError(error) {
   chromeHandoffStarted = false
-  console.error('[Tube] failed to open supported Chrome sign-in:', error)
+  console.error('[Noirva] failed to open supported Chrome sign-in:', error)
   mainWindow?.show()
   dialog.showErrorBox(
     'Chrome sign-in is unavailable',
-    `${error.message}\n\nInstall the Tube Chrome runtime or set TUBE_CHROME_PATH and try again.`,
+    `${error.message}\n\nInstall the Noirva Chrome runtime or set NOIRVA_CHROME_PATH and try again.`,
   )
 }
 
@@ -86,7 +87,7 @@ async function openSupportedChromeSignIn() {
 
     const extensionDir = findExtensionDir()
     if (!extensionDir) {
-      throw new Error('The Tube Chrome extension is not available')
+      throw new Error('The Noirva Chrome extension is not available')
     }
 
     const chrome = spawn(
@@ -98,7 +99,7 @@ async function openSupportedChromeSignIn() {
       isProfileRunning: () => isChromeProfileRunning({ chromePath, profileDir }),
     })
     if (chrome.exitCode === null) chrome.unref()
-    console.log('[Tube] Google sign-in handed off to supported Chrome')
+    console.log('[Noirva] Google sign-in handed off to supported Chrome')
     app.quit()
   } catch (error) {
     showChromeHandoffError(error)
@@ -118,7 +119,7 @@ function handleMainFrameNavigation(details) {
   }
   if (action === 'external') {
     void shell.openExternal(details.url).catch((error) => {
-      console.error('[Tube] failed to open external link:', error)
+      console.error('[Noirva] failed to open external link:', error)
     })
   }
 }
@@ -129,7 +130,7 @@ function handleWindowOpen({ url }) {
   else if (action === 'allow') void mainWindow?.loadURL(url)
   else if (action === 'external') {
     void shell.openExternal(url).catch((error) => {
-      console.error('[Tube] failed to open external link:', error)
+      console.error('[Noirva] failed to open external link:', error)
     })
   }
   return { action: 'deny' }
@@ -139,7 +140,8 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
-    title: 'Tube',
+    title: 'Noirva',
+    icon: path.join(__dirname, '..', 'assets', 'brand', 'noirva-logo-v2-512.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -150,7 +152,7 @@ function createWindow() {
 
   // Read as an app, not a browser: no application menu.
   Menu.setApplicationMenu(null)
-  mainWindow.setTitle('Tube')
+  mainWindow.setTitle('Noirva')
 
   // Surface the renderer console (incl. the inject success line) in main stdout.
   mainWindow.webContents.on('console-message', (event, level, message) => {
@@ -167,7 +169,7 @@ function createWindow() {
   mainWindow.loadURL('https://www.youtube.com')
 
   // TEMP-VERIFY: screenshot a few seconds after load to prove real youtube loads.
-  if (process.env.TUBE_SCREENSHOT) {
+  if (process.env.NOIRVA_SCREENSHOT || process.env.TUBE_SCREENSHOT) {
     mainWindow.webContents.once('did-finish-load', () => {
       setTimeout(async () => {
         try {
@@ -176,9 +178,9 @@ function createWindow() {
             path.join(__dirname, 'screenshot.png'),
             img.toPNG(),
           )
-          console.log('[Tube] screenshot saved')
+          console.log('[Noirva] screenshot saved')
         } catch (e) {
-          console.error('[Tube] screenshot failed:', e)
+          console.error('[Noirva] screenshot failed:', e)
         }
         setTimeout(() => app.quit(), 1500)
       }, 6000)

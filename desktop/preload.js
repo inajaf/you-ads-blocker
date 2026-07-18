@@ -15,17 +15,24 @@ const path = require('path')
 const { webFrame } = require('electron')
 
 const ELECTRON_GUIDE_STORAGE_KEY = 'tube.electronDesktopGuideVersion'
+const NOIRVA_LOGO_PATH = ['extension', 'icons', 'noirva-logo-v2-128.png']
 
 function readProjectFile(...segments) {
   return fs.readFileSync(path.join(__dirname, '..', ...segments), 'utf8')
 }
 
+function readProjectImageDataUrl(segments) {
+  const bytes = fs.readFileSync(path.join(__dirname, '..', ...segments))
+  return `data:image/png;base64,${bytes.toString('base64')}`
+}
+
 async function executeProjectScript(segments, label) {
   await webFrame.executeJavaScript(readProjectFile(...segments))
-  console.log(`[Tube] preload injected ${label} into page world`)
+  console.log(`[Noirva] preload injected ${label} into page world`)
 }
 
 async function initializePage() {
+  const logoUrl = readProjectImageDataUrl(NOIRVA_LOGO_PATH)
   await executeProjectScript(['adblock', 'inject.js'], 'adblock/inject.js')
 
   webFrame.insertCSS(readProjectFile('extension', 'content.css'))
@@ -45,11 +52,12 @@ async function initializePage() {
         globalThis.localStorage,
         ${JSON.stringify(ELECTRON_GUIDE_STORAGE_KEY)}
       ),
+      logoUrl: ${JSON.stringify(logoUrl)},
     })
   `)
-  console.log('[Tube] Electron first-run guide initialized')
+  console.log('[Noirva] Electron first-run guide initialized')
 }
 
 initializePage().catch((error) => {
-  console.error('[Tube] preload initialization failed:', error)
+  console.error('[Noirva] preload initialization failed:', error)
 })

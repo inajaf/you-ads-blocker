@@ -1,5 +1,5 @@
 /**
- * Shared DOM UI for the Tube first-run guide.
+ * Shared DOM UI for the Noirva first-run guide.
  *
  * Chrome App Mode and Electron provide different persistence adapters, while
  * this module owns the common dialog and YouTube header controls.
@@ -90,12 +90,12 @@
     return button
   }
 
-  function createController(guide, storage) {
+  function createController(guide, storage, logoUrl) {
     let guideCheckStarted = false
 
     function markComplete() {
       Promise.resolve(storage.setCompletedVersion(guide.VERSION)).catch((error) => {
-        console.error('[Tube] failed to save first-run guide state:', error)
+        console.error('[Noirva] failed to save first-run guide state:', error)
       })
     }
 
@@ -127,12 +127,28 @@
       })
       const brand = createElement('div', { className: 'tube-guide-brand' })
       const brandMark = createElement('span', { className: 'tube-guide-brand-mark' })
-      brandMark.append(createStepIcon('play'))
-      brand.append(brandMark, createElement('span', { text: 'Tube' }))
+      if (logoUrl) {
+        brandMark.append(
+          createElement('img', {
+            attributes: {
+              src: logoUrl,
+              alt: '',
+              width: 40,
+              height: 40,
+            },
+          }),
+        )
+      } else {
+        brandMark.append(createStepIcon('play'))
+      }
+      brand.append(
+        brandMark,
+        createElement('span', { text: guide.PRODUCT_NAME || 'Noirva' }),
+      )
       const heroIcon = createElement('div', { className: 'tube-guide-hero-icon' })
       const visualCopy = createElement('p', {
         className: 'tube-guide-visual-copy',
-        text: 'A focused YouTube window with YT Ads Shield built in.',
+        text: guide.TAGLINE || 'Focused video with fewer interruptions.',
       })
       visual.append(brand, heroIcon, visualCopy)
 
@@ -253,7 +269,7 @@
       const button = document.createElement('button')
       button.id = DESKTOP_HELP_ID
       button.type = 'button'
-      button.setAttribute('aria-label', 'Open Tube getting started guide')
+      button.setAttribute('aria-label', 'Open Noirva getting started guide')
       button.title = 'Getting started'
       button.append(
         createSvgIcon(
@@ -273,7 +289,7 @@
         const completedVersion = await storage.getCompletedVersion()
         if (guide.isFirstRun(completedVersion)) openGuide()
       } catch (error) {
-        console.error('[Tube] failed to read first-run guide state:', error)
+        console.error('[Noirva] failed to read first-run guide state:', error)
         openGuide()
       }
     }
@@ -301,7 +317,7 @@
     return Object.freeze({ ensureNavigation, openGuide })
   }
 
-  function install({ guide = global.TubeDesktopGuide, storage } = {}) {
+  function install({ guide = global.TubeDesktopGuide, storage, logoUrl } = {}) {
     if (installedController) return installedController
     if (!guide || !Array.isArray(guide.STEPS)) {
       throw new TypeError('TubeDesktopGuide model is required')
@@ -314,7 +330,7 @@
       throw new TypeError('A desktop guide storage adapter is required')
     }
 
-    installedController = createController(guide, storage)
+    installedController = createController(guide, storage, logoUrl)
     const ensureNavigation = () => installedController.ensureNavigation()
     if (document.body) ensureNavigation()
     else document.addEventListener('DOMContentLoaded', ensureNavigation, { once: true })

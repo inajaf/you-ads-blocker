@@ -77,7 +77,7 @@ async function fetchPiped(base, path, signal, redirectsLeft = 2) {
     redirect: 'manual',
     headers: {
       Accept: 'application/json',
-      'User-Agent': 'TubePWA-Proxy/1.4',
+      'User-Agent': 'Noirva-Proxy/1.4',
     },
   })
   if (res.status >= 300 && res.status < 400) {

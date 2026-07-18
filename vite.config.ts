@@ -30,17 +30,17 @@ export default defineConfig({
       // installability behind the protected tunnel. (Phone installs go
       // through dev:phone — ngrok's free-tier interstitial blocks them.)
       useCredentials: true,
-      includeAssets: ['favicon.svg', 'media-sw-fetch.js'],
+      includeAssets: ['noirva-logo-v2-48.png', 'media-sw-fetch.js'],
       // Dev: enable SW so /__tube_media works for max-quality MSE locally
       devOptions: {
         enabled: true,
         type: 'module',
       },
       manifest: {
-        name: 'TubePWA',
-        short_name: 'TubePWA',
+        name: 'Noirva',
+        short_name: 'Noirva',
         description:
-          'Install from browser link. YouTube-like player without ads. No APK, no API keys.',
+          'Install from a browser link. Focused video playback with best-effort ad filtering and no API keys.',
         theme_color: '#0f0f0f',
         background_color: '#0f0f0f',
         display: 'standalone',
@@ -49,10 +49,10 @@ export default defineConfig({
         scope: '/',
         id: '/',
         icons: [
-          { src: 'pwa-192.png', sizes: '192x192', type: 'image/png' },
-          { src: 'pwa-512.png', sizes: '512x512', type: 'image/png' },
+          { src: 'noirva-logo-v2-192.png', sizes: '192x192', type: 'image/png' },
+          { src: 'noirva-logo-v2-512.png', sizes: '512x512', type: 'image/png' },
           {
-            src: 'pwa-512.png',
+            src: 'noirva-logo-v2-512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'maskable',

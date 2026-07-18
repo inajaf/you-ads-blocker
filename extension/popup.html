@@ -18,11 +18,19 @@
         align-items: center;
         gap: 8px;
       }
+      .logo {
+        width: 32px;
+        height: 32px;
+        border-radius: 9px;
+      }
       .dot {
+        display: inline-block;
         width: 10px;
         height: 10px;
+        margin-right: 6px;
         border-radius: 50%;
         background: #4caf50;
+        vertical-align: -1px;
       }
       .dot.off {
         background: #666;
@@ -48,7 +56,10 @@
     </style>
   </head>
   <body>
-    <h1><span class="dot" id="dot"></span> YT Ads Shield</h1>
+    <h1>
+      <img class="logo" src="icons/noirva-logo-v2-48.png" alt="" />
+      <span><span class="dot" id="dot"></span>Noirva Shield</span>
+    </h1>
     <p>
       Блокирует рекламные запросы внутри <strong>YouTube embed</strong> на
       localhost/ngrok и на youtube.com. API-ключи не нужны.
