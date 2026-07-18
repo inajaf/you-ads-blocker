@@ -38,7 +38,9 @@ let shieldEnabled = false
 const DESKTOP_APP_KEY = 'tube.desktopAppMode'
 const DESKTOP_GUIDE_STORAGE_KEY = 'tube.desktopGuideVersion'
 const DESKTOP_GUIDE_HANDOFF_PARAM = 'tube_guide'
+const DESKTOP_FAVICON_ID = 'tube-desktop-favicon'
 const DESKTOP_APP_WINDOW_MESSAGE = 'REGISTER_DESKTOP_APP_WINDOW'
+const DESKTOP_APP_STATUS_MESSAGE = 'GET_DESKTOP_APP_WINDOW_STATUS'
 const DESKTOP_APP_HEARTBEAT_MS = 15_000
 const desktopGuide = globalThis.TubeDesktopGuide
 const desktopGuideUI = globalThis.TubeDesktopGuideUI
@@ -47,9 +49,11 @@ let desktopGuideInstalled = false
 let desktopWindowRegistrationPending = false
 let desktopWindowLastConfirmedAt = 0
 let adContainerCleanupScheduled = false
+let desktopAppModeConfirmed = false
 
 function isDesktopAppMode() {
   if (new URLSearchParams(location.search).get('tube_app') === '1') {
+    desktopAppModeConfirmed = true
     try {
       sessionStorage.setItem(DESKTOP_APP_KEY, '1')
     } catch {
@@ -57,9 +61,36 @@ function isDesktopAppMode() {
     }
     return true
   }
+  if (desktopAppModeConfirmed) return true
   try {
-    return sessionStorage.getItem(DESKTOP_APP_KEY) === '1'
+    desktopAppModeConfirmed = sessionStorage.getItem(DESKTOP_APP_KEY) === '1'
+    return desktopAppModeConfirmed
   } catch {
+    return false
+  }
+}
+
+async function refreshDesktopAppMode() {
+  if (window.top !== window || isDesktopAppMode()) return isDesktopAppMode()
+
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: DESKTOP_APP_STATUS_MESSAGE,
+    })
+    if (!response?.active) return false
+
+    desktopAppModeConfirmed = true
+    try {
+      sessionStorage.setItem(DESKTOP_APP_KEY, '1')
+    } catch {
+      /* ignore */
+    }
+    applyDesktopAppChrome()
+    registerDesktopAppWindow()
+    ensureDesktopGuide()
+    return true
+  } catch (error) {
+    console.error('[Noirva] failed to detect the desktop app window:', error)
     return false
   }
 }
@@ -67,6 +98,20 @@ function isDesktopAppMode() {
 function applyDesktopAppChrome() {
   const enabled = isDesktopAppMode()
   document.documentElement?.classList.toggle('tube-desktop-app', enabled)
+  if (enabled && document.head) {
+    const logoUrl = chrome.runtime.getURL('icons/noirva-logo-v2-128.png')
+    for (const favicon of document.head.querySelectorAll('link[rel~="icon"]')) {
+      favicon.href = logoUrl
+    }
+    let noirvaFavicon = document.getElementById(DESKTOP_FAVICON_ID)
+    if (!noirvaFavicon) {
+      noirvaFavicon = document.createElement('link')
+      noirvaFavicon.id = DESKTOP_FAVICON_ID
+      noirvaFavicon.rel = 'icon'
+      document.head.append(noirvaFavicon)
+    }
+    noirvaFavicon.href = logoUrl
+  }
   return enabled
 }
 
@@ -329,6 +374,7 @@ const startObs = () => {
   scheduleFeedAdContainerCleanup()
   registerDesktopAppWindow()
   ensureDesktopGuide()
+  void refreshDesktopAppMode()
 }
 
 if (document.documentElement) startObs()

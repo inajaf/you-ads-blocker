@@ -5,6 +5,7 @@ import {
   existsSync,
   readFileSync,
   utimesSync,
+  writeFileSync,
 } from 'node:fs'
 import { homedir } from 'node:os'
 import path from 'node:path'
@@ -22,8 +23,25 @@ export const defaultNoirvaIconPath = path.resolve(
   'brand',
   'noirva-logo-v2.icns',
 )
+export const defaultNoirvaWindowsIconPath = path.resolve(
+  desktopDir,
+  '..',
+  'assets',
+  'brand',
+  'noirva-logo-v2.ico',
+)
+const defaultRceditPath = path.resolve(
+  desktopDir,
+  'node_modules',
+  'rcedit',
+  'bin',
+  process.arch === 'ia32' ? 'rcedit.exe' : 'rcedit-x64.exe',
+)
 
-const appSupportDir = path.join(homedir(), 'Library', 'Application Support')
+const appSupportDir =
+  process.platform === 'win32'
+    ? process.env.LOCALAPPDATA || path.join(homedir(), 'AppData', 'Local')
+    : path.join(homedir(), 'Library', 'Application Support')
 export const defaultManagedRuntimeRoots = [
   path.join(appSupportDir, 'Noirva Desktop Runtime'),
   path.join(appSupportDir, 'Tube Desktop Runtime'),
@@ -61,6 +79,91 @@ function fileDigest(filePath) {
   return createHash('sha256').update(readFileSync(filePath)).digest('hex')
 }
 
+function readJsonFile(filePath) {
+  try {
+    return JSON.parse(readFileSync(filePath, 'utf8'))
+  } catch {
+    return null
+  }
+}
+
+function ensureWindowsChromeRuntimeBranding({
+  chromeExecutablePath,
+  iconPath,
+  managedRuntimeRoots,
+  rceditPath,
+  execFileSyncImpl,
+}) {
+  if (!isManagedChromeRuntime(chromeExecutablePath, managedRuntimeRoots)) {
+    return {
+      branded: false,
+      changed: false,
+      reason: 'external-runtime',
+      executablePath: chromeExecutablePath,
+    }
+  }
+
+  for (const requiredPath of [chromeExecutablePath, iconPath, rceditPath]) {
+    if (!existsSync(requiredPath)) {
+      throw new Error(`Noirva runtime branding file was not found: ${requiredPath}`)
+    }
+  }
+
+  const markerPath = `${chromeExecutablePath}.noirva-branding.json`
+  const backupPath = `${chromeExecutablePath}.noirva-original.exe`
+  const iconDigest = fileDigest(iconPath)
+  const executableDigest = fileDigest(chromeExecutablePath)
+  const marker = readJsonFile(markerPath)
+  if (
+    marker?.version === 1 &&
+    marker.iconDigest === iconDigest &&
+    marker.executableDigest === executableDigest
+  ) {
+    return {
+      branded: true,
+      changed: false,
+      executablePath: chromeExecutablePath,
+      backupPath,
+    }
+  }
+
+  if (!existsSync(backupPath)) copyFileSync(chromeExecutablePath, backupPath)
+  execFileSyncImpl(
+    rceditPath,
+    [
+      chromeExecutablePath,
+      '--set-icon',
+      iconPath,
+      '--set-version-string',
+      'ProductName',
+      'Noirva',
+      '--set-version-string',
+      'FileDescription',
+      'Noirva',
+      '--set-version-string',
+      'InternalName',
+      'Noirva',
+    ],
+    { stdio: 'ignore' },
+  )
+
+  writeFileSync(
+    markerPath,
+    `${JSON.stringify({
+      version: 1,
+      iconDigest,
+      executableDigest: fileDigest(chromeExecutablePath),
+    }, null, 2)}\n`,
+    'utf8',
+  )
+  return {
+    branded: true,
+    changed: true,
+    executablePath: chromeExecutablePath,
+    backupPath,
+  }
+}
+
 function readPlistValue(infoPlistPath, key) {
   try {
     return execFileSync(
@@ -87,21 +190,36 @@ function removePlistKey(infoPlistPath, key) {
 
 /**
  * Brands Noirva's private Chrome for Testing bundle without touching a user's
- * installed browser. Chrome for Testing ships both CFBundleIconName and
- * CFBundleIconFile; macOS prefers the Assets.car icon named by the first key,
- * so it must be removed before the Noirva .icns file can be displayed.
+ * installed browser. On Windows the original executable is backed up before
+ * its private resources are branded. Chrome for Testing on macOS ships both
+ * CFBundleIconName and CFBundleIconFile; macOS prefers the Assets.car icon
+ * named by the first key, so it must be removed before the Noirva .icns file
+ * can be displayed.
  */
 export function ensureChromeRuntimeBranding({
   chromeExecutablePath,
-  iconPath = defaultNoirvaIconPath,
   platform = process.platform,
+  iconPath =
+    platform === 'win32' ? defaultNoirvaWindowsIconPath : defaultNoirvaIconPath,
   managedRuntimeRoots = defaultManagedRuntimeRoots,
+  rceditPath = defaultRceditPath,
+  execFileSyncImpl = execFileSync,
 } = {}) {
-  if (platform !== 'darwin') {
+  if (platform !== 'darwin' && platform !== 'win32') {
     return { branded: false, changed: false, reason: 'unsupported-platform' }
   }
   if (!chromeExecutablePath) {
     throw new Error('Chrome executable path is required for Noirva branding.')
+  }
+
+  if (platform === 'win32') {
+    return ensureWindowsChromeRuntimeBranding({
+      chromeExecutablePath,
+      iconPath,
+      managedRuntimeRoots,
+      rceditPath,
+      execFileSyncImpl,
+    })
   }
 
   const appPath = chromeAppPathFromExecutable(chromeExecutablePath)

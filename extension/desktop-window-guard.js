@@ -1,5 +1,6 @@
 ;(function installDesktopWindowGuard(globalScope) {
   const DESKTOP_APP_WINDOW_MESSAGE = 'REGISTER_DESKTOP_APP_WINDOW'
+  const DESKTOP_APP_STATUS_MESSAGE = 'GET_DESKTOP_APP_WINDOW_STATUS'
 
   const APP_WINDOW_STORAGE_KEY = 'noirva.desktopAppWindowId'
   const DEFAULT_REOPEN_DELAY_MS = 0
@@ -101,6 +102,39 @@
       }
     }
 
+    async function isAppWindowSender(sender) {
+      const senderWindowId = sender?.tab?.windowId
+      const senderTabId = sender?.tab?.id
+      const senderUrl = sender?.url || sender?.tab?.url
+      if (
+        sender?.frameId !== 0 ||
+        !isWindowId(senderWindowId) ||
+        !isWindowId(senderTabId) ||
+        !isAllowedDesktopAppTabUrl(senderUrl)
+      ) {
+        return false
+      }
+
+      const registration = await readAppWindowRegistration()
+      if (
+        registration?.windowId !== senderWindowId ||
+        registration?.tabId !== senderTabId
+      ) {
+        return false
+      }
+
+      try {
+        const tab = await tabs.get(senderTabId)
+        return (
+          tab.windowId === senderWindowId &&
+          isAllowedDesktopAppTabUrl(tab.url)
+        )
+      } catch {
+        await clearAppWindowRegistration()
+        return false
+      }
+    }
+
     async function handleWindowCreated(createdWindow) {
       if (createdWindow?.type !== 'normal' || !isWindowId(createdWindow.id)) return false
 
@@ -142,12 +176,14 @@
       getLiveAppWindow,
       handleWindowCreated,
       handleWindowRemoved,
+      isAppWindowSender,
       registerAppWindow,
     }
   }
 
   globalScope.NoirvaDesktopWindowGuard = Object.freeze({
     createDesktopWindowGuard,
+    DESKTOP_APP_STATUS_MESSAGE,
     DESKTOP_APP_WINDOW_MESSAGE,
     isAllowedDesktopAppTabUrl,
     isTrustedDesktopAppEntryUrl,

@@ -528,15 +528,29 @@
       void maybeShowFirstRunGuide()
 
       const mastheadStart = document.querySelector('ytd-masthead #start')
-      if (!mastheadStart) return
+      const isStudio = location.hostname === 'studio.youtube.com'
+      let navigationHost = mastheadStart
+      if (!navigationHost && isStudio) {
+        navigationHost = document.getElementById('tube-desktop-studio-navigation')
+        if (!navigationHost) {
+          navigationHost = createElement('nav', {
+            id: 'tube-desktop-studio-navigation',
+          })
+          navigationHost.setAttribute('aria-label', 'Noirva navigation')
+          document.body.append(navigationHost)
+        }
+      }
+      if (!navigationHost) return
 
-      const guideButton = mastheadStart.querySelector('#guide-button')
+      const guideButton = mastheadStart?.querySelector('#guide-button')
       let backButton = document.getElementById(DESKTOP_BACK_ID)
       if (!backButton) {
         backButton = createBackButton()
         if (guideButton) guideButton.insertAdjacentElement('afterend', backButton)
-        else mastheadStart.prepend(backButton)
+        else navigationHost.prepend(backButton)
       }
+
+      if (isStudio) return
 
       let helpButton = document.getElementById(DESKTOP_HELP_ID)
       if (!helpButton) {

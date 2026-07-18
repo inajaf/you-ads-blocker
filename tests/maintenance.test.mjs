@@ -102,4 +102,24 @@ describe('Noirva profile maintenance', () => {
     assert.match(content, /content\.childElementCount === 0/)
     assert.match(content, /classList\.toggle\('tube-desktop-app'/)
   })
+
+  it('keeps Noirva back navigation available on YouTube Studio', () => {
+    const content = fs.readFileSync(
+      new URL('../extension/content.js', import.meta.url),
+      'utf8',
+    )
+    const guideUI = fs.readFileSync(
+      new URL('../extension/desktop-guide-ui.js', import.meta.url),
+      'utf8',
+    )
+    const css = fs.readFileSync(new URL('../extension/content.css', import.meta.url), 'utf8')
+
+    assert.match(content, /GET_DESKTOP_APP_WINDOW_STATUS/)
+    assert.match(content, /refreshDesktopAppMode/)
+    assert.match(content, /tube-desktop-favicon/)
+    assert.match(content, /noirva-logo-v2-128\.png/)
+    assert.match(guideUI, /studio\.youtube\.com/)
+    assert.match(guideUI, /tube-desktop-studio-navigation/)
+    assert.match(css, /#tube-desktop-studio-navigation/)
+  })
 })

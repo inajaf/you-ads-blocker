@@ -5,6 +5,7 @@ importScripts('maintenance.js')
 
 const {
   createDesktopWindowGuard,
+  DESKTOP_APP_STATUS_MESSAGE,
   DESKTOP_APP_WINDOW_MESSAGE,
 } = globalThis.NoirvaDesktopWindowGuard
 const {
@@ -64,6 +65,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       .registerAppWindow(sender)
       .then((registered) => sendResponse({ registered }))
       .catch((error) => sendResponse({ registered: false, error: String(error) }))
+    return true
+  }
+
+  if (msg?.type === DESKTOP_APP_STATUS_MESSAGE) {
+    desktopWindowGuard
+      .isAppWindowSender(sender)
+      .then((active) => sendResponse({ active }))
+      .catch((error) => sendResponse({ active: false, error: String(error) }))
     return true
   }
 

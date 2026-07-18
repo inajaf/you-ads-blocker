@@ -2,21 +2,53 @@ import { execFile } from 'node:child_process'
 
 const DEFAULT_STARTUP_GRACE_MS = 750
 
-export async function isChromeProfileRunning({ chromePath, profileDir }) {
+export function chromeProcessListCommand(platform = process.platform) {
+  if (platform === 'win32') {
+    return {
+      executable: 'powershell.exe',
+      args: [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        '$chromeIds = @(Get-Process chrome -ErrorAction SilentlyContinue).Id; Get-CimInstance Win32_Process -Filter "Name = \'chrome.exe\'" | Where-Object { $chromeIds -contains $_.ProcessId } | Select-Object -ExpandProperty CommandLine',
+      ],
+    }
+  }
+
+  return {
+    executable: '/bin/ps',
+    args: ['ax', '-o', 'command='],
+  }
+}
+
+export function isChromeProfileCommand(command, { chromePath, profileDir }) {
+  const normalizedCommand = command.replaceAll('"', '').toLowerCase()
+  return (
+    normalizedCommand.includes(chromePath.toLowerCase()) &&
+    normalizedCommand.includes('--user-data-dir=') &&
+    normalizedCommand.includes(profileDir.toLowerCase()) &&
+    !normalizedCommand.includes('--type=')
+  )
+}
+
+export async function isChromeProfileRunning({
+  chromePath,
+  profileDir,
+  platform = process.platform,
+  execFileImpl = execFile,
+}) {
+  const processList = chromeProcessListCommand(platform)
   const stdout = await new Promise((resolve) => {
-    execFile('/bin/ps', ['ax', '-o', 'command='], { maxBuffer: 4 * 1024 * 1024 }, (error, output) => {
-      resolve(error ? '' : output)
-    })
+    execFileImpl(
+      processList.executable,
+      processList.args,
+      { maxBuffer: 4 * 1024 * 1024 },
+      (error, output) => resolve(error ? '' : output),
+    )
   })
-  const profileArg = `--user-data-dir=${profileDir}`
   return stdout
     .split('\n')
-    .some(
-      (command) =>
-        command.includes(chromePath) &&
-        command.includes(profileArg) &&
-        !command.includes('--type='),
-    )
+    .some((command) => isChromeProfileCommand(command, { chromePath, profileDir }))
 }
 
 export function waitForChromeStartup(

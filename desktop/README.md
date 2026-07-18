@@ -7,9 +7,10 @@ an address bar.
 
 Before either the sign-in or normal launch, Noirva brands only its private
 Chrome for Testing runtime with the Noirva display name and app icon. The
-system Chrome installation is never modified. If an old Chrome icon is already
-running in the Dock, close that window once and start Noirva again so macOS can
-load the refreshed icon.
+system Chrome installation is never modified. On Windows the original private
+`chrome.exe` is retained beside it as `chrome.exe.noirva-original.exe`. If an
+old Chrome icon is already running in the macOS Dock or Windows taskbar, close
+that window once and start Noirva again so the OS can load the refreshed icon.
 
 ## Prerequisites
 
@@ -20,15 +21,17 @@ load the refreshed icon.
    npm run build:extension
    ```
 
-2. Download Chrome for Testing for macOS. By default the launcher expects its
-   executable at:
+2. Download Chrome for Testing for your platform. Extract the archive so the
+   launcher can find the executable at the matching default path:
 
    ```text
-   ~/Library/Application Support/Tube Desktop Runtime/<architecture>/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing
+   macOS:   ~/Library/Application Support/Noirva Desktop Runtime/chrome-mac-<architecture>/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing
+   Windows: %LOCALAPPDATA%\Noirva Desktop Runtime\chrome-win64\chrome.exe
    ```
 
-   Existing installations keep using this legacy directory so the signed-in
-   profile is not lost. You can keep the runtime elsewhere and set
+   On 32-bit Windows, use the `chrome-win32` archive and directory. Existing
+   installations keep using the legacy `Tube Desktop Runtime` directory so the
+   signed-in profile is not lost. You can keep the runtime elsewhere and set
    `NOIRVA_CHROME_PATH` to the executable (`TUBE_CHROME_PATH` remains supported).
    Custom external Chrome paths are launched but deliberately left unmodified.
 

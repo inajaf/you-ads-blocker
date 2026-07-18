@@ -2,11 +2,41 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
 
-import { waitForChromeStartup } from '../desktop/chrome-launch.mjs'
+import {
+  chromeProcessListCommand,
+  isChromeProfileCommand,
+  isChromeProfileRunning,
+  waitForChromeStartup,
+} from '../desktop/chrome-launch.mjs'
 
 class FakeChild extends EventEmitter {}
 
 describe('Chrome launcher lifecycle', () => {
+  it('uses a Windows process query and recognizes the dedicated profile', async () => {
+    const chromePath = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
+    const profileDir = 'C:\\Users\\Example\\AppData\\Local\\Noirva Desktop Chrome'
+    const browserCommand = `"${chromePath}" --user-data-dir="${profileDir}" --app=https://www.youtube.com/`
+
+    assert.equal(chromeProcessListCommand('win32').executable, 'powershell.exe')
+    assert.equal(isChromeProfileCommand(browserCommand, { chromePath, profileDir }), true)
+    assert.equal(
+      isChromeProfileCommand(`${browserCommand} --type=renderer`, { chromePath, profileDir }),
+      false,
+    )
+    assert.equal(
+      await isChromeProfileRunning({
+        chromePath,
+        profileDir,
+        platform: 'win32',
+        execFileImpl: (executable, args, options, callback) => {
+          assert.equal(executable, 'powershell.exe')
+          callback(null, browserCommand)
+        },
+      }),
+      true,
+    )
+  })
+
   it('accepts a process that remains alive through the startup grace period', async () => {
     const child = new FakeChild()
     const startup = waitForChromeStartup(child, { graceMs: 1 })

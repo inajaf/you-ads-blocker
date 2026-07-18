@@ -11,6 +11,7 @@ const guardContext = vm.createContext({ URL, setTimeout })
 vm.runInContext(guardSource, guardContext)
 const {
   createDesktopWindowGuard,
+  DESKTOP_APP_STATUS_MESSAGE,
   DESKTOP_APP_WINDOW_MESSAGE,
   isAllowedDesktopAppTabUrl,
   isTrustedDesktopAppEntryUrl,
@@ -85,6 +86,7 @@ function createGuard(fakes) {
 describe('Noirva desktop window guard', () => {
   it('uses an explicit message shared by the content script and worker', () => {
     assert.equal(DESKTOP_APP_WINDOW_MESSAGE, 'REGISTER_DESKTOP_APP_WINDOW')
+    assert.equal(DESKTOP_APP_STATUS_MESSAGE, 'GET_DESKTOP_APP_WINDOW_STATUS')
 
     const contentSource = fs.readFileSync(
       new URL('../extension/content.js', import.meta.url),
@@ -109,8 +111,36 @@ describe('Noirva desktop window guard', () => {
       /Date\.now\(\) - desktopWindowLastConfirmedAt < DESKTOP_APP_HEARTBEAT_MS/,
     )
     assert.match(backgroundSource, /DESKTOP_APP_WINDOW_MESSAGE/)
+    assert.match(backgroundSource, /DESKTOP_APP_STATUS_MESSAGE/)
     assert.equal(manifest.background.type, undefined)
     assert.match(backgroundSource, /importScripts\('desktop-window-guard\.js'\)/)
+  })
+
+  it('recognizes the registered app tab after navigation to YouTube Studio', async () => {
+    const fakes = createFakes([
+      { id: 7, type: 'app' },
+    ], [
+      { id: 70, windowId: 7, url: 'https://studio.youtube.com/channel/example' },
+    ])
+    fakes.storageState[STORAGE_KEY] = { windowId: 7, tabId: 70 }
+    const guard = createGuard(fakes)
+
+    assert.equal(
+      await guard.isAppWindowSender({
+        frameId: 0,
+        url: 'https://studio.youtube.com/channel/example',
+        tab: { id: 70, windowId: 7 },
+      }),
+      true,
+    )
+    assert.equal(
+      await guard.isAppWindowSender({
+        frameId: 0,
+        url: 'https://studio.youtube.com/channel/example',
+        tab: { id: 71, windowId: 8 },
+      }),
+      false,
+    )
   })
 
   it('recognizes only the trusted HTTPS YouTube app entry marker', () => {
