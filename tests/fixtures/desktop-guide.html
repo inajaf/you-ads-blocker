@@ -3,17 +3,17 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Tube desktop guide fixture</title>
+    <title>Noirva desktop guide fixture</title>
     <link rel="stylesheet" href="/extension/content.css?v=2" />
   </head>
   <body>
     <ytd-masthead>
       <div id="start"><button id="guide-button" type="button">Guide</button></div>
     </ytd-masthead>
-    <main><h1>Tube guide test page</h1></main>
+    <main><h1>Noirva guide test page</h1></main>
 
-    <script src="/extension/desktop-guide.js"></script>
-    <script src="/extension/desktop-guide-ui.js"></script>
+    <script src="/extension/desktop-guide.js?v=2"></script>
+    <script src="/extension/desktop-guide-ui.js?v=2"></script>
     <script>
       const key = new URLSearchParams(location.search).get('key') || 'default'
       TubeDesktopGuideUI.install({
@@ -22,6 +22,7 @@
           localStorage,
           `tube.desktopGuideFixture.${key}`,
         ),
+        logoUrl: '/extension/icons/noirva-logo-v2-128.png',
       })
     </script>
   </body>

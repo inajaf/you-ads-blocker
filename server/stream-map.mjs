@@ -1,5 +1,5 @@
 /**
- * Pure mapping of player/API payloads → TubePWA stream shape.
+ * Pure mapping of player/API payloads to the Noirva stream shape.
  * Unit-tested offline without network.
  */
 

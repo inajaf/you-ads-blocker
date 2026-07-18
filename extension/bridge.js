@@ -1,4 +1,4 @@
-/** Origin-scoped status bridge for the TubePWA desktop player gate. */
+/** Origin-scoped status bridge for the Noirva desktop player gate. */
 
 const BRIDGE_SOURCE = 'yt-ads-shield'
 let lastRequestId = ''

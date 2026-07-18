@@ -11,7 +11,7 @@ const { GOOGLE_LOGIN_URL } = chromeAuth
 ensureChromeRuntime()
 
 console.log('Sign in with the supported Google Chrome window.')
-console.log('Close that window after YouTube shows your avatar; Tube will open automatically.')
+console.log('Close that window after YouTube shows your avatar; Noirva will open automatically.')
 
 const login = spawn(
   chromePath,

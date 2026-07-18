@@ -78,7 +78,7 @@ function ShieldGate({ onRetry }: { onRetry: () => void }) {
       </div>
       <div>
         <p className="eyebrow">Desktop protection required</p>
-        <h2>Turn on YT Ads Shield to start the embed</h2>
+        <h2>Turn on Noirva Shield to start the embed</h2>
         <p className="muted">
           The YouTube iframe stays unloaded until the extension confirms that
           blocking is active, so ad requests cannot start in the background.
@@ -326,7 +326,7 @@ export function WatchPage() {
           </summary>
           <div className="desc-content">
             <p>
-              Desktop uses the official YouTube embed only after YT Ads Shield
+              Desktop uses the official YouTube embed only after Noirva Shield
               confirms that blocking is enabled. Mobile uses the in-app stream
               player because mobile PWAs cannot control a cross-origin iframe.
             </p>

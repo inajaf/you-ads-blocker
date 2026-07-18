@@ -50,7 +50,7 @@ export function HomePage() {
           <span className="logo-mark" aria-hidden="true">
             <Play size={16} fill="currentColor" strokeWidth={2} />
           </span>
-          <span>TubePWA</span>
+          <span>Noirva</span>
         </h1>
         <span className="region-badge" aria-label={`Content region ${region}`}>
           <Globe2 size={15} strokeWidth={2} aria-hidden="true" />

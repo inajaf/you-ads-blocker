@@ -76,10 +76,14 @@ function ensureDesktopGuide() {
       currentUrl.searchParams.delete(DESKTOP_GUIDE_HANDOFF_PARAM)
       history.replaceState(history.state, '', currentUrl)
     }
-    desktopGuideUI.install({ guide: desktopGuide, storage })
+    desktopGuideUI.install({
+      guide: desktopGuide,
+      storage,
+      logoUrl: chrome.runtime.getURL('icons/noirva-logo-v2-128.png'),
+    })
   })().catch((error) => {
     desktopGuideInstalled = false
-    console.error('[Tube] failed to initialize desktop guide:', error)
+    console.error('[Noirva] failed to initialize desktop guide:', error)
   })
 }
 
