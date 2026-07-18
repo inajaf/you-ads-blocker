@@ -4,11 +4,13 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { isChromeProfileRunning, waitForChromeStartup } from './chrome-launch.mjs'
 import { chromePath, ensureChromeRuntime, profileDir } from './runtime-paths.mjs'
+import { prepareChromeRuntimeBranding } from './runtime-branding.mjs'
 
 const desktopDir = path.dirname(fileURLToPath(import.meta.url))
 const extensionDir = path.resolve(desktopDir, '..', 'dist-extension')
 
 ensureChromeRuntime()
+prepareChromeRuntimeBranding(chromePath)
 
 if (!existsSync(path.join(extensionDir, 'manifest.json'))) {
   console.error('The Noirva extension is not built. Run npm run build:extension first.')

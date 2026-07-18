@@ -102,4 +102,33 @@ describe('Electron Google sign-in handoff', () => {
     assert.match(loginSource, /--load-extension=/)
     assert.match(loginSource, /--disable-extensions-except=/)
   })
+
+  it('brands only the private Chrome runtime as Noirva before launch', () => {
+    const startSource = fs.readFileSync(
+      new URL('../desktop/start-chrome-app.mjs', import.meta.url),
+      'utf8',
+    )
+    const loginSource = fs.readFileSync(
+      new URL('../desktop/login-and-start.mjs', import.meta.url),
+      'utf8',
+    )
+    const brandingSource = fs.readFileSync(
+      new URL('../desktop/runtime-branding.mjs', import.meta.url),
+      'utf8',
+    )
+    const icon = fs.readFileSync(
+      new URL('../assets/brand/noirva-logo-v2.icns', import.meta.url),
+    )
+
+    assert.match(startSource, /prepareChromeRuntimeBranding\(chromePath\)/)
+    assert.match(loginSource, /prepareChromeRuntimeBranding\(chromePath\)/)
+    assert.match(brandingSource, /CFBundleDisplayName/)
+    assert.match(brandingSource, /CFBundleIconFile/)
+    assert.match(brandingSource, /removePlistKey\(infoPlistPath, 'CFBundleIconName'\)/)
+    assert.match(brandingSource, /Noirva Desktop Runtime/)
+    assert.match(brandingSource, /Tube Desktop Runtime/)
+    assert.doesNotMatch(brandingSource, /setPlistString\([^\n]*CFBundleIdentifier/)
+    assert.doesNotMatch(brandingSource, /codesign/)
+    assert.equal(icon.subarray(0, 4).toString('ascii'), 'icns')
+  })
 })
