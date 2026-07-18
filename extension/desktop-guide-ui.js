@@ -82,7 +82,9 @@
     button.title = 'Back (⌘[ or Alt+Left)'
     button.append(createSvgIcon(['M15 18l-6-6 6-6']))
     button.addEventListener('click', () => {
-      if (history.length > 1) history.back()
+      const isAppEntry = new URLSearchParams(location.search).get('tube_app') === '1'
+      if (isAppEntry) location.assign('https://www.youtube.com/?tube_app=1')
+      else if (history.length > 1) history.back()
       else location.assign('https://www.youtube.com/')
     })
     return button
@@ -314,7 +316,7 @@
 
     installedController = createController(guide, storage)
     const ensureNavigation = () => installedController.ensureNavigation()
-    if (document.documentElement) ensureNavigation()
+    if (document.body) ensureNavigation()
     else document.addEventListener('DOMContentLoaded', ensureNavigation, { once: true })
     setInterval(ensureNavigation, 800)
     return installedController

@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tube desktop guide fixture</title>
+    <link rel="stylesheet" href="/extension/content.css?v=2" />
+  </head>
+  <body>
+    <ytd-masthead>
+      <div id="start"><button id="guide-button" type="button">Guide</button></div>
+    </ytd-masthead>
+    <main><h1>Tube guide test page</h1></main>
+
+    <script src="/extension/desktop-guide.js"></script>
+    <script src="/extension/desktop-guide-ui.js"></script>
+    <script>
+      const key = new URLSearchParams(location.search).get('key') || 'default'
+      TubeDesktopGuideUI.install({
+        guide: TubeDesktopGuide,
+        storage: TubeDesktopGuideUI.createWebStorageAdapter(
+          localStorage,
+          `tube.desktopGuideFixture.${key}`,
+        ),
+      })
+    </script>
+  </body>
+</html>

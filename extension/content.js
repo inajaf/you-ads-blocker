@@ -26,6 +26,7 @@ let shieldEnabled = false
 
 const DESKTOP_APP_KEY = 'tube.desktopAppMode'
 const DESKTOP_GUIDE_STORAGE_KEY = 'tube.desktopGuideVersion'
+const DESKTOP_GUIDE_HANDOFF_PARAM = 'tube_guide'
 const desktopGuide = globalThis.TubeDesktopGuide
 const desktopGuideUI = globalThis.TubeDesktopGuideUI
 let desktopGuideInstalled = false
@@ -57,19 +58,29 @@ function ensureDesktopGuide() {
     return
   }
 
-  desktopGuideUI.install({
-    guide: desktopGuide,
-    storage: {
-      async getCompletedVersion() {
-        const cfg = await chrome.storage.local.get({ [DESKTOP_GUIDE_STORAGE_KEY]: 0 })
-        return cfg[DESKTOP_GUIDE_STORAGE_KEY]
-      },
-      async setCompletedVersion(version) {
-        await chrome.storage.local.set({ [DESKTOP_GUIDE_STORAGE_KEY]: version })
-      },
-    },
-  })
   desktopGuideInstalled = true
+  const storage = {
+    async getCompletedVersion() {
+      const cfg = await chrome.storage.local.get({ [DESKTOP_GUIDE_STORAGE_KEY]: 0 })
+      return cfg[DESKTOP_GUIDE_STORAGE_KEY]
+    },
+    async setCompletedVersion(version) {
+      await chrome.storage.local.set({ [DESKTOP_GUIDE_STORAGE_KEY]: version })
+    },
+  }
+
+  void (async () => {
+    const currentUrl = new URL(location.href)
+    if (currentUrl.searchParams.get(DESKTOP_GUIDE_HANDOFF_PARAM) === 'done') {
+      await storage.setCompletedVersion(desktopGuide.VERSION)
+      currentUrl.searchParams.delete(DESKTOP_GUIDE_HANDOFF_PARAM)
+      history.replaceState(history.state, '', currentUrl)
+    }
+    desktopGuideUI.install({ guide: desktopGuide, storage })
+  })().catch((error) => {
+    desktopGuideInstalled = false
+    console.error('[Tube] failed to initialize desktop guide:', error)
+  })
 }
 
 function publishState() {

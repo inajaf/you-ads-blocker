@@ -1,14 +1,14 @@
 'use strict'
 
-// contextIsolation is false, so this preload shares the page's global object and
-// runs in the MAIN world. We must patch the PAGE's own JSON.parse / fetch / XHR
-// before page scripts run.
+// This preload keeps its Node.js helpers isolated from YouTube. Page patches and
+// the shared guide are installed explicitly in the page's MAIN world through
+// webFrame.executeJavaScript.
 //
 // A plain `(0,eval)(code)` is blocked on youtube.com by its Trusted Types CSP
 // (`require-trusted-types-for 'script'`), which forbids evaluating strings as
 // JS. So we use Electron's webFrame.executeJavaScript, which compiles the source
-// directly via V8 (not through the eval sink) and — because contextIsolation is
-// false — executes in the page's main world, bypassing the CSP restriction.
+// directly via V8 (not through the eval sink) and executes in the page's main
+// world, bypassing the CSP restriction.
 
 const fs = require('fs')
 const path = require('path')

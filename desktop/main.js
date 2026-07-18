@@ -1,10 +1,10 @@
 'use strict'
 
 const { spawn } = require('child_process')
-const { app, BrowserWindow, dialog, Menu, session } = require('electron')
+const { app, BrowserWindow, dialog, Menu, session, shell } = require('electron')
 const path = require('path')
 const fs = require('fs')
-const { createChromeHandoffArgs, isGoogleSignInUrl } = require('./chrome-auth')
+const { classifyElectronNavigation, createChromeHandoffArgs } = require('./chrome-auth')
 
 // Keep YouTube rendering consistent with the Chromium engine bundled in this
 // Electron build. Google account authentication is handled separately in a
@@ -77,6 +77,9 @@ async function openSupportedChromeSignIn() {
 
   try {
     const { chromePath, profileDir } = await import('./runtime-paths.mjs')
+    const { isChromeProfileRunning, waitForChromeStartup } = await import(
+      './chrome-launch.mjs'
+    )
     if (!fs.existsSync(chromePath)) {
       throw new Error(`Chrome for Testing was not found at ${chromePath}`)
     }
@@ -91,22 +94,45 @@ async function openSupportedChromeSignIn() {
       createChromeHandoffArgs({ profileDir, extensionDir }),
       { detached: true, stdio: 'ignore' },
     )
-    chrome.once('error', showChromeHandoffError)
-    chrome.once('spawn', () => {
-      chrome.unref()
-      console.log('[Tube] Google sign-in handed off to supported Chrome')
-      app.quit()
+    await waitForChromeStartup(chrome, {
+      isProfileRunning: () => isChromeProfileRunning({ chromePath, profileDir }),
     })
+    if (chrome.exitCode === null) chrome.unref()
+    console.log('[Tube] Google sign-in handed off to supported Chrome')
+    app.quit()
   } catch (error) {
     showChromeHandoffError(error)
   }
 }
 
-function redirectGoogleSignIn(event, url) {
-  if (!isGoogleSignInUrl(url)) return false
-  event.preventDefault()
-  void openSupportedChromeSignIn()
-  return true
+function handleMainFrameNavigation(details) {
+  if (!details.isMainFrame) return
+
+  const action = classifyElectronNavigation(details.url)
+  if (action === 'allow') return
+
+  details.preventDefault()
+  if (action === 'handoff') {
+    void openSupportedChromeSignIn()
+    return
+  }
+  if (action === 'external') {
+    void shell.openExternal(details.url).catch((error) => {
+      console.error('[Tube] failed to open external link:', error)
+    })
+  }
+}
+
+function handleWindowOpen({ url }) {
+  const action = classifyElectronNavigation(url)
+  if (action === 'handoff') void openSupportedChromeSignIn()
+  else if (action === 'allow') void mainWindow?.loadURL(url)
+  else if (action === 'external') {
+    void shell.openExternal(url).catch((error) => {
+      console.error('[Tube] failed to open external link:', error)
+    })
+  }
+  return { action: 'deny' }
 }
 
 function createWindow() {
@@ -116,7 +142,7 @@ function createWindow() {
     title: 'Tube',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
-      contextIsolation: false,
+      contextIsolation: true,
       sandbox: false,
       nodeIntegration: false,
     },
@@ -134,17 +160,9 @@ function createWindow() {
   // Also pin the top-level webContents UA for normal YouTube browsing.
   mainWindow.webContents.setUserAgent(chromeUserAgent)
 
-  mainWindow.webContents.on('will-navigate', (event, url) => {
-    redirectGoogleSignIn(event, url)
-  })
-  mainWindow.webContents.on('will-redirect', (event, url) => {
-    redirectGoogleSignIn(event, url)
-  })
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (!isGoogleSignInUrl(url)) return { action: 'allow' }
-    void openSupportedChromeSignIn()
-    return { action: 'deny' }
-  })
+  mainWindow.webContents.on('will-navigate', handleMainFrameNavigation)
+  mainWindow.webContents.on('will-redirect', handleMainFrameNavigation)
+  mainWindow.webContents.setWindowOpenHandler(handleWindowOpen)
 
   mainWindow.loadURL('https://www.youtube.com')
 
