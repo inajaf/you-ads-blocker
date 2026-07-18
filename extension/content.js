@@ -21,6 +21,17 @@ const SELECTORS_AD_STATE = [
   '.ytp-ad-text',
 ]
 
+const SELECTORS_FEED_ADS = [
+  'ytd-ad-slot-renderer',
+  'ytd-in-feed-ad-layout-renderer',
+  'ytd-promoted-sparkles-web-renderer',
+  'ytd-banner-promo-renderer',
+  'ytd-statement-banner-renderer',
+]
+const SELECTOR_FEED_AD = SELECTORS_FEED_ADS.join(',')
+const SELECTOR_FEED_CONTAINER = 'ytd-rich-item-renderer, ytd-rich-section-renderer'
+const HIDDEN_FEED_CONTAINER_CLASS = 'tube-hidden-ad-container'
+
 const STATE_EVENT = 'yt-ads-shield:state'
 let shieldEnabled = false
 
@@ -31,9 +42,11 @@ const DESKTOP_APP_WINDOW_MESSAGE = 'REGISTER_DESKTOP_APP_WINDOW'
 const DESKTOP_APP_HEARTBEAT_MS = 15_000
 const desktopGuide = globalThis.TubeDesktopGuide
 const desktopGuideUI = globalThis.TubeDesktopGuideUI
+const maintenanceModel = globalThis.NoirvaMaintenance
 let desktopGuideInstalled = false
 let desktopWindowRegistrationPending = false
 let desktopWindowLastConfirmedAt = 0
+let adContainerCleanupScheduled = false
 
 function isDesktopAppMode() {
   if (new URLSearchParams(location.search).get('tube_app') === '1') {
@@ -51,11 +64,48 @@ function isDesktopAppMode() {
   }
 }
 
+function applyDesktopAppChrome() {
+  const enabled = isDesktopAppMode()
+  document.documentElement?.classList.toggle('tube-desktop-app', enabled)
+  return enabled
+}
+
+function collapseFeedAdContainers() {
+  adContainerCleanupScheduled = false
+  if (!document.documentElement) return
+
+  const containers = document.querySelectorAll(
+    `${SELECTOR_FEED_CONTAINER}, .${HIDDEN_FEED_CONTAINER_CLASS}`,
+  )
+  for (const container of containers) {
+    const containsAd = Boolean(container.querySelector(SELECTOR_FEED_AD))
+    const content = container.matches('ytd-rich-item-renderer')
+      ? container.querySelector(':scope > #content')
+      : null
+    // When Shield blocks an ad request before YouTube creates its ad custom
+    // element, the rich item survives with an empty #content node. These are
+    // the repeating blank cells visible in the Home feed (for example every
+    // seventh item in the current renderer). Unhide it automatically if
+    // YouTube later recycles the node and inserts real content.
+    const isOrphanedEmptyItem = Boolean(content && content.childElementCount === 0)
+    container.classList.toggle(
+      HIDDEN_FEED_CONTAINER_CLASS,
+      containsAd || isOrphanedEmptyItem,
+    )
+  }
+}
+
+function scheduleFeedAdContainerCleanup() {
+  if (adContainerCleanupScheduled) return
+  adContainerCleanupScheduled = true
+  requestAnimationFrame(collapseFeedAdContainers)
+}
+
 function registerDesktopAppWindow() {
   if (
     desktopWindowRegistrationPending ||
     window.top !== window ||
-    !isDesktopAppMode() ||
+    !applyDesktopAppChrome() ||
     Date.now() - desktopWindowLastConfirmedAt < DESKTOP_APP_HEARTBEAT_MS
   ) {
     return
@@ -111,6 +161,19 @@ function ensureDesktopGuide() {
       await chrome.storage.local.set({ [DESKTOP_GUIDE_STORAGE_KEY]: version })
     },
   }
+  const maintenance = {
+    async clear(action) {
+      if (!maintenanceModel) throw new Error('Noirva maintenance service is unavailable')
+      const response = await chrome.runtime.sendMessage({
+        type: maintenanceModel.MAINTENANCE_MESSAGE,
+        action,
+      })
+      if (!response?.ok) {
+        throw new Error(response?.error || 'Noirva could not clear browsing data')
+      }
+      return response
+    },
+  }
 
   void (async () => {
     const currentUrl = new URL(location.href)
@@ -122,6 +185,7 @@ function ensureDesktopGuide() {
     desktopGuideUI.install({
       guide: desktopGuide,
       storage,
+      maintenance,
       logoUrl: chrome.runtime.getURL('icons/noirva-logo-v2-128.png'),
     })
   })().catch((error) => {
@@ -245,6 +309,7 @@ function tick() {
   if (!shieldEnabled) return
   trySkip()
   speedThroughAd()
+  scheduleFeedAdContainerCleanup()
 }
 
 // Fast loop for skip button
@@ -260,6 +325,8 @@ const startObs = () => {
     attributes: true,
     attributeFilter: ['class'],
   })
+  applyDesktopAppChrome()
+  scheduleFeedAdContainerCleanup()
   registerDesktopAppWindow()
   ensureDesktopGuide()
 }

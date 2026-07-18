@@ -1,11 +1,16 @@
 /** Service worker — owns the effective Shield + DNR state. */
 
 importScripts('desktop-window-guard.js')
+importScripts('maintenance.js')
 
 const {
   createDesktopWindowGuard,
   DESKTOP_APP_WINDOW_MESSAGE,
 } = globalThis.NoirvaDesktopWindowGuard
+const {
+  createMaintenanceService,
+  MAINTENANCE_MESSAGE,
+} = globalThis.NoirvaMaintenance
 
 const DEFAULTS = { enabled: true }
 
@@ -13,6 +18,9 @@ const desktopWindowGuard = createDesktopWindowGuard({
   tabs: chrome.tabs,
   windows: chrome.windows,
   sessionStorage: chrome.storage.session,
+})
+const maintenanceService = createMaintenanceService({
+  browsingData: chrome.browsingData,
 })
 
 chrome.windows.onCreated.addListener((createdWindow) => {
@@ -43,6 +51,14 @@ async function getStatus() {
 }
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg?.type === MAINTENANCE_MESSAGE) {
+    maintenanceService
+      .clear(msg.action)
+      .then(sendResponse)
+      .catch((error) => sendResponse({ ok: false, error: String(error) }))
+    return true
+  }
+
   if (msg?.type === DESKTOP_APP_WINDOW_MESSAGE) {
     desktopWindowGuard
       .registerAppWindow(sender)

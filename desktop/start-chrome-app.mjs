@@ -5,12 +5,21 @@ import path from 'node:path'
 import { isChromeProfileRunning, waitForChromeStartup } from './chrome-launch.mjs'
 import { chromePath, ensureChromeRuntime, profileDir } from './runtime-paths.mjs'
 import { prepareChromeRuntimeBranding } from './runtime-branding.mjs'
+import { prepareNoirvaProfilePreferences } from './profile-preferences.mjs'
 
 const desktopDir = path.dirname(fileURLToPath(import.meta.url))
 const extensionDir = path.resolve(desktopDir, '..', 'dist-extension')
 
 ensureChromeRuntime()
 prepareChromeRuntimeBranding(chromePath)
+
+const profileAlreadyRunning = await isChromeProfileRunning({ chromePath, profileDir })
+if (!profileAlreadyRunning) {
+  const preferences = prepareNoirvaProfilePreferences(profileDir)
+  if (preferences.changed) {
+    console.log('Noirva disabled Chrome translation prompts in its private profile.')
+  }
+}
 
 if (!existsSync(path.join(extensionDir, 'manifest.json'))) {
   console.error('The Noirva extension is not built. Run npm run build:extension first.')
@@ -27,6 +36,8 @@ const chrome = spawn(
     '--no-default-browser-check',
     '--disable-background-mode',
     '--disable-infobars',
+    '--disable-translate',
+    '--disable-features=Translate,TranslateUI',
     '--app=https://www.youtube.com/?tube_app=1',
   ],
   {

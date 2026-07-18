@@ -41,7 +41,7 @@
       description:
         `${PRODUCT_NAME} hides the normal browser toolbar, so it adds its own Back control to the YouTube header.`,
       points: Object.freeze([
-        'Select the left arrow beside the YouTube menu.',
+        'Select the left arrow at the start of the YouTube header.',
         'Keyboard alternatives: Command + [ on Mac or Alt + Left on Windows.',
       ]),
       icon: 'back',

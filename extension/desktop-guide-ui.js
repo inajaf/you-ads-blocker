@@ -7,7 +7,10 @@
 (function registerTubeDesktopGuideUI(global) {
   const DESKTOP_BACK_ID = 'tube-desktop-back'
   const DESKTOP_HELP_ID = 'tube-desktop-help'
+  const DESKTOP_MAINTENANCE_ID = 'tube-desktop-maintenance'
   const DESKTOP_GUIDE_ID = 'tube-desktop-guide'
+  const DESKTOP_MAINTENANCE_DIALOG_ID = 'tube-desktop-maintenance-dialog'
+  const DESKTOP_TOAST_ID = 'tube-desktop-toast'
   const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
 
   let installedController = null
@@ -70,8 +73,41 @@
       ],
       back: ['m15 18-6-6 6-6'],
       check: ['m5 12 4 4L19 6'],
+      history: ['M3 12a9 9 0 1 0 3-6.7', 'M3 4v5h5', 'M12 7v5l3 2'],
+      cache: [
+        'M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3Z',
+        'M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6',
+        'M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6',
+      ],
     }
     return createSvgIcon(paths[name] || paths.play)
+  }
+
+  function getMaintenanceCopy() {
+    return {
+      buttonLabel: 'Clean up Noirva data',
+      dialogTitle: 'Clean up Noirva data',
+      dialogDescription:
+        'Remove history or temporary files from this private app profile. YouTube sign-in and cookies are preserved.',
+      closeLabel: 'Close data cleanup',
+      historyTitle: 'Browser history',
+      historyDescription: 'Removes the list of pages visited in the Noirva profile.',
+      historyAction: 'Clear history',
+      cacheTitle: 'Browser cache',
+      cacheDescription: 'Removes temporary files. Needed content will download again.',
+      cacheAction: 'Clear cache',
+      cancel: 'Cancel',
+      confirm: 'Clear',
+      clearing: 'Clearing…',
+      confirmTitle: (label) => `${label}?`,
+      confirmDescription:
+        'This cannot be undone. Cookies, passwords and your YouTube sign-in will not be touched.',
+      success: {
+        history: 'History cleared. Your YouTube sign-in was preserved.',
+        cache: 'Cache cleared. Your YouTube sign-in was preserved.',
+      },
+      error: 'Noirva could not clear the data. Please try again.',
+    }
   }
 
   function createBackButton() {
@@ -90,8 +126,201 @@
     return button
   }
 
-  function createController(guide, storage, logoUrl) {
+  function createController(guide, storage, logoUrl, maintenance) {
     let guideCheckStarted = false
+
+    function showToast(message) {
+      document.getElementById(DESKTOP_TOAST_ID)?.remove()
+      const toast = createElement('div', {
+        className: 'tube-desktop-toast',
+        id: DESKTOP_TOAST_ID,
+        text: message,
+        attributes: { role: 'status', 'aria-live': 'polite' },
+      })
+      document.body.append(toast)
+      setTimeout(() => toast.remove(), 4_000)
+    }
+
+    function openMaintenance() {
+      if (!maintenance || window.top !== window || !document.body) return
+
+      const existing = document.getElementById(DESKTOP_MAINTENANCE_DIALOG_ID)
+      if (existing) {
+        if (!existing.open) existing.showModal()
+        existing.querySelector('.tube-maintenance-title')?.focus()
+        return
+      }
+
+      const copy = getMaintenanceCopy()
+      const dialog = document.createElement('dialog')
+      dialog.id = DESKTOP_MAINTENANCE_DIALOG_ID
+      dialog.setAttribute('aria-labelledby', 'tube-maintenance-title')
+      dialog.setAttribute('aria-describedby', 'tube-maintenance-description')
+
+      const shell = createElement('section', { className: 'tube-maintenance-shell' })
+      const heading = createElement('h2', {
+        className: 'tube-maintenance-title',
+        id: 'tube-maintenance-title',
+        text: copy.dialogTitle,
+        attributes: { tabindex: -1 },
+      })
+      const description = createElement('p', {
+        className: 'tube-maintenance-description',
+        id: 'tube-maintenance-description',
+        text: copy.dialogDescription,
+      })
+      const closeButton = createElement('button', {
+        className: 'tube-maintenance-close',
+        attributes: { type: 'button', 'aria-label': copy.closeLabel },
+      })
+      closeButton.append(createSvgIcon(['m6 6 12 12M18 6 6 18']))
+
+      const actionGrid = createElement('div', { className: 'tube-maintenance-grid' })
+      const confirmPanel = createElement('section', {
+        className: 'tube-maintenance-confirm',
+        attributes: { hidden: true },
+      })
+      const confirmHeading = createElement('h3', {
+        className: 'tube-maintenance-confirm-title',
+        attributes: { tabindex: -1 },
+      })
+      const confirmDescription = createElement('p', {
+        className: 'tube-maintenance-confirm-description',
+        text: copy.confirmDescription,
+      })
+      const errorMessage = createElement('p', {
+        className: 'tube-maintenance-error',
+        attributes: { role: 'alert', hidden: true },
+      })
+      const confirmActions = createElement('div', { className: 'tube-maintenance-confirm-actions' })
+      const cancelButton = createElement('button', {
+        className: 'tube-maintenance-cancel',
+        text: copy.cancel,
+        attributes: { type: 'button' },
+      })
+      const confirmButton = createElement('button', {
+        className: 'tube-maintenance-confirm-button',
+        text: copy.confirm,
+        attributes: { type: 'button' },
+      })
+      confirmActions.append(cancelButton, confirmButton)
+      confirmPanel.append(confirmHeading, confirmDescription, errorMessage, confirmActions)
+
+      let pendingAction = null
+
+      function showConfirmation(action, label) {
+        pendingAction = action
+        confirmHeading.textContent = copy.confirmTitle(label)
+        errorMessage.hidden = true
+        actionGrid.hidden = true
+        confirmPanel.hidden = false
+        requestAnimationFrame(() => confirmHeading.focus?.())
+      }
+
+      function createMaintenanceCard({ action, title, description: cardDescription, label, icon }) {
+        const card = createElement('article', { className: 'tube-maintenance-card' })
+        const iconShell = createElement('span', {
+          className: 'tube-maintenance-card-icon',
+          attributes: { 'aria-hidden': 'true' },
+        })
+        iconShell.append(createStepIcon(icon))
+        const copyShell = createElement('div', { className: 'tube-maintenance-card-copy' })
+        copyShell.append(
+          createElement('h3', { text: title }),
+          createElement('p', { text: cardDescription }),
+        )
+        const button = createElement('button', {
+          className: 'tube-maintenance-action',
+          text: label,
+          attributes: { type: 'button' },
+        })
+        button.addEventListener('click', () => showConfirmation(action, label))
+        card.append(iconShell, copyShell, button)
+        return card
+      }
+
+      actionGrid.append(
+        createMaintenanceCard({
+          action: 'history',
+          title: copy.historyTitle,
+          description: copy.historyDescription,
+          label: copy.historyAction,
+          icon: 'history',
+        }),
+        createMaintenanceCard({
+          action: 'cache',
+          title: copy.cacheTitle,
+          description: copy.cacheDescription,
+          label: copy.cacheAction,
+          icon: 'cache',
+        }),
+      )
+
+      function closeDialog() {
+        dialog.close()
+        dialog.remove()
+      }
+
+      closeButton.addEventListener('click', closeDialog)
+      dialog.addEventListener('cancel', (event) => {
+        event.preventDefault()
+        closeDialog()
+      })
+      cancelButton.addEventListener('click', () => {
+        pendingAction = null
+        confirmPanel.hidden = true
+        actionGrid.hidden = false
+        actionGrid.querySelector('button')?.focus()
+      })
+      confirmButton.addEventListener('click', async () => {
+        if (!pendingAction) return
+        const action = pendingAction
+        confirmButton.disabled = true
+        cancelButton.disabled = true
+        confirmButton.textContent = copy.clearing
+        errorMessage.hidden = true
+
+        try {
+          await maintenance.clear(action)
+          closeDialog()
+          showToast(copy.success[action])
+        } catch (error) {
+          console.error('[Noirva] failed to clear browsing data:', error)
+          errorMessage.textContent = copy.error
+          errorMessage.hidden = false
+        } finally {
+          confirmButton.disabled = false
+          cancelButton.disabled = false
+          confirmButton.textContent = copy.confirm
+        }
+      })
+
+      shell.append(closeButton, heading, description, actionGrid, confirmPanel)
+      dialog.append(shell)
+      document.body.append(dialog)
+      dialog.showModal()
+      requestAnimationFrame(() => heading.focus())
+    }
+
+    function createMaintenanceButton() {
+      const button = document.createElement('button')
+      button.id = DESKTOP_MAINTENANCE_ID
+      button.type = 'button'
+      const copy = getMaintenanceCopy()
+      button.setAttribute('aria-label', copy.buttonLabel)
+      button.title = copy.buttonLabel
+      button.append(
+        createSvgIcon([
+          'M4 7h10',
+          'M4 12h16',
+          'M10 17h10',
+          'M17 4v6',
+          'M7 14v6',
+        ]),
+      )
+      button.addEventListener('click', openMaintenance)
+      return button
+    }
 
     function markComplete() {
       Promise.resolve(storage.setCompletedVersion(guide.VERSION)).catch((error) => {
@@ -309,15 +538,21 @@
         else mastheadStart.prepend(backButton)
       }
 
-      if (!document.getElementById(DESKTOP_HELP_ID)) {
-        backButton.insertAdjacentElement('afterend', createHelpButton())
+      let helpButton = document.getElementById(DESKTOP_HELP_ID)
+      if (!helpButton) {
+        helpButton = createHelpButton()
+        backButton.insertAdjacentElement('afterend', helpButton)
+      }
+
+      if (maintenance && !document.getElementById(DESKTOP_MAINTENANCE_ID)) {
+        helpButton.insertAdjacentElement('afterend', createMaintenanceButton())
       }
     }
 
     return Object.freeze({ ensureNavigation, openGuide })
   }
 
-  function install({ guide = global.TubeDesktopGuide, storage, logoUrl } = {}) {
+  function install({ guide = global.TubeDesktopGuide, storage, logoUrl, maintenance } = {}) {
     if (installedController) return installedController
     if (!guide || !Array.isArray(guide.STEPS)) {
       throw new TypeError('TubeDesktopGuide model is required')
@@ -329,8 +564,11 @@
     ) {
       throw new TypeError('A desktop guide storage adapter is required')
     }
+    if (maintenance && typeof maintenance.clear !== 'function') {
+      throw new TypeError('A Noirva maintenance adapter must provide clear(action)')
+    }
 
-    installedController = createController(guide, storage, logoUrl)
+    installedController = createController(guide, storage, logoUrl, maintenance)
     const ensureNavigation = () => installedController.ensureNavigation()
     if (document.body) ensureNavigation()
     else document.addEventListener('DOMContentLoaded', ensureNavigation, { once: true })

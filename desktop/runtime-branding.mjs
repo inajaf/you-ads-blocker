@@ -127,6 +127,13 @@ export function ensureChromeRuntimeBranding({
     setPlistString(infoPlistPath, 'CFBundleDisplayName', 'Noirva')
     changed = true
   }
+  // macOS uses CFBundleName for the first application-menu item. Keeping it
+  // branded prevents the private runtime from surfacing "Chrome for Testing"
+  // inside the otherwise standalone Noirva app experience.
+  if (readPlistValue(infoPlistPath, 'CFBundleName') !== 'Noirva') {
+    setPlistString(infoPlistPath, 'CFBundleName', 'Noirva')
+    changed = true
+  }
   if (readPlistValue(infoPlistPath, 'CFBundleIconFile') !== 'app.icns') {
     setPlistString(infoPlistPath, 'CFBundleIconFile', 'app.icns')
     changed = true

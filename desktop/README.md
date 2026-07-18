@@ -62,6 +62,16 @@ On the first app launch, Noirva opens a four-step guide over YouTube that explai
 Finish or skip the guide to dismiss it. Use the question-mark button beside
 Noirva's Back button in the YouTube header whenever you want to reopen it.
 
+The adjacent maintenance button opens two separate, confirmed actions:
+
+- **Clear history** removes visited-page history from Noirva's private profile.
+- **Clear cache** removes temporary browser files.
+
+Neither action removes cookies, passwords, local storage, or the saved YouTube
+sign-in. In the dedicated app window Chrome's tabs, address bar, browser menu,
+and YouTube's lookalike hamburger control are hidden; Noirva's Back button and
+the compact YouTube navigation remain available.
+
 Set `NOIRVA_PROFILE_DIR` to use a different persistent Chrome profile directory.
 The legacy `TUBE_PROFILE_DIR` variable remains supported for compatibility.
 The Electron implementation remains available as the development fallback via

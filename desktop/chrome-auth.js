@@ -63,6 +63,8 @@ function createChromeHandoffArgs({ profileDir, extensionDir }) {
     '--no-default-browser-check',
     '--disable-background-mode',
     '--disable-infobars',
+    '--disable-translate',
+    '--disable-features=Translate,TranslateUI',
     `--app=${GOOGLE_LOGIN_URL}`,
   ]
 }
