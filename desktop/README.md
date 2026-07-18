@@ -5,6 +5,12 @@ profile and the unpacked Noirva Shield extension. Chrome App Mode keeps Google
 sign-in supported while presenting a standalone window without normal tabs or
 an address bar.
 
+Before either the sign-in or normal launch, Noirva brands only its private
+Chrome for Testing runtime with the Noirva display name and app icon. The
+system Chrome installation is never modified. If an old Chrome icon is already
+running in the Dock, close that window once and start Noirva again so macOS can
+load the refreshed icon.
+
 ## Prerequisites
 
 1. Install the root dependencies and build the extension:
@@ -24,6 +30,7 @@ an address bar.
    Existing installations keep using this legacy directory so the signed-in
    profile is not lost. You can keep the runtime elsewhere and set
    `NOIRVA_CHROME_PATH` to the executable (`TUBE_CHROME_PATH` remains supported).
+   Custom external Chrome paths are launched but deliberately left unmodified.
 
 ## First sign-in
 
