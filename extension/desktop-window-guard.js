@@ -93,6 +93,23 @@
         ) {
           return false
         }
+
+        const registration = await readAppWindowRegistration()
+        if (registration && registration.windowId !== appWindowId) {
+          try {
+            await windows.get(registration.windowId)
+
+            const isChildSurface =
+              appTab.openerTabId === registration.tabId || appWindow.type === 'popup'
+
+            // Studio and upload can open a child popup. Let it inherit app mode,
+            // but keep the primary Noirva window registered for reopen handling.
+            return isChildSurface
+          } catch {
+            // The previous primary window is gone, so this one may replace it.
+          }
+        }
+
         await sessionStorage.set({
           [APP_WINDOW_STORAGE_KEY]: { windowId: appWindowId, tabId: appTabId },
         })
@@ -116,21 +133,35 @@
       }
 
       const registration = await readAppWindowRegistration()
-      if (
-        registration?.windowId !== senderWindowId ||
-        registration?.tabId !== senderTabId
-      ) {
+      if (!registration) {
         return false
       }
 
       try {
-        const tab = await tabs.get(senderTabId)
-        return (
-          tab.windowId === senderWindowId &&
-          isAllowedDesktopAppTabUrl(tab.url)
-        )
+        const [registeredWindow, senderWindow, tab] = await Promise.all([
+          windows.get(registration.windowId),
+          windows.get(senderWindowId),
+          tabs.get(senderTabId),
+        ])
+        if (
+          !registeredWindow ||
+          tab.windowId !== senderWindowId ||
+          !isAllowedDesktopAppTabUrl(tab.url)
+        ) {
+          return false
+        }
+
+        if (registration.windowId === senderWindowId) {
+          if (registration.tabId !== senderTabId) {
+            await sessionStorage.set({
+              [APP_WINDOW_STORAGE_KEY]: { windowId: senderWindowId, tabId: senderTabId },
+            })
+          }
+          return true
+        }
+
+        return tab.openerTabId === registration.tabId || senderWindow.type === 'popup'
       } catch {
-        await clearAppWindowRegistration()
         return false
       }
     }
