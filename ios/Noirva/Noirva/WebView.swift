@@ -1,7 +1,7 @@
 import SwiftUI
 import WebKit
 
-struct WebView: UIViewRepresentable {
+struct WebView: UIViewControllerRepresentable {
     @ObservedObject var adBlocker: AdBlocker
     @Binding var canGoBack: Bool
     @Binding var canGoForward: Bool
@@ -10,37 +10,11 @@ struct WebView: UIViewRepresentable {
         Coordinator(adBlocker: adBlocker, canGoBack: $canGoBack, canGoForward: $canGoForward)
     }
 
-    func makeUIView(context: Context) -> WKWebView {
-        let config = WKWebViewConfiguration()
-        config.allowsInlineMediaPlayback = true
-        config.mediaTypesRequiringUserActionForPlayback = []
-
-        if !adBlocker.injectScript.isEmpty {
-            let userScript = WKUserScript(
-                source: adBlocker.injectScript,
-                injectionTime: .atDocumentEnd,
-                forMainFrameOnly: false
-            )
-            config.userContentController.addUserScript(userScript)
-        }
-
-        let webView = WKWebView(frame: .zero, configuration: config)
-        webView.navigationDelegate = context.coordinator
-        webView.allowsBackForwardNavigationGestures = true
-        webView.customUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1"
-
-        if let url = URL(string: "https://m.youtube.com") {
-            webView.load(URLRequest(url: url))
-        }
-
-        return webView
+    func makeUIViewController(context: Context) -> WebViewController {
+        WebViewController(coordinator: context.coordinator, adBlocker: adBlocker)
     }
 
-    func updateUIView(_ uiView: WKWebView, context: Context) {}
-
-    static func dismantleUIView(_ uiView: WKWebView, coordinator: Coordinator) {
-        uiView.stopLoading()
-    }
+    func updateUIViewController(_ vc: WebViewController, context: Context) {}
 
     class Coordinator: NSObject, WKNavigationDelegate {
         let adBlocker: AdBlocker
@@ -52,38 +26,17 @@ struct WebView: UIViewRepresentable {
             self.adBlocker = adBlocker
             self.canGoBack = canGoBack
             self.canGoForward = canGoForward
-            super.init()
-            NotificationCenter.default.addObserver(
-                self,
-                selector: #selector(handleAction),
-                name: .webViewAction,
-                object: nil
-            )
         }
 
-        deinit {
-            NotificationCenter.default.removeObserver(self, name: .webViewAction, object: nil)
+        func updateNavState() {
+            guard let wv = webView else { return }
+            canGoBack.wrappedValue = wv.canGoBack
+            canGoForward.wrappedValue = wv.canGoForward
         }
 
-        @objc private func handleAction(_ notification: Notification) {
-            guard let action = notification.userInfo?["action"] as? String else { return }
-            DispatchQueue.main.async { [weak self] in
-                guard let webView = self?.webView else { return }
-                switch action {
-                case "goBack": webView.goBackIfPossible()
-                case "goForward": webView.goForwardIfPossible()
-                case "reload": webView.reload()
-                default: break
-                }
-            }
-        }
-
-        func webView(
-            _ webView: WKWebView,
-            decidePolicyFor navigationAction: WKNavigationAction,
-            decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
-        ) {
-            if let url = navigationAction.request.url, adBlocker.shouldBlock(url) {
+        func webView(_ webView: WKWebView, decidePolicyFor navAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+            self.webView = webView
+            if let url = navAction.request.url, adBlocker.shouldBlock(url) {
                 decisionHandler(.cancel)
                 return
             }
@@ -92,24 +45,162 @@ struct WebView: UIViewRepresentable {
 
         func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
             self.webView = webView
-            canGoBack.wrappedValue = webView.canGoBack
-            canGoForward.wrappedValue = webView.canGoForward
+            updateNavState()
         }
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             self.webView = webView
-            canGoBack.wrappedValue = webView.canGoBack
-            canGoForward.wrappedValue = webView.canGoForward
+            updateNavState()
         }
     }
 }
 
-extension WKWebView {
-    func goBackIfPossible() {
-        if canGoBack { goBack() }
+class WebViewController: UIViewController {
+    private let coordinator: WebView.Coordinator
+    private let adBlocker: AdBlocker
+    private var webView: WKWebView!
+    private var toolbar: UIView!
+    private var toolbarBottom: NSLayoutConstraint!
+    private var toolbarHideWork: DispatchWorkItem?
+
+    init(coordinator: WebView.Coordinator, adBlocker: AdBlocker) {
+        self.coordinator = coordinator
+        self.adBlocker = adBlocker
+        super.init(nibName: nil, bundle: nil)
     }
 
-    func goForwardIfPossible() {
-        if canGoForward { goForward() }
+    required init?(coder: NSCoder) { nil }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        setupWebView()
+        setupToolbar()
+        showToolbar()
+    }
+
+    private func setupWebView() {
+        let config = WKWebViewConfiguration()
+        config.allowsInlineMediaPlayback = true
+        config.mediaTypesRequiringUserActionForPlayback = []
+
+        if !adBlocker.injectScript.isEmpty {
+            let script = WKUserScript(source: adBlocker.injectScript, injectionTime: .atDocumentEnd, forMainFrameOnly: false)
+            config.userContentController.addUserScript(script)
+        }
+
+        webView = WKWebView(frame: .zero, configuration: config)
+        webView.translatesAutoresizingMaskIntoConstraints = false
+        webView.navigationDelegate = coordinator
+        webView.allowsBackForwardNavigationGestures = true
+        webView.customUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1"
+        view.addSubview(webView)
+
+        NSLayoutConstraint.activate([
+            webView.topAnchor.constraint(equalTo: view.topAnchor),
+            webView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            webView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            webView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+        ])
+
+        if let url = URL(string: "https://m.youtube.com") {
+            webView.load(URLRequest(url: url))
+        }
+    }
+
+    private func setupToolbar() {
+        let bar = UIView()
+        bar.translatesAutoresizingMaskIntoConstraints = false
+        bar.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.85)
+
+        let stack = UIStackView()
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        stack.axis = .horizontal
+        stack.distribution = .equalSpacing
+        stack.alignment = .center
+
+        let backBtn = toolbarButton(systemName: "chevron.left", action: #selector(goBack))
+        let fwdBtn = toolbarButton(systemName: "chevron.right", action: #selector(goForward))
+        let shieldBtn = toolbarButton(systemName: "shield.fill", action: #selector(toggleShield))
+        let reloadBtn = toolbarButton(systemName: "arrow.clockwise", action: #selector(reloadPage))
+
+        stack.addArrangedSubview(backBtn)
+        stack.addArrangedSubview(fwdBtn)
+        stack.addArrangedSubview(shieldBtn)
+        stack.addArrangedSubview(reloadBtn)
+
+        bar.addSubview(stack)
+        view.addSubview(bar)
+
+        toolbarBottom = bar.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: 100)
+        NSLayoutConstraint.activate([
+            bar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            bar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            toolbarBottom,
+            bar.heightAnchor.constraint(equalToConstant: 56),
+
+            stack.leadingAnchor.constraint(equalTo: bar.leadingAnchor, constant: 16),
+            stack.trailingAnchor.constraint(equalTo: bar.trailingAnchor, constant: -16),
+            stack.topAnchor.constraint(equalTo: bar.topAnchor),
+            stack.bottomAnchor.constraint(equalTo: bar.bottomAnchor),
+        ])
+
+        let tap = UITapGestureRecognizer(target: self, action: #selector(didTapWebView))
+        tap.cancelsTouchesInView = false
+        webView.addGestureRecognizer(tap)
+
+        toolbar = bar
+        updateShieldIcon(shieldBtn)
+    }
+
+    private func toolbarButton(systemName: String, action: Selector) -> UIButton {
+        let btn = UIButton(type: .system)
+        btn.translatesAutoresizingMaskIntoConstraints = false
+        let config = UIImage.SymbolConfiguration(pointSize: 20, weight: .medium)
+        btn.setImage(UIImage(systemName: systemName, withConfiguration: config), for: .normal)
+        btn.tintColor = .white
+        btn.addTarget(self, action: action, for: .touchUpInside)
+        btn.widthAnchor.constraint(equalToConstant: 52).isActive = true
+        btn.heightAnchor.constraint(equalToConstant: 48).isActive = true
+        return btn
+    }
+
+    private func updateShieldIcon(_ button: UIButton? = nil) {
+        guard let btn = button ?? toolbar?.subviews.first?.subviews.compactMap({ $0 as? UIButton }).dropFirst(2).first else { return }
+        let name = adBlocker.enabled ? "shield.fill" : "shield.slash"
+        let config = UIImage.SymbolConfiguration(pointSize: 20, weight: .medium)
+        btn.setImage(UIImage(systemName: name, withConfiguration: config), for: .normal)
+        btn.tintColor = adBlocker.enabled ? .systemGreen : .gray
+    }
+
+    @objc private func didTapWebView() {
+        showToolbar()
+    }
+
+    @objc private func goBack() { webView.goBack() }
+    @objc private func goForward() { webView.goForward() }
+    @objc private func reloadPage() { webView.reload() }
+
+    @objc private func toggleShield() {
+        adBlocker.toggle()
+        updateShieldIcon()
+        showToolbar()
+    }
+
+    private func showToolbar() {
+        toolbarHideWork?.cancel()
+        toolbarBottom.constant = 0
+        UIView.animate(withDuration: 0.25) { self.view.layoutIfNeeded() }
+        scheduleHide()
+    }
+
+    private func scheduleHide() {
+        let work = DispatchWorkItem { [weak self] in
+            UIView.animate(withDuration: 0.25) {
+                self?.toolbarBottom.constant = 100
+                self?.view.layoutIfNeeded()
+            }
+        }
+        toolbarHideWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3, execute: work)
     }
 }
