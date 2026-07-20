@@ -113,6 +113,47 @@ describe('desktop first-run guide model', () => {
     assert.match(content, /history\.replaceState/)
   })
 
+  it('sends the back arrow to the app home, preserving tube_app on fresh surfaces', () => {
+    const resolve = globalThis.TubeDesktopGuideUI.resolveBackNavigation
+    const APP_HOME = 'https://www.youtube.com/?tube_app=1'
+
+    // App entry page: always return to the app home rather than leaving.
+    assert.deepEqual(
+      resolve({ search: '?tube_app=1', historyLength: 1 }),
+      { type: 'assign', url: APP_HOME },
+    )
+    assert.deepEqual(
+      resolve({ search: '?tube_app=1', historyLength: 5 }),
+      { type: 'assign', url: APP_HOME },
+    )
+
+    // Fresh Studio tab / upload popup: no tube_app marker and no real history,
+    // so keep the app context instead of dropping to plain youtube.com.
+    assert.deepEqual(
+      resolve({ search: '', historyLength: 1 }),
+      { type: 'assign', url: APP_HOME },
+    )
+    assert.deepEqual(
+      resolve({ search: '?o=U', historyLength: 1 }),
+      { type: 'assign', url: APP_HOME },
+    )
+
+    // Studio reached by real navigation inside the app window: go back through
+    // history so the user lands on the previous app page.
+    assert.deepEqual(
+      resolve({ search: '', historyLength: 3 }),
+      { type: 'back' },
+    )
+  })
+
+  it('never falls back to plain youtube.com in the back button handler', () => {
+    const guideUI = fs.readFileSync(
+      new URL('../extension/desktop-guide-ui.js', import.meta.url),
+      'utf8',
+    )
+    assert.doesNotMatch(guideUI, /location\.assign\('https:\/\/www\.youtube\.com\/'\)/)
+  })
+
   it('keeps the guide usable in short windows with an accessible CTA', () => {
     const css = fs.readFileSync(new URL('../extension/content.css', import.meta.url), 'utf8')
     assert.match(css, /max-height:\s*560px/)

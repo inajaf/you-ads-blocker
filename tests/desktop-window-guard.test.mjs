@@ -116,11 +116,12 @@ describe('Noirva desktop window guard', () => {
     assert.match(backgroundSource, /importScripts\('desktop-window-guard\.js'\)/)
   })
 
-  it('recognizes the registered app tab after navigation to YouTube Studio', async () => {
+  it('adopts a new YouTube Studio tab in the registered app window', async () => {
     const fakes = createFakes([
-      { id: 7, type: 'app' },
+      { id: 7, type: 'normal' },
     ], [
-      { id: 70, windowId: 7, url: 'https://studio.youtube.com/channel/example' },
+      { id: 70, windowId: 7, url: 'https://www.youtube.com/' },
+      { id: 71, windowId: 7, url: 'https://studio.youtube.com/channel/example' },
     ])
     fakes.storageState[STORAGE_KEY] = { windowId: 7, tabId: 70 }
     const guard = createGuard(fakes)
@@ -129,18 +130,104 @@ describe('Noirva desktop window guard', () => {
       await guard.isAppWindowSender({
         frameId: 0,
         url: 'https://studio.youtube.com/channel/example',
-        tab: { id: 70, windowId: 7 },
+        tab: { id: 71, windowId: 7 },
       }),
       true,
     )
+    assert.deepEqual(plain(fakes.storageState[STORAGE_KEY]), { windowId: 7, tabId: 71 })
+  })
+
+  it('inherits app mode in a Studio popup without replacing the primary registration', async () => {
+    const fakes = createFakes([
+      { id: 7, type: 'normal' },
+      { id: 8, type: 'popup' },
+    ], [
+      { id: 70, windowId: 7, url: 'https://www.youtube.com/' },
+      {
+        id: 80,
+        windowId: 8,
+        openerTabId: 70,
+        url: 'https://studio.youtube.com/channel/example/videos/upload',
+      },
+    ])
+    fakes.storageState[STORAGE_KEY] = { windowId: 7, tabId: 70 }
+    const guard = createGuard(fakes)
+    const popupSender = {
+      frameId: 0,
+      url: 'https://studio.youtube.com/channel/example/videos/upload',
+      tab: { id: 80, windowId: 8 },
+    }
+
+    assert.equal(await guard.isAppWindowSender(popupSender), true)
+    assert.equal(await guard.registerAppWindow(popupSender), true)
+    assert.deepEqual(plain(fakes.storageState[STORAGE_KEY]), { windowId: 7, tabId: 70 })
+  })
+
+  it('clears the registration when the registered app window is gone', async () => {
+    const fakes = createFakes([
+      { id: 8, type: 'normal' },
+    ], [
+      { id: 80, windowId: 8, url: 'https://www.youtube.com/' },
+    ])
+    // The stored primary window (404) was closed while the worker slept.
+    fakes.storageState[STORAGE_KEY] = { windowId: 404, tabId: 405 }
+    const guard = createGuard(fakes)
+
     assert.equal(
       await guard.isAppWindowSender({
         frameId: 0,
-        url: 'https://studio.youtube.com/channel/example',
-        tab: { id: 71, windowId: 8 },
+        url: 'https://www.youtube.com/',
+        tab: { id: 80, windowId: 8 },
       }),
       false,
     )
+    assert.equal(fakes.storageState[STORAGE_KEY], undefined)
+  })
+
+  it('keeps a live registration when only the sender lookup fails', async () => {
+    const fakes = createFakes([
+      { id: 7, type: 'normal' },
+    ], [
+      { id: 70, windowId: 7, url: 'https://www.youtube.com/' },
+    ])
+    // Registered window 7 is alive, but the sender references a window/tab that
+    // is not resolvable (e.g. a transient race), which must not wipe the record.
+    fakes.storageState[STORAGE_KEY] = { windowId: 7, tabId: 70 }
+    const guard = createGuard(fakes)
+
+    assert.equal(
+      await guard.isAppWindowSender({
+        frameId: 0,
+        url: 'https://www.youtube.com/',
+        tab: { id: 999, windowId: 8 },
+      }),
+      false,
+    )
+    assert.deepEqual(plain(fakes.storageState[STORAGE_KEY]), { windowId: 7, tabId: 70 })
+  })
+
+  it('rejects an unrelated normal YouTube window', async () => {
+    const fakes = createFakes([
+      { id: 7, type: 'normal' },
+      { id: 8, type: 'normal' },
+    ], [
+      { id: 70, windowId: 7, url: 'https://www.youtube.com/' },
+      { id: 80, windowId: 8, url: 'https://studio.youtube.com/channel/example' },
+    ])
+    fakes.storageState[STORAGE_KEY] = { windowId: 7, tabId: 70 }
+    const guard = createGuard(fakes)
+    const unrelatedSender = {
+      frameId: 0,
+      url: 'https://studio.youtube.com/channel/example',
+      tab: { id: 80, windowId: 8 },
+    }
+
+    assert.equal(
+      await guard.isAppWindowSender(unrelatedSender),
+      false,
+    )
+    assert.equal(await guard.registerAppWindow(unrelatedSender), false)
+    assert.deepEqual(plain(fakes.storageState[STORAGE_KEY]), { windowId: 7, tabId: 70 })
   })
 
   it('recognizes only the trusted HTTPS YouTube app entry marker', () => {
@@ -187,6 +274,27 @@ describe('Noirva desktop window guard', () => {
       }),
       false,
     )
+  })
+
+  it('lets a new window become primary when the registered window is closed', async () => {
+    const fakes = createFakes([
+      { id: 7, type: 'normal' },
+    ], [
+      { id: 70, windowId: 7, url: 'https://www.youtube.com/?tube_app=1' },
+    ])
+    // A registration survives for a window id (404) that no longer exists.
+    fakes.storageState[STORAGE_KEY] = { windowId: 404, tabId: 405 }
+    const guard = createGuard(fakes)
+
+    assert.equal(
+      await guard.registerAppWindow({
+        frameId: 0,
+        url: 'https://www.youtube.com/?tube_app=1',
+        tab: { id: 70, windowId: 7 },
+      }),
+      true,
+    )
+    assert.deepEqual(plain(fakes.storageState[STORAGE_KEY]), { windowId: 7, tabId: 70 })
   })
 
   it('rejects registration when the live tab no longer belongs to the sender window', async () => {
