@@ -30,10 +30,14 @@ Developer mode, choose **Load unpacked**, and select `dist-extension/`.
 `npm run dev` is an alias for `npm run dev:local`. Port 5173 is strict so the
 extension/tunnel always talk to the same address.
 
+## Desktop app
+
+Grab the latest macOS DMG from [Releases](https://github.com/inajaf/you-ads-blocker/releases).
+
+YouTube in a standalone window with ad blocking, back-button navigation, and Google sign-in. See [`desktop/README.md`](desktop/README.md) for install instructions.
+
 ## Native wrappers
 
-- `desktop/` runs YouTube in Chrome App Mode with the unpacked Shield extension
-  and a persistent Google profile. See [`desktop/README.md`](desktop/README.md).
 - `android/` contains a native WebView wrapper backed by the shared ad-block
   core in `adblock/`. See [`android/README.md`](android/README.md).
 
