@@ -42,3 +42,4 @@ CLAUDE.local.md
 *.njsproj
 *.sln
 *.sw?
+ios/Noirva/build/
