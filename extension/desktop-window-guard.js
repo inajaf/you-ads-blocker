@@ -137,9 +137,20 @@
         return false
       }
 
+      let registeredWindow
       try {
-        const [registeredWindow, senderWindow, tab] = await Promise.all([
-          windows.get(registration.windowId),
+        registeredWindow = await windows.get(registration.windowId)
+      } catch {
+        // The registered app window is confirmed gone, so drop the stale record
+        // and let a future window claim the primary slot. Only the registered
+        // window lookup clears here; unrelated sender lookup failures below do
+        // not, so a transient error can't wipe a live registration.
+        await clearAppWindowRegistration()
+        return false
+      }
+
+      try {
+        const [senderWindow, tab] = await Promise.all([
           windows.get(senderWindowId),
           tabs.get(senderTabId),
         ])

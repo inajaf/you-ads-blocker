@@ -110,6 +110,17 @@
     }
   }
 
+  // The back button is only ever injected while Noirva runs in desktop app
+  // mode, so every fallback must return to the app's YouTube home with its
+  // tube_app context intact. Studio and the upload popup open as fresh surfaces
+  // where history.length === 1; the old plain-youtube.com fallback dropped app
+  // mode there, so the arrow appeared to do nothing useful.
+  function resolveBackNavigation({ search, historyLength }) {
+    const isAppEntry = new URLSearchParams(search).get('tube_app') === '1'
+    if (!isAppEntry && historyLength > 1) return { type: 'back' }
+    return { type: 'assign', url: 'https://www.youtube.com/?tube_app=1' }
+  }
+
   function createBackButton() {
     const button = document.createElement('button')
     button.id = DESKTOP_BACK_ID
@@ -118,10 +129,12 @@
     button.title = 'Back (⌘[ or Alt+Left)'
     button.append(createSvgIcon(['M15 18l-6-6 6-6']))
     button.addEventListener('click', () => {
-      const isAppEntry = new URLSearchParams(location.search).get('tube_app') === '1'
-      if (isAppEntry) location.assign('https://www.youtube.com/?tube_app=1')
-      else if (history.length > 1) history.back()
-      else location.assign('https://www.youtube.com/')
+      const decision = resolveBackNavigation({
+        search: location.search,
+        historyLength: history.length,
+      })
+      if (decision.type === 'back') history.back()
+      else location.assign(decision.url)
     })
     return button
   }
@@ -593,5 +606,6 @@
   global.TubeDesktopGuideUI = Object.freeze({
     createWebStorageAdapter,
     install,
+    resolveBackNavigation,
   })
 })(globalThis)
