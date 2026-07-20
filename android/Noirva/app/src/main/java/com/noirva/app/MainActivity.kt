@@ -37,7 +37,7 @@ class MainActivity : Activity() {
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(14), dp(8), dp(14), dp(8))
+            setPadding(dp(14), dp(10), dp(14), dp(10))
             setBackgroundColor(Color.parseColor("#0F0F0F"))
         }
 
@@ -57,29 +57,32 @@ class MainActivity : Activity() {
             bg.cornerRadius = dp(20).toFloat()
             bg.setColor(Color.parseColor("#242424"))
             background = bg
-            setPadding(dp(14), dp(0), dp(14), dp(0))
+            setPadding(dp(14), dp(9), dp(14), dp(9))
         }
         val searchPillParams = LinearLayout.LayoutParams(0, dp(38), 1f)
         searchPillParams.marginStart = dp(10)
         header.addView(searchPill, searchPillParams)
 
-        // Magnifying glass icon (text-based, gray)
-        val searchIconText = TextView(this).apply {
-            text = "\uD83D\uDD0D"
-            textSize = 13f
-            setPadding(0, 0, dp(8), 0)
+        // Magnifying glass icon (vector drawable, gray)
+        val searchIcon = ImageView(this).apply {
+            setImageResource(R.drawable.ic_search)
+            scaleType = ImageView.ScaleType.FIT_CENTER
         }
-        searchPill.addView(searchIconText)
+        val searchIconParams = LinearLayout.LayoutParams(dp(16), dp(16))
+        searchIconParams.marginEnd = dp(8)
+        searchPill.addView(searchIcon, searchIconParams)
 
         searchField = EditText(this).apply {
             hint = "Search or paste a link"
             setTextColor(Color.WHITE)
             setHintTextColor(Color.parseColor("#888888"))
             setBackgroundColor(Color.TRANSPARENT)
+            setBackgroundResource(0)
             textSize = 14f
             isSingleLine = true
             imeOptions = EditorInfo.IME_ACTION_GO
             maxLines = 1
+            setPadding(0, 0, 0, 0)
             setOnEditorActionListener { _, actionId, _ ->
                 if (actionId == EditorInfo.IME_ACTION_GO) {
                     performSearch()
@@ -97,7 +100,7 @@ class MainActivity : Activity() {
             bg.cornerRadius = dp(20).toFloat()
             bg.setColor(Color.parseColor("#2E3830"))
             background = bg
-            setPadding(dp(11), dp(0), dp(11), dp(0))
+            setPadding(dp(11), dp(8), dp(11), dp(8))
         }
         val badgeParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.WRAP_CONTENT, dp(32))
