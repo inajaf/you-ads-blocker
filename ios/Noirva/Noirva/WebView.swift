@@ -3,11 +3,9 @@ import WebKit
 
 struct WebView: UIViewControllerRepresentable {
     @ObservedObject var adBlocker: AdBlocker
-    @Binding var canGoBack: Bool
-    @Binding var canGoForward: Bool
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(adBlocker: adBlocker, canGoBack: $canGoBack, canGoForward: $canGoForward)
+        Coordinator(adBlocker: adBlocker)
     }
 
     func makeUIViewController(context: Context) -> WebViewController {
@@ -18,20 +16,10 @@ struct WebView: UIViewControllerRepresentable {
 
     class Coordinator: NSObject, WKNavigationDelegate {
         let adBlocker: AdBlocker
-        var canGoBack: Binding<Bool>
-        var canGoForward: Binding<Bool>
         weak var webView: WKWebView?
 
-        init(adBlocker: AdBlocker, canGoBack: Binding<Bool>, canGoForward: Binding<Bool>) {
+        init(adBlocker: AdBlocker) {
             self.adBlocker = adBlocker
-            self.canGoBack = canGoBack
-            self.canGoForward = canGoForward
-        }
-
-        func updateNavState() {
-            guard let wv = webView else { return }
-            canGoBack.wrappedValue = wv.canGoBack
-            canGoForward.wrappedValue = wv.canGoForward
         }
 
         func webView(_ webView: WKWebView, decidePolicyFor navAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
@@ -41,16 +29,6 @@ struct WebView: UIViewControllerRepresentable {
                 return
             }
             decisionHandler(.allow)
-        }
-
-        func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
-            self.webView = webView
-            updateNavState()
-        }
-
-        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-            self.webView = webView
-            updateNavState()
         }
     }
 }
@@ -84,7 +62,7 @@ class WebViewController: UIViewController {
         config.mediaTypesRequiringUserActionForPlayback = []
 
         if !adBlocker.injectScript.isEmpty {
-            let script = WKUserScript(source: adBlocker.injectScript, injectionTime: .atDocumentEnd, forMainFrameOnly: false)
+            let script = WKUserScript(source: adBlocker.injectScript, injectionTime: .atDocumentStart, forMainFrameOnly: false)
             config.userContentController.addUserScript(script)
         }
 
@@ -115,18 +93,23 @@ class WebViewController: UIViewController {
         let stack = UIStackView()
         stack.translatesAutoresizingMaskIntoConstraints = false
         stack.axis = .horizontal
-        stack.distribution = .equalSpacing
+        stack.distribution = .equalCentering
         stack.alignment = .center
 
-        let backBtn = toolbarButton(systemName: "chevron.left", action: #selector(goBack))
-        let fwdBtn = toolbarButton(systemName: "chevron.right", action: #selector(goForward))
         let shieldBtn = toolbarButton(systemName: "shield.fill", action: #selector(toggleShield))
         let reloadBtn = toolbarButton(systemName: "arrow.clockwise", action: #selector(reloadPage))
 
-        stack.addArrangedSubview(backBtn)
-        stack.addArrangedSubview(fwdBtn)
+        let spacerL = UIView()
+        spacerL.translatesAutoresizingMaskIntoConstraints = false
+        let spacerR = UIView()
+        spacerR.translatesAutoresizingMaskIntoConstraints = false
+
+        stack.addArrangedSubview(spacerL)
         stack.addArrangedSubview(shieldBtn)
         stack.addArrangedSubview(reloadBtn)
+        stack.addArrangedSubview(spacerR)
+
+        spacerL.widthAnchor.constraint(equalTo: spacerR.widthAnchor).isActive = true
 
         bar.addSubview(stack)
         view.addSubview(bar)
@@ -155,7 +138,7 @@ class WebViewController: UIViewController {
     private func toolbarButton(systemName: String, action: Selector) -> UIButton {
         let btn = UIButton(type: .system)
         btn.translatesAutoresizingMaskIntoConstraints = false
-        let config = UIImage.SymbolConfiguration(pointSize: 20, weight: .medium)
+        let config = UIImage.SymbolConfiguration(pointSize: 22, weight: .medium)
         btn.setImage(UIImage(systemName: systemName, withConfiguration: config), for: .normal)
         btn.tintColor = .white
         btn.addTarget(self, action: action, for: .touchUpInside)
@@ -165,9 +148,9 @@ class WebViewController: UIViewController {
     }
 
     private func updateShieldIcon(_ button: UIButton? = nil) {
-        guard let btn = button ?? toolbar?.subviews.first?.subviews.compactMap({ $0 as? UIButton }).dropFirst(2).first else { return }
+        guard let btn = button ?? toolbar?.subviews.first?.subviews.compactMap({ $0 as? UIButton }).first else { return }
         let name = adBlocker.enabled ? "shield.fill" : "shield.slash"
-        let config = UIImage.SymbolConfiguration(pointSize: 20, weight: .medium)
+        let config = UIImage.SymbolConfiguration(pointSize: 22, weight: .medium)
         btn.setImage(UIImage(systemName: name, withConfiguration: config), for: .normal)
         btn.tintColor = adBlocker.enabled ? .systemGreen : .gray
     }
@@ -176,8 +159,6 @@ class WebViewController: UIViewController {
         showToolbar()
     }
 
-    @objc private func goBack() { webView.goBack() }
-    @objc private func goForward() { webView.goForward() }
     @objc private func reloadPage() { webView.reload() }
 
     @objc private func toggleShield() {

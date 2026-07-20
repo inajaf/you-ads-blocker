@@ -18,6 +18,8 @@ dev-dist
 # Generated local verification artifacts
 phone-install-qr.png
 desktop/screenshot.png
+desktop/release
+desktop/out
 
 # Playwright
 playwright-report
