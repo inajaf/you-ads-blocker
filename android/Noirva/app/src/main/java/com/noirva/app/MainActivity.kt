@@ -21,6 +21,10 @@ class MainActivity : Activity() {
     private lateinit var shieldKnob: View
     private lateinit var shieldIcon: ImageView
 
+    private val green = Color.parseColor("#5FCA6B")
+    private val darkBg = Color.parseColor("#0F0F0F")
+    private val greenTop = Color.parseColor("#1C211C")
+
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -30,26 +34,27 @@ class MainActivity : Activity() {
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.parseColor("#0F0F0F"))
+            setBackgroundColor(darkBg)
             fitsSystemWindows = true
         }
 
-        // Header container with gradient
+        // Header with gradient background
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(16), dp(10), dp(16), dp(14))
-            setBackgroundColor(Color.parseColor("#0F0F0F"))
+            setPadding(dp(16), dp(10), dp(16), 0)
+            setBackgroundColor(darkBg)
         }
         val gradientDrawable = GradientDrawable(
             GradientDrawable.Orientation.TOP_BOTTOM,
-            intArrayOf(Color.parseColor("#1A201A"), Color.parseColor("#0F0F0F"))
+            intArrayOf(greenTop, darkBg)
         )
         header.background = gradientDrawable
 
-        // Row 1: App name + search button
+        // Row 1: App name + search button (height 24)
         val row1 = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
+            minimumHeight = dp(24)
         }
 
         val appName = TextView(this).apply {
@@ -60,12 +65,12 @@ class MainActivity : Activity() {
         }
         row1.addView(appName, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
 
+        // Search button: 36x36 circle, rgba(255,255,255,.06) bg
         val searchBtn = ImageView(this).apply {
             setImageResource(R.drawable.ic_search)
             val bg = GradientDrawable()
-            bg.shape = GradientDrawable.RECTANGLE
             bg.cornerRadius = dp(18).toFloat()
-            bg.setColor(Color.parseColor("#0FFFFFFF"))
+            bg.setColor(0x0FFFFFFF.toInt())
             background = bg
             scaleType = ImageView.ScaleType.CENTER_INSIDE
             setColorFilter(Color.WHITE)
@@ -76,15 +81,15 @@ class MainActivity : Activity() {
         header.addView(row1, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
 
-        // Row 2: Status card
+        // Row 2: Status card (height 48)
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(14), dp(10), dp(14), dp(10))
             val bg = GradientDrawable()
             bg.cornerRadius = dp(12).toFloat()
-            bg.setColor(Color.parseColor("#0DFFFFFF"))
-            bg.setStroke(1, Color.parseColor("#12FFFFFF"))
+            bg.setColor(0x0DFFFFFF.toInt())
+            bg.setStroke(1, 0x12FFFFFF.toInt())
             background = bg
         }
         val cardParams = LinearLayout.LayoutParams(
@@ -92,15 +97,15 @@ class MainActivity : Activity() {
         cardParams.topMargin = dp(10)
         header.addView(card, cardParams)
 
-        // Shield icon (28x28) — custom drawn, no tint
+        // Shield icon 28x28
         shieldIcon = ImageView(this).apply {
-            setImageDrawable(ShieldDrawable(dp(28), Color.parseColor("#5FCA6B")))
+            setImageDrawable(ShieldDrawable(dp(28), green))
             scaleType = ImageView.ScaleType.FIT_CENTER
             setOnClickListener { toggleShield() }
         }
         card.addView(shieldIcon, LinearLayout.LayoutParams(dp(28), dp(28)))
 
-        // "Protection active" label only
+        // "Protection active" label
         val protectionLabel = TextView(this).apply {
             text = "Protection active"
             setTextColor(Color.WHITE)
@@ -111,31 +116,34 @@ class MainActivity : Activity() {
         labelParams.marginStart = dp(12)
         card.addView(protectionLabel, labelParams)
 
-        // Toggle switch (40x24)
+        // Toggle switch 40x24
         shieldToggle = FrameLayout(this).apply {
             val bg = GradientDrawable()
             bg.cornerRadius = dp(12).toFloat()
-            bg.setColor(Color.parseColor("#5FCA6B"))
+            bg.setColor(green)
             background = bg
         }
         card.addView(shieldToggle, LinearLayout.LayoutParams(dp(40), dp(24)))
 
-        // Toggle knob (18x18 circle)
+        // Toggle knob 18x18
         shieldKnob = View(this).apply {
             val bg = GradientDrawable()
             bg.shape = GradientDrawable.OVAL
-            bg.setColor(Color.parseColor("#0F0F0F"))
+            bg.setColor(darkBg)
             background = bg
         }
         shieldToggle.addView(shieldKnob, FrameLayout.LayoutParams(dp(18), dp(18)))
 
+        // Position knob at right (ON state) after layout
         shieldToggle.post {
-            val knobParams = shieldKnob.layoutParams as FrameLayout.LayoutParams
-            knobParams.gravity = Gravity.END or Gravity.CENTER_VERTICAL
-            shieldKnob.layoutParams = knobParams
+            shieldKnob.x = shieldToggle.width - dp(18) - dp(3).toFloat()
+            shieldKnob.y = (shieldToggle.height - dp(18)) / 2f
         }
 
         shieldToggle.setOnClickListener { toggleShield() }
+
+        header.addView(LinearLayout(this), LinearLayout.LayoutParams(
+            0, dp(14), 0f))
 
         root.addView(header, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
@@ -215,15 +223,25 @@ class MainActivity : Activity() {
     }
 
     private fun updateShieldUI() {
-        val bg = shieldToggle.background as? GradientDrawable
-        bg?.setColor(if (shieldEnabled) Color.parseColor("#5FCA6B") else Color.parseColor("#888888"))
-        val knobParams = shieldKnob.layoutParams as? FrameLayout.LayoutParams
-        if (shieldEnabled) {
-            knobParams?.gravity = Gravity.END or Gravity.CENTER_VERTICAL
+        // Toggle background
+        val toggleBg = shieldToggle.background as? GradientDrawable
+        toggleBg?.setColor(if (shieldEnabled) green else Color.parseColor("#888888"))
+
+        // Knob position — pixel-based like iOS
+        val targetX = if (shieldEnabled) {
+            shieldToggle.width - dp(18) - dp(3).toFloat()
         } else {
-            knobParams?.gravity = Gravity.START or Gravity.CENTER_VERTICAL
+            dp(3).toFloat()
         }
-        shieldKnob.layoutParams = knobParams
+        val targetY = (shieldToggle.height - dp(18)) / 2f
+
+        // Animate knob slide
+        shieldKnob.animate()
+            .x(targetX)
+            .y(targetY)
+            .setDuration(250)
+            .setInterpolator(OvershootInterpolator(0.8f))
+            .start()
     }
 
     private fun dp(value: Int): Int {
