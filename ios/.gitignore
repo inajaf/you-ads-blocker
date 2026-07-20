@@ -1,0 +1,6 @@
+# Noirva iOS build artifacts
+ios/Noirva/Build/
+ios/Noirva/DerivedData/
+ios/Noirva/Noirva.xcodeproj/xcuserdata/
+*.xcuserstate
+*.xcworkspace/xcuserdata/

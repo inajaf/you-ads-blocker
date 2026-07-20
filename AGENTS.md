@@ -1,16 +1,18 @@
-# AGENTS.md — instructions for AI agents (Claude Code, Codex, Kimi, Grok Build, etc.)
+# You Ads Blocker (Noirva)
 
-Single source of truth, read by all tools. Keep under 150 lines.
+Cinema-dark React PWA for browsing videos with best-effort ad filtering and no API keys.
 
-## Project
+## Stack
 
-- Noirva — video app with best-effort ad filtering, no API keys.
-- Web app: React 19 + TypeScript + Vite PWA (`src/`), dev server at http://localhost:5173
-- Local media proxy: `vite-plugin-proxy.ts` + `server/` (also `netlify/` functions for deploys)
-- Browser extension: `extension/` → packed via `npm run build:extension` into `dist-extension/`
-- Desktop wrapper: `desktop/`; Android wrapper: `android/`
+| Layer | Location | Notes |
+|-------|----------|-------|
+| UI | `src/` | React 19, TypeScript strict, Vite PWA, HLS.js, IndexedDB |
+| Proxy | `vite-plugin-proxy.ts` + `server/` | Media proxy with allowlisted hosts; also `netlify/` functions |
+| Extension | `extension/` | Chrome Manifest V3 ad-block companion (Noirva Shield) |
+| Desktop | `desktop/` | Chrome App Mode wrapper |
+| Android | `android/` | Native WebView wrapper backed by `adblock/` |
 
-## Commands
+## Commands (gate: `npm test && npm run build`)
 
 ```bash
 npm run dev             # Vite dev server on http://localhost:5173
@@ -19,7 +21,6 @@ npm run build           # tsc -b && vite build
 npm run build:extension # pack the browser extension
 npx oxlint .            # lint (config in .oxlintrc.json)
 ./scripts/ui-check.sh   # UI check (Playwright, starts dev server itself)
-graphify query "<term>" # query the code knowledge graph (graphify-out/) before grepping
 ```
 
 ## Code rules
@@ -53,5 +54,5 @@ scroll at 390px width.
 
 ## Definition of Done
 
-`npm test && npm run build && ./scripts/ui-check.sh` — all green,
-`docs/status.md` updated, changes in a branch, meaningful commit message.
+`npm test && npm run build` — all green, changes in a branch, meaningful commit message.
+UI check (`./scripts/ui-check.sh`) required after frontend changes.
