@@ -37,9 +37,8 @@ class WebViewController: UIViewController {
     private let coordinator: WebView.Coordinator
     private let adBlocker: AdBlocker
     private var webView: WKWebView!
+    private var shieldBtn: UIButton!
     private var toolbar: UIView!
-    private var toolbarBottom: NSLayoutConstraint!
-    private var toolbarHideWork: DispatchWorkItem?
 
     init(coordinator: WebView.Coordinator, adBlocker: AdBlocker) {
         self.coordinator = coordinator
@@ -51,6 +50,7 @@ class WebViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        view.backgroundColor = .systemBackground
         compileRulesThenSetup()
     }
 
@@ -88,6 +88,12 @@ class WebViewController: UIViewController {
             config.userContentController.addUserScript(script)
         }
 
+        if let domLayerURL = Bundle.main.url(forResource: "dom-layer", withExtension: "js"),
+           let domLayerJS = try? String(contentsOf: domLayerURL, encoding: .utf8), !domLayerJS.isEmpty {
+            let domScript = WKUserScript(source: domLayerJS, injectionTime: .atDocumentEnd, forMainFrameOnly: false)
+            config.userContentController.addUserScript(domScript)
+        }
+
         webView = WKWebView(frame: .zero, configuration: config)
         webView.translatesAutoresizingMaskIntoConstraints = false
         webView.navigationDelegate = coordinator
@@ -95,14 +101,14 @@ class WebViewController: UIViewController {
         webView.customUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1"
         view.addSubview(webView)
 
+        setupToolbar()
+
         NSLayoutConstraint.activate([
-            webView.topAnchor.constraint(equalTo: view.topAnchor),
-            webView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            webView.topAnchor.constraint(equalTo: toolbar.bottomAnchor),
             webView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             webView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            webView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
-
-        setupToolbar()
 
         if let url = URL(string: "https://m.youtube.com") {
             webView.load(URLRequest(url: url))
@@ -110,78 +116,54 @@ class WebViewController: UIViewController {
     }
 
     private func setupToolbar() {
-        let bar = UIView()
+        let bar = UIVisualEffectView(effect: UIBlurEffect(style: .systemMaterial))
         bar.translatesAutoresizingMaskIntoConstraints = false
-        bar.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.85)
 
-        let stack = UIStackView()
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        stack.axis = .horizontal
-        stack.distribution = .equalCentering
-        stack.alignment = .center
+        let contentView = bar.contentView
 
-        let shieldBtn = toolbarButton(systemName: "shield.fill", action: #selector(toggleShield))
-        let reloadBtn = toolbarButton(systemName: "arrow.clockwise", action: #selector(reloadPage))
+        let shield = makeButton(systemName: "shield.fill", action: #selector(toggleShield))
+        shieldBtn = shield
+        let reload = makeButton(systemName: "arrow.clockwise", action: #selector(reloadPage))
 
-        let spacerL = UIView()
-        spacerL.translatesAutoresizingMaskIntoConstraints = false
-        let spacerR = UIView()
-        spacerR.translatesAutoresizingMaskIntoConstraints = false
-
-        stack.addArrangedSubview(spacerL)
-        stack.addArrangedSubview(shieldBtn)
-        stack.addArrangedSubview(reloadBtn)
-        stack.addArrangedSubview(spacerR)
-
-        spacerL.widthAnchor.constraint(equalTo: spacerR.widthAnchor).isActive = true
-
-        bar.addSubview(stack)
+        contentView.addSubview(shield)
+        contentView.addSubview(reload)
         view.addSubview(bar)
 
-        toolbarBottom = bar.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: 100)
         NSLayoutConstraint.activate([
             bar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             bar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            toolbarBottom,
-            bar.heightAnchor.constraint(equalToConstant: 56),
+            bar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            bar.heightAnchor.constraint(equalToConstant: 44),
 
-            stack.leadingAnchor.constraint(equalTo: bar.leadingAnchor, constant: 16),
-            stack.trailingAnchor.constraint(equalTo: bar.trailingAnchor, constant: -16),
-            stack.topAnchor.constraint(equalTo: bar.topAnchor),
-            stack.bottomAnchor.constraint(equalTo: bar.bottomAnchor),
+            shield.trailingAnchor.constraint(equalTo: reload.leadingAnchor, constant: -2),
+            shield.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+            shield.widthAnchor.constraint(equalToConstant: 44),
+            shield.heightAnchor.constraint(equalToConstant: 44),
+
+            reload.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -6),
+            reload.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+            reload.widthAnchor.constraint(equalToConstant: 44),
+            reload.heightAnchor.constraint(equalToConstant: 44),
         ])
 
-        let tap = UITapGestureRecognizer(target: self, action: #selector(didTapWebView))
-        tap.cancelsTouchesInView = false
-        webView.addGestureRecognizer(tap)
-
+        updateShieldIcon()
         toolbar = bar
-        updateShieldIcon(shieldBtn)
-        showToolbar()
     }
 
-    private func toolbarButton(systemName: String, action: Selector) -> UIButton {
+    private func makeButton(systemName: String, action: Selector) -> UIButton {
         let btn = UIButton(type: .system)
         btn.translatesAutoresizingMaskIntoConstraints = false
-        let config = UIImage.SymbolConfiguration(pointSize: 22, weight: .medium)
+        let config = UIImage.SymbolConfiguration(pointSize: 20, weight: .medium)
         btn.setImage(UIImage(systemName: systemName, withConfiguration: config), for: .normal)
-        btn.tintColor = .white
         btn.addTarget(self, action: action, for: .touchUpInside)
-        btn.widthAnchor.constraint(equalToConstant: 52).isActive = true
-        btn.heightAnchor.constraint(equalToConstant: 48).isActive = true
         return btn
     }
 
-    private func updateShieldIcon(_ button: UIButton? = nil) {
-        guard let btn = button ?? toolbar?.subviews.first?.subviews.compactMap({ $0 as? UIButton }).first else { return }
+    private func updateShieldIcon() {
         let name = adBlocker.enabled ? "shield.fill" : "shield.slash"
-        let config = UIImage.SymbolConfiguration(pointSize: 22, weight: .medium)
-        btn.setImage(UIImage(systemName: name, withConfiguration: config), for: .normal)
-        btn.tintColor = adBlocker.enabled ? .systemGreen : .gray
-    }
-
-    @objc private func didTapWebView() {
-        showToolbar()
+        let config = UIImage.SymbolConfiguration(pointSize: 20, weight: .medium)
+        shieldBtn.setImage(UIImage(systemName: name, withConfiguration: config), for: .normal)
+        shieldBtn.tintColor = adBlocker.enabled ? .systemGreen : .gray
     }
 
     @objc private func reloadPage() { webView.reload() }
@@ -189,24 +171,5 @@ class WebViewController: UIViewController {
     @objc private func toggleShield() {
         adBlocker.toggle()
         updateShieldIcon()
-        showToolbar()
-    }
-
-    private func showToolbar() {
-        toolbarHideWork?.cancel()
-        toolbarBottom.constant = 0
-        UIView.animate(withDuration: 0.25) { self.view.layoutIfNeeded() }
-        scheduleHide()
-    }
-
-    private func scheduleHide() {
-        let work = DispatchWorkItem { [weak self] in
-            UIView.animate(withDuration: 0.25) {
-                self?.toolbarBottom.constant = 100
-                self?.view.layoutIfNeeded()
-            }
-        }
-        toolbarHideWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3, execute: work)
     }
 }
