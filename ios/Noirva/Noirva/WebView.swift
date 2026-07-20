@@ -41,11 +41,14 @@ class WebViewController: UIViewController, UITextFieldDelegate {
     private var shieldBadge: UIView!
     private var shieldDot: UIView!
     private var shieldLabel: UILabel!
-    private var blockedCount = 0
+    private var shieldEnabled = true
 
-    private let green = UIColor(red: 0.38, green: 0.82, blue: 0.42, alpha: 1.0)
+    private let green = UIColor(red: 0.37, green: 0.79, blue: 0.42, alpha: 1.0) // oklch(0.62 0.17 155)
     private let darkBg = UIColor(red: 0.06, green: 0.06, blue: 0.06, alpha: 1.0)
     private let pillBg = UIColor(red: 0.14, green: 0.14, blue: 0.14, alpha: 1.0)
+    private let badgeBg = UIColor(red: 0.18, green: 0.22, blue: 0.18, alpha: 1.0) // oklch(0.28 0.05 155)
+    private let badgeOnText = UIColor(red: 0.52, green: 0.80, blue: 0.52, alpha: 1.0) // oklch(0.85 0.1 155)
+    private let dotGreen = UIColor(red: 0.45, green: 0.80, blue: 0.45, alpha: 1.0) // oklch(0.72 0.2 155)
 
     init(coordinator: WebView.Coordinator, adBlocker: AdBlocker) {
         self.coordinator = coordinator
@@ -111,7 +114,7 @@ class WebViewController: UIViewController, UITextFieldDelegate {
         setupHeader()
 
         NSLayoutConstraint.activate([
-            webView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 62),
+            webView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 56),
             webView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             webView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             webView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
@@ -135,26 +138,12 @@ class WebViewController: UIViewController, UITextFieldDelegate {
             header.heightAnchor.constraint(equalToConstant: 56),
         ])
 
-        // Shield icon (green circle with shield SVG)
-        let shieldIcon = UIView()
+        // Shield icon — standalone green shield SVG, no background
+        let shieldIcon = UIImageView()
         shieldIcon.translatesAutoresizingMaskIntoConstraints = false
-        shieldIcon.backgroundColor = green
-        shieldIcon.layer.cornerRadius = 15
+        shieldIcon.image = makeShieldImage()
+        shieldIcon.tintColor = green
         header.addSubview(shieldIcon)
-
-        let shieldPath = UIImageView(image: UIImage(systemName: "shield.fill"))
-        shieldPath.translatesAutoresizingMaskIntoConstraints = false
-        shieldPath.tintColor = darkBg
-        shieldIcon.addSubview(shieldPath)
-
-        // App name
-        let appName = UILabel()
-        appName.translatesAutoresizingMaskIntoConstraints = false
-        appName.text = "Noirva"
-        appName.textColor = .white
-        appName.font = .systemFont(ofSize: 17, weight: .heavy)
-        appName.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        header.addSubview(appName)
 
         // Search pill
         let searchPill = UIView()
@@ -190,67 +179,102 @@ class WebViewController: UIViewController, UITextFieldDelegate {
         // Shield badge (green dot + ON)
         shieldBadge = UIView()
         shieldBadge.translatesAutoresizingMaskIntoConstraints = false
-        shieldBadge.backgroundColor = UIColor(red: 0.16, green: 0.22, blue: 0.16, alpha: 1.0)
+        shieldBadge.backgroundColor = badgeBg
         shieldBadge.layer.cornerRadius = 16
         header.addSubview(shieldBadge)
 
         shieldDot = UIView()
         shieldDot.translatesAutoresizingMaskIntoConstraints = false
-        shieldDot.backgroundColor = green
+        shieldDot.backgroundColor = dotGreen
         shieldDot.layer.cornerRadius = 3.5
         shieldBadge.addSubview(shieldDot)
 
         shieldLabel = UILabel()
         shieldLabel.translatesAutoresizingMaskIntoConstraints = false
         shieldLabel.text = "ON"
-        shieldLabel.textColor = green
-        shieldLabel.font = .systemFont(ofSize: 12, weight: .heavy)
+        shieldLabel.textColor = badgeOnText
+        shieldLabel.font = .systemFont(ofSize: 12, weight: .bold)
         shieldBadge.addSubview(shieldLabel)
 
         let tapBadge = UITapGestureRecognizer(target: self, action: #selector(toggleShield))
         shieldBadge.addGestureRecognizer(tapBadge)
 
         NSLayoutConstraint.activate([
-            shieldIcon.leadingAnchor.constraint(equalTo: header.leadingAnchor, constant: 16),
+            // Shield icon: 26x26, leading 14
+            shieldIcon.leadingAnchor.constraint(equalTo: header.leadingAnchor, constant: 14),
             shieldIcon.centerYAnchor.constraint(equalTo: header.centerYAnchor),
-            shieldIcon.widthAnchor.constraint(equalToConstant: 30),
-            shieldIcon.heightAnchor.constraint(equalToConstant: 30),
+            shieldIcon.widthAnchor.constraint(equalToConstant: 26),
+            shieldIcon.heightAnchor.constraint(equalToConstant: 26),
 
-            shieldPath.centerXAnchor.constraint(equalTo: shieldIcon.centerXAnchor),
-            shieldPath.centerYAnchor.constraint(equalTo: shieldIcon.centerYAnchor),
-            shieldPath.widthAnchor.constraint(equalToConstant: 16),
-            shieldPath.heightAnchor.constraint(equalToConstant: 16),
-
-            appName.leadingAnchor.constraint(equalTo: shieldIcon.trailingAnchor, constant: 8),
-            appName.centerYAnchor.constraint(equalTo: header.centerYAnchor),
-
-            searchPill.leadingAnchor.constraint(equalTo: header.trailingAnchor, constant: -120),
-            searchPill.trailingAnchor.constraint(equalTo: shieldBadge.leadingAnchor, constant: -8),
+            // Search pill: flex 1, leading 10 from shield
+            searchPill.leadingAnchor.constraint(equalTo: shieldIcon.trailingAnchor, constant: 10),
             searchPill.centerYAnchor.constraint(equalTo: header.centerYAnchor),
             searchPill.heightAnchor.constraint(equalToConstant: 38),
 
-            searchIcon.leadingAnchor.constraint(equalTo: searchPill.leadingAnchor, constant: 12),
+            // Search icon inside pill
+            searchIcon.leadingAnchor.constraint(equalTo: searchPill.leadingAnchor, constant: 14),
             searchIcon.centerYAnchor.constraint(equalTo: searchPill.centerYAnchor),
             searchIcon.widthAnchor.constraint(equalToConstant: 16),
             searchIcon.heightAnchor.constraint(equalToConstant: 16),
 
+            // Search field fills pill
             searchField.leadingAnchor.constraint(equalTo: searchIcon.trailingAnchor, constant: 8),
-            searchField.trailingAnchor.constraint(equalTo: searchPill.trailingAnchor, constant: -12),
+            searchField.trailingAnchor.constraint(equalTo: searchPill.trailingAnchor, constant: -14),
             searchField.centerYAnchor.constraint(equalTo: searchPill.centerYAnchor),
 
-            shieldBadge.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -16),
+            // Shield badge: trailing, centered
+            shieldBadge.leadingAnchor.constraint(equalTo: searchPill.trailingAnchor, constant: 10),
+            shieldBadge.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -14),
             shieldBadge.centerYAnchor.constraint(equalTo: header.centerYAnchor),
             shieldBadge.heightAnchor.constraint(equalToConstant: 32),
 
-            shieldDot.leadingAnchor.constraint(equalTo: shieldBadge.leadingAnchor, constant: 10),
+            // Dot inside badge
+            shieldDot.leadingAnchor.constraint(equalTo: shieldBadge.leadingAnchor, constant: 11),
             shieldDot.centerYAnchor.constraint(equalTo: shieldBadge.centerYAnchor),
             shieldDot.widthAnchor.constraint(equalToConstant: 7),
             shieldDot.heightAnchor.constraint(equalToConstant: 7),
 
+            // Label inside badge
             shieldLabel.leadingAnchor.constraint(equalTo: shieldDot.trailingAnchor, constant: 5),
-            shieldLabel.trailingAnchor.constraint(equalTo: shieldBadge.trailingAnchor, constant: -10),
+            shieldLabel.trailingAnchor.constraint(equalTo: shieldBadge.trailingAnchor, constant: -11),
             shieldLabel.centerYAnchor.constraint(equalTo: shieldBadge.centerYAnchor),
         ])
+    }
+
+    private func makeShieldImage() -> UIImage? {
+        let size = CGSize(width: 26, height: 26)
+        UIGraphicsBeginImageContextWithOptions(size, false, 0)
+        guard let ctx = UIGraphicsGetCurrentContext() else { return nil }
+
+        // Shield path
+        let shield = UIBezierPath()
+        shield.move(to: CGPoint(x: 13, y: 3))
+        shield.addLine(to: CGPoint(x: 21, y: 6.5))
+        shield.addLine(to: CGPoint(x: 21, y: 11.5))
+        shield.addCurve(to: CGPoint(x: 13, y: 22.5),
+                        controlPoint1: CGPoint(x: 21, y: 15.5),
+                        controlPoint2: CGPoint(x: 16, y: 19.7))
+        shield.addCurve(to: CGPoint(x: 5, y: 11.5),
+                        controlPoint1: CGPoint(x: 10, y: 19.7),
+                        controlPoint2: CGPoint(x: 5, y: 15.5))
+        shield.close()
+
+        green.setFill()
+        shield.fill()
+
+        // Checkmark
+        let check = UIBezierPath()
+        check.lineWidth = 1.8
+        check.move(to: CGPoint(x: 9.5, y: 12))
+        check.addLine(to: CGPoint(x: 11.3, y: 13.8))
+        check.addLine(to: CGPoint(x: 14.7, y: 10.2))
+
+        darkBg.setStroke()
+        check.stroke()
+
+        let image = UIGraphicsGetImageFromCurrentImageContext()
+        UIGraphicsEndImageContext()
+        return image
     }
 
     @objc private func searchPillTapped() {
@@ -258,14 +282,13 @@ class WebViewController: UIViewController, UITextFieldDelegate {
     }
 
     @objc private func toggleShield() {
+        shieldEnabled.toggle()
         adBlocker.toggle()
-        let on = adBlocker.enabled
-        shieldDot.backgroundColor = on ? green : .gray
+        let on = shieldEnabled
+        shieldDot.backgroundColor = on ? dotGreen : .gray
         shieldLabel.text = on ? "ON" : "OFF"
-        shieldLabel.textColor = on ? green : .gray
-        shieldBadge.backgroundColor = on
-            ? UIColor(red: 0.16, green: 0.22, blue: 0.16, alpha: 1.0)
-            : UIColor(red: 0.22, green: 0.16, blue: 0.16, alpha: 1.0)
+        shieldLabel.textColor = on ? badgeOnText : .gray
+        shieldBadge.backgroundColor = on ? badgeBg : UIColor(red: 0.22, green: 0.16, blue: 0.16, alpha: 1.0)
         webView.reload()
     }
 
