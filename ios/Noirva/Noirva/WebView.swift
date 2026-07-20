@@ -41,9 +41,9 @@ class WebViewController: UIViewController {
     private var shieldKnob: UIView!
     private var shieldEnabled = true
 
-    private let green = UIColor(red: 0.37, green: 0.79, blue: 0.42, alpha: 1.0)
-    private let darkBg = UIColor(red: 0.06, green: 0.06, blue: 0.06, alpha: 1.0)
-    private let gradientTop = UIColor(red: 0.11, green: 0.13, blue: 0.11, alpha: 1.0)
+    private let green = UIColor(red: 0.373, green: 0.788, blue: 0.420, alpha: 1.0) // #5FCA6B
+    private let darkBg = UIColor(red: 0.059, green: 0.059, blue: 0.059, alpha: 1.0) // #0F0F0F
+    private let greenTop = UIColor(red: 0.110, green: 0.129, blue: 0.110, alpha: 1.0) // #1C211C
 
     init(coordinator: WebView.Coordinator, adBlocker: AdBlocker) {
         self.coordinator = coordinator
@@ -121,12 +121,14 @@ class WebViewController: UIViewController {
     }
 
     private func setupHeader() {
+        // Header container
         let header = UIView()
         header.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(header)
 
+        // Gradient background: #1C211C → #0F0F0F
         let gradient = CAGradientLayer()
-        gradient.colors = [gradientTop.cgColor, darkBg.cgColor]
+        gradient.colors = [greenTop.cgColor, darkBg.cgColor]
         gradient.startPoint = CGPoint(x: 0.5, y: 0)
         gradient.endPoint = CGPoint(x: 0.5, y: 1)
         header.layer.insertSublayer(gradient, at: 0)
@@ -155,10 +157,11 @@ class WebViewController: UIViewController {
         appName.translatesAutoresizingMaskIntoConstraints = false
         appName.text = "Noirva"
         appName.textColor = .white
-        appName.font = .systemFont(ofSize: 17, weight: .heavy)
+        appName.font = .systemFont(ofSize: 17, weight: .bold)
         appName.setContentCompressionResistancePriority(.required, for: .horizontal)
         row1.addSubview(appName)
 
+        // Search button: 36x36, rgba(255,255,255,.06) bg
         let searchBtn = UIButton(type: .system)
         searchBtn.translatesAutoresizingMaskIntoConstraints = false
         searchBtn.backgroundColor = UIColor(white: 1.0, alpha: 0.06)
@@ -166,6 +169,7 @@ class WebViewController: UIViewController {
         searchBtn.tintColor = .white
         let searchConfig = UIImage.SymbolConfiguration(pointSize: 19, weight: .regular)
         searchBtn.setImage(UIImage(systemName: "magnifyingglass", withConfiguration: searchConfig), for: .normal)
+        searchBtn.contentEdgeInsets = UIEdgeInsets(top: 8, left: 8, bottom: 8, right: 8)
         searchBtn.addTarget(self, action: #selector(searchTapped), for: .touchUpInside)
         row1.addSubview(searchBtn)
 
@@ -181,10 +185,10 @@ class WebViewController: UIViewController {
         // Row 2: Status card
         let card = UIView()
         card.translatesAutoresizingMaskIntoConstraints = false
-        card.backgroundColor = UIColor(white: 1.0, alpha: 0.05)
+        card.backgroundColor = UIColor(white: 1.0, alpha: 0.05) // #0DFFFFFF
         card.layer.cornerRadius = 12
         card.layer.borderWidth = 1
-        card.layer.borderColor = UIColor(white: 1.0, alpha: 0.07).cgColor
+        card.layer.borderColor = UIColor(white: 1.0, alpha: 0.07).cgColor // #12FFFFFF
         header.addSubview(card)
 
         NSLayoutConstraint.activate([
@@ -194,20 +198,21 @@ class WebViewController: UIViewController {
             card.heightAnchor.constraint(equalToConstant: 48),
         ])
 
-        // Shield icon — draw colored image, no tint override
+        // Shield icon 28x28
         let shieldIcon = UIImageView()
         shieldIcon.translatesAutoresizingMaskIntoConstraints = false
         if let img = makeShieldImage(size: 28) {
             shieldIcon.image = img.withRenderingMode(.alwaysOriginal)
         }
+        shieldIcon.tag = 200
         shieldIcon.contentMode = .scaleAspectFit
         shieldIcon.clipsToBounds = true
+        shieldIcon.isUserInteractionEnabled = true
+        let shieldTap = UITapGestureRecognizer(target: self, action: #selector(toggleShield))
+        shieldIcon.addGestureRecognizer(shieldTap)
         card.addSubview(shieldIcon)
 
-        let shieldTap = UITapGestureRecognizer(target: self, action: #selector(toggleShield))
-        shieldIcon.isUserInteractionEnabled = true
-        shieldIcon.addGestureRecognizer(shieldTap)
-
+        // "Protection active" label
         let protectionLabel = UILabel()
         protectionLabel.translatesAutoresizingMaskIntoConstraints = false
         protectionLabel.text = "Protection active"
@@ -215,22 +220,22 @@ class WebViewController: UIViewController {
         protectionLabel.font = .systemFont(ofSize: 13, weight: .bold)
         card.addSubview(protectionLabel)
 
-        // Toggle switch
+        // Toggle switch 40x24
         shieldToggle = UIView()
         shieldToggle.translatesAutoresizingMaskIntoConstraints = false
         shieldToggle.backgroundColor = green
         shieldToggle.layer.cornerRadius = 12
         shieldToggle.isUserInteractionEnabled = true
+        let tapToggle = UITapGestureRecognizer(target: self, action: #selector(toggleShield))
+        shieldToggle.addGestureRecognizer(tapToggle)
         card.addSubview(shieldToggle)
 
+        // Toggle knob 18x18
         shieldKnob = UIView()
         shieldKnob.translatesAutoresizingMaskIntoConstraints = false
         shieldKnob.backgroundColor = darkBg
         shieldKnob.layer.cornerRadius = 9
         shieldToggle.addSubview(shieldKnob)
-
-        let tapToggle = UITapGestureRecognizer(target: self, action: #selector(toggleShield))
-        shieldToggle.addGestureRecognizer(tapToggle)
 
         NSLayoutConstraint.activate([
             shieldIcon.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 14),
@@ -251,6 +256,18 @@ class WebViewController: UIViewController {
             shieldKnob.centerYAnchor.constraint(equalTo: shieldToggle.centerYAnchor),
             shieldKnob.widthAnchor.constraint(equalToConstant: 18),
             shieldKnob.heightAnchor.constraint(equalToConstant: 18),
+        ])
+
+        // Bottom spacer 14dp
+        let spacer = UIView()
+        spacer.translatesAutoresizingMaskIntoConstraints = false
+        header.addSubview(spacer)
+        NSLayoutConstraint.activate([
+            spacer.topAnchor.constraint(equalTo: card.bottomAnchor),
+            spacer.leadingAnchor.constraint(equalTo: header.leadingAnchor),
+            spacer.trailingAnchor.constraint(equalTo: header.trailingAnchor),
+            spacer.heightAnchor.constraint(equalToConstant: 14),
+            spacer.bottomAnchor.constraint(equalTo: header.bottomAnchor),
         ])
     }
 
@@ -277,6 +294,8 @@ class WebViewController: UIViewController {
 
         let check = UIBezierPath()
         check.lineWidth = 1.8 * s
+        check.lineCapStyle = .round
+        check.lineJoinStyle = .round
         check.move(to: CGPoint(x: 9.5*s, y: 12*s))
         check.addLine(to: CGPoint(x: 11.3*s, y: 13.8*s))
         check.addLine(to: CGPoint(x: 14.7*s, y: 10.2*s))
@@ -294,8 +313,20 @@ class WebViewController: UIViewController {
         shieldEnabled.toggle()
         adBlocker.toggle()
 
+        // Shield pulse animation (matches Android)
+        UIView.animate(withDuration: 0.15, delay: 0, options: .curveEaseOut, animations: {
+            self.view.viewWithTag(200)?.transform = self.shieldEnabled
+                ? CGAffineTransform(scaleX: 1.3, y: 1.3)
+                : CGAffineTransform(scaleX: 0.8, y: 0.8)
+        }) { _ in
+            UIView.animate(withDuration: 0.2, delay: 0, usingSpringWithDamping: 0.6, initialSpringVelocity: 0, options: [], animations: {
+                self.view.viewWithTag(200)?.transform = .identity
+            })
+        }
+
+        // Toggle knob + color (250ms spring, matches Android)
         UIView.animate(withDuration: 0.25, delay: 0, usingSpringWithDamping: 0.6, initialSpringVelocity: 3, options: [], animations: {
-            self.shieldToggle.backgroundColor = self.shieldEnabled ? self.green : .gray
+            self.shieldToggle.backgroundColor = self.shieldEnabled ? self.green : UIColor(red: 0.533, green: 0.533, blue: 0.533, alpha: 1.0) // #888888
             if self.shieldEnabled {
                 self.shieldKnob.center.x = self.shieldToggle.bounds.maxX - 12
             } else {
