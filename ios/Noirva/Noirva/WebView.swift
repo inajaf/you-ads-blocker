@@ -33,22 +33,21 @@ struct WebView: UIViewControllerRepresentable {
     }
 }
 
-class WebViewController: UIViewController, UITextFieldDelegate {
+class WebViewController: UIViewController {
     private let coordinator: WebView.Coordinator
     private let adBlocker: AdBlocker
     private var webView: WKWebView!
-    private var searchField: UITextField!
     private var shieldBadge: UIView!
     private var shieldDot: UIView!
     private var shieldLabel: UILabel!
+    private var shieldIcon: UIImageView!
     private var shieldEnabled = true
 
-    private let green = UIColor(red: 0.37, green: 0.79, blue: 0.42, alpha: 1.0) // oklch(0.62 0.17 155)
+    private let green = UIColor(red: 0.37, green: 0.79, blue: 0.42, alpha: 1.0)
     private let darkBg = UIColor(red: 0.06, green: 0.06, blue: 0.06, alpha: 1.0)
-    private let pillBg = UIColor(red: 0.14, green: 0.14, blue: 0.14, alpha: 1.0)
-    private let badgeBg = UIColor(red: 0.18, green: 0.22, blue: 0.18, alpha: 1.0) // oklch(0.28 0.05 155)
-    private let badgeOnText = UIColor(red: 0.52, green: 0.80, blue: 0.52, alpha: 1.0) // oklch(0.85 0.1 155)
-    private let dotGreen = UIColor(red: 0.45, green: 0.80, blue: 0.45, alpha: 1.0) // oklch(0.72 0.2 155)
+    private let badgeBg = UIColor(red: 0.18, green: 0.22, blue: 0.18, alpha: 1.0)
+    private let badgeOnText = UIColor(red: 0.52, green: 0.80, blue: 0.52, alpha: 1.0)
+    private let dotGreen = UIColor(red: 0.45, green: 0.80, blue: 0.45, alpha: 1.0)
 
     init(coordinator: WebView.Coordinator, adBlocker: AdBlocker) {
         self.coordinator = coordinator
@@ -138,45 +137,18 @@ class WebViewController: UIViewController, UITextFieldDelegate {
             header.heightAnchor.constraint(equalToConstant: 56),
         ])
 
-        // Shield icon — standalone green shield SVG, no background
-        let shieldIcon = UIImageView()
+        // Shield icon — standalone green shield SVG, animated
+        shieldIcon = UIImageView()
         shieldIcon.translatesAutoresizingMaskIntoConstraints = false
         shieldIcon.image = makeShieldImage()
         shieldIcon.tintColor = green
+        shieldIcon.isUserInteractionEnabled = true
         header.addSubview(shieldIcon)
 
-        // Search pill
-        let searchPill = UIView()
-        searchPill.translatesAutoresizingMaskIntoConstraints = false
-        searchPill.backgroundColor = pillBg
-        searchPill.layer.cornerRadius = 20
-        header.addSubview(searchPill)
+        let tapShield = UITapGestureRecognizer(target: self, action: #selector(toggleShield))
+        shieldIcon.addGestureRecognizer(tapShield)
 
-        let searchIcon = UIImageView(image: UIImage(systemName: "magnifyingglass"))
-        searchIcon.translatesAutoresizingMaskIntoConstraints = false
-        searchIcon.tintColor = .gray
-        searchPill.addSubview(searchIcon)
-
-        searchField = UITextField()
-        searchField.translatesAutoresizingMaskIntoConstraints = false
-        searchField.attributedPlaceholder = NSAttributedString(
-            string: "Search or paste a link",
-            attributes: [.foregroundColor: UIColor.gray]
-        )
-        searchField.textColor = .white
-        searchField.font = .systemFont(ofSize: 14)
-        searchField.borderStyle = .none
-        searchField.autocorrectionType = .no
-        searchField.autocapitalizationType = .none
-        searchField.keyboardType = .webSearch
-        searchField.returnKeyType = .go
-        searchField.delegate = self
-        searchPill.addSubview(searchField)
-
-        let tapPill = UITapGestureRecognizer(target: self, action: #selector(searchPillTapped))
-        searchPill.addGestureRecognizer(tapPill)
-
-        // Shield badge (green dot + ON)
+        // Shield badge (green dot + ON), trailing
         shieldBadge = UIView()
         shieldBadge.translatesAutoresizingMaskIntoConstraints = false
         shieldBadge.backgroundColor = badgeBg
@@ -206,24 +178,7 @@ class WebViewController: UIViewController, UITextFieldDelegate {
             shieldIcon.widthAnchor.constraint(equalToConstant: 26),
             shieldIcon.heightAnchor.constraint(equalToConstant: 26),
 
-            // Search pill: flex 1, leading 10 from shield
-            searchPill.leadingAnchor.constraint(equalTo: shieldIcon.trailingAnchor, constant: 10),
-            searchPill.centerYAnchor.constraint(equalTo: header.centerYAnchor),
-            searchPill.heightAnchor.constraint(equalToConstant: 38),
-
-            // Search icon inside pill
-            searchIcon.leadingAnchor.constraint(equalTo: searchPill.leadingAnchor, constant: 14),
-            searchIcon.centerYAnchor.constraint(equalTo: searchPill.centerYAnchor),
-            searchIcon.widthAnchor.constraint(equalToConstant: 16),
-            searchIcon.heightAnchor.constraint(equalToConstant: 16),
-
-            // Search field fills pill
-            searchField.leadingAnchor.constraint(equalTo: searchIcon.trailingAnchor, constant: 8),
-            searchField.trailingAnchor.constraint(equalTo: searchPill.trailingAnchor, constant: -14),
-            searchField.centerYAnchor.constraint(equalTo: searchPill.centerYAnchor),
-
-            // Shield badge: trailing, centered
-            shieldBadge.leadingAnchor.constraint(equalTo: searchPill.trailingAnchor, constant: 10),
+            // Shield badge: trailing
             shieldBadge.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -14),
             shieldBadge.centerYAnchor.constraint(equalTo: header.centerYAnchor),
             shieldBadge.heightAnchor.constraint(equalToConstant: 32),
@@ -244,9 +199,8 @@ class WebViewController: UIViewController, UITextFieldDelegate {
     private func makeShieldImage() -> UIImage? {
         let size = CGSize(width: 26, height: 26)
         UIGraphicsBeginImageContextWithOptions(size, false, 0)
-        guard let ctx = UIGraphicsGetCurrentContext() else { return nil }
+        guard let _ = UIGraphicsGetCurrentContext() else { return nil }
 
-        // Shield path
         let shield = UIBezierPath()
         shield.move(to: CGPoint(x: 13, y: 3))
         shield.addLine(to: CGPoint(x: 21, y: 6.5))
@@ -262,7 +216,6 @@ class WebViewController: UIViewController, UITextFieldDelegate {
         green.setFill()
         shield.fill()
 
-        // Checkmark
         let check = UIBezierPath()
         check.lineWidth = 1.8
         check.move(to: CGPoint(x: 9.5, y: 12))
@@ -277,38 +230,27 @@ class WebViewController: UIViewController, UITextFieldDelegate {
         return image
     }
 
-    @objc private func searchPillTapped() {
-        searchField.becomeFirstResponder()
-    }
-
     @objc private func toggleShield() {
         shieldEnabled.toggle()
         adBlocker.toggle()
+
         let on = shieldEnabled
         shieldDot.backgroundColor = on ? dotGreen : .gray
         shieldLabel.text = on ? "ON" : "OFF"
         shieldLabel.textColor = on ? badgeOnText : .gray
         shieldBadge.backgroundColor = on ? badgeBg : UIColor(red: 0.22, green: 0.16, blue: 0.16, alpha: 1.0)
+
+        // Pulse animation
+        UIView.animate(withDuration: 0.15, delay: 0, usingSpringWithDamping: 0.5, initialSpringVelocity: 3, options: [], animations: {
+            self.shieldIcon.transform = on
+                ? CGAffineTransform(scaleX: 1.3, y: 1.3)
+                : CGAffineTransform(scaleX: 0.8, y: 0.8)
+        }, completion: { _ in
+            UIView.animate(withDuration: 0.2, delay: 0, usingSpringWithDamping: 0.6, initialSpringVelocity: 2, options: [], animations: {
+                self.shieldIcon.transform = .identity
+            })
+        })
+
         webView.reload()
-    }
-
-    func textFieldShouldReturn(_ textField: UITextField) -> Bool {
-        textField.resignFirstResponder()
-        guard let text = textField.text, !text.isEmpty else { return true }
-
-        let query = text.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? text
-        let url: URL
-        if text.contains(".") && !text.contains(" ") {
-            if text.hasPrefix("http") {
-                url = URL(string: text)!
-            } else {
-                url = URL(string: "https://\(text)")!
-            }
-        } else {
-            url = URL(string: "https://m.youtube.com/results?search_query=\(query)")!
-        }
-        webView.load(URLRequest(url: url))
-        textField.text = ""
-        return true
     }
 }

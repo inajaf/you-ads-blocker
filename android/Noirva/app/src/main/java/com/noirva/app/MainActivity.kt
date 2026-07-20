@@ -7,7 +7,8 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.view.Gravity
 import android.view.View
-import android.view.inputmethod.EditorInfo
+import android.view.animation.AccelerateDecelerateInterpolator
+import android.view.animation.OvershootInterpolator
 import android.webkit.*
 import android.widget.*
 import android.app.Activity
@@ -19,7 +20,7 @@ class MainActivity : Activity() {
     private lateinit var shieldDot: View
     private lateinit var shieldText: TextView
     private lateinit var shieldBadge: LinearLayout
-    private lateinit var searchField: EditText
+    private lateinit var shieldIcon: ImageView
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -42,56 +43,18 @@ class MainActivity : Activity() {
             setBackgroundColor(Color.parseColor("#0F0F0F"))
         }
 
-        // Shield icon — standalone green shield, no background circle
-        val shieldIcon = ImageView(this).apply {
+        // Shield icon — standalone green shield, animated
+        shieldIcon = ImageView(this).apply {
             setImageDrawable(ShieldDrawable(dp(26), Color.parseColor("#5FCA6B")))
             scaleType = ImageView.ScaleType.FIT_CENTER
+            setOnClickListener { toggleShield() }
         }
         val shieldIconParams = LinearLayout.LayoutParams(dp(26), dp(26))
         header.addView(shieldIcon, shieldIconParams)
 
-        // Search pill (flex:1)
-        val searchPill = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            val bg = GradientDrawable()
-            bg.cornerRadius = dp(20).toFloat()
-            bg.setColor(Color.parseColor("#242424"))
-            background = bg
-            setPadding(dp(14), dp(9), dp(14), dp(9))
-        }
-        val searchPillParams = LinearLayout.LayoutParams(0, dp(38), 1f)
-        searchPillParams.marginStart = dp(10)
-        header.addView(searchPill, searchPillParams)
-
-        // Magnifying glass icon (vector drawable, gray)
-        val searchIcon = ImageView(this).apply {
-            setImageResource(R.drawable.ic_search)
-            scaleType = ImageView.ScaleType.FIT_CENTER
-        }
-        val searchIconParams = LinearLayout.LayoutParams(dp(16), dp(16))
-        searchIconParams.marginEnd = dp(8)
-        searchPill.addView(searchIcon, searchIconParams)
-
-        searchField = EditText(this).apply {
-            hint = "Search or paste a link"
-            setTextColor(Color.WHITE)
-            setHintTextColor(Color.parseColor("#888888"))
-            setBackgroundColor(Color.TRANSPARENT)
-            setBackgroundResource(0)
-            textSize = 14f
-            isSingleLine = true
-            imeOptions = EditorInfo.IME_ACTION_GO
-            maxLines = 1
-            setPadding(0, 0, 0, 0)
-            setOnEditorActionListener { _, actionId, _ ->
-                if (actionId == EditorInfo.IME_ACTION_GO) {
-                    performSearch()
-                    true
-                } else false
-            }
-        }
-        searchPill.addView(searchField, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        // Spacer — pushes badge to trailing edge
+        val spacer = View(this)
+        header.addView(spacer, LinearLayout.LayoutParams(0, 0, 1f))
 
         // Shield badge (green dot + ON)
         shieldBadge = LinearLayout(this).apply {
@@ -102,10 +65,10 @@ class MainActivity : Activity() {
             bg.setColor(Color.parseColor("#2E3830"))
             background = bg
             setPadding(dp(11), dp(8), dp(11), dp(8))
+            setOnClickListener { toggleShield() }
         }
         val badgeParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.WRAP_CONTENT, dp(32))
-        badgeParams.marginStart = dp(10)
         header.addView(shieldBadge, badgeParams)
 
         shieldDot = View(this).apply {
@@ -124,12 +87,6 @@ class MainActivity : Activity() {
             setPadding(dp(5), 0, 0, 0)
         }
         shieldBadge.addView(shieldText)
-
-        shieldBadge.setOnClickListener {
-            shieldEnabled = !shieldEnabled
-            updateShieldUI()
-            webView.reload()
-        }
 
         root.addView(header, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
@@ -168,18 +125,46 @@ class MainActivity : Activity() {
         setContentView(root)
     }
 
-    private fun performSearch() {
-        val text = searchField.text.toString().trim()
-        if (text.isEmpty()) return
-        searchField.clearFocus()
+    private fun toggleShield() {
+        shieldEnabled = !shieldEnabled
+        updateShieldUI()
+        animateShield()
+        webView.reload()
+    }
 
-        val url = if (text.contains(".") && !text.contains(" ")) {
-            if (text.startsWith("http")) text else "https://$text"
+    private fun animateShield() {
+        shieldIcon.animate().cancel()
+        if (shieldEnabled) {
+            // Pulse up then back
+            shieldIcon.scaleX = 1f
+            shieldIcon.scaleY = 1f
+            shieldIcon.animate()
+                .scaleX(1.3f).scaleY(1.3f)
+                .setDuration(150)
+                .setInterpolator(OvershootInterpolator(2f))
+                .withEndAction {
+                    shieldIcon.animate()
+                        .scaleX(1f).scaleY(1f)
+                        .setDuration(200)
+                        .setInterpolator(AccelerateDecelerateInterpolator())
+                        .start()
+                }
+                .start()
         } else {
-            "https://m.youtube.com/results?search_query=${java.net.URLEncoder.encode(text, "UTF-8")}"
+            // Shake down
+            shieldIcon.animate()
+                .scaleX(0.8f).scaleY(0.8f)
+                .setDuration(150)
+                .setInterpolator(AccelerateDecelerateInterpolator())
+                .withEndAction {
+                    shieldIcon.animate()
+                        .scaleX(1f).scaleY(1f)
+                        .setDuration(200)
+                        .setInterpolator(OvershootInterpolator(2f))
+                        .start()
+                }
+                .start()
         }
-        webView.loadUrl(url)
-        searchField.setText("")
     }
 
     private fun updateShieldUI() {
@@ -198,7 +183,6 @@ class MainActivity : Activity() {
     }
 }
 
-/** Custom drawable that draws a shield shape with checkmark — matches the 1b design spec */
 class ShieldDrawable(private val sizeDp: Int, private val fillColor: Int) : Drawable() {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val darkColor = Color.parseColor("#0F0F0F")
@@ -207,28 +191,18 @@ class ShieldDrawable(private val sizeDp: Int, private val fillColor: Int) : Draw
         val s = bounds.width().toFloat()
         val scale = s / 26f
 
-        // Shield path
         val shield = Path()
         shield.moveTo(13f * scale, 3f * scale)
         shield.lineTo(21f * scale, 6.5f * scale)
         shield.lineTo(21f * scale, 11.5f * scale)
-        shield.cubicTo(
-            21f * scale, 15.5f * scale,
-            16f * scale, 19.7f * scale,
-            13f * scale, 22.5f * scale
-        )
-        shield.cubicTo(
-            10f * scale, 19.7f * scale,
-            5f * scale, 15.5f * scale,
-            5f * scale, 11.5f * scale
-        )
+        shield.cubicTo(21f * scale, 15.5f * scale, 16f * scale, 19.7f * scale, 13f * scale, 22.5f * scale)
+        shield.cubicTo(10f * scale, 19.7f * scale, 5f * scale, 15.5f * scale, 5f * scale, 11.5f * scale)
         shield.close()
 
         paint.color = fillColor
         paint.style = Paint.Style.FILL
         canvas.drawPath(shield, paint)
 
-        // Checkmark
         val check = Path()
         check.moveTo(9.5f * scale, 12f * scale)
         check.lineTo(11.3f * scale, 13.8f * scale)
