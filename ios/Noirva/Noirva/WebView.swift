@@ -51,15 +51,37 @@ class WebViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        setupWebView()
-        setupToolbar()
-        showToolbar()
+        compileRulesThenSetup()
     }
 
-    private func setupWebView() {
+    private func compileRulesThenSetup() {
+        guard let rulesURL = Bundle.main.url(forResource: "adblock-rules", withExtension: "json"),
+              let json = try? String(contentsOf: rulesURL, encoding: .utf8) else {
+            setupWebView(with: nil)
+            return
+        }
+
+        WKContentRuleListStore.default().compileContentRuleList(
+            forIdentifier: "noirva-adblock",
+            encodedContentRuleList: json
+        ) { [weak self] ruleList, error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    NSLog("[Noirva] WKContentRuleList compile error: %@", error.localizedDescription)
+                }
+                self?.setupWebView(with: ruleList)
+            }
+        }
+    }
+
+    private func setupWebView(with ruleList: WKContentRuleList?) {
         let config = WKWebViewConfiguration()
         config.allowsInlineMediaPlayback = true
         config.mediaTypesRequiringUserActionForPlayback = []
+
+        if let rules = ruleList {
+            config.userContentController.add(rules)
+        }
 
         if !adBlocker.injectScript.isEmpty {
             let script = WKUserScript(source: adBlocker.injectScript, injectionTime: .atDocumentStart, forMainFrameOnly: false)
@@ -79,6 +101,8 @@ class WebViewController: UIViewController {
             webView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             webView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
         ])
+
+        setupToolbar()
 
         if let url = URL(string: "https://m.youtube.com") {
             webView.load(URLRequest(url: url))
@@ -133,6 +157,7 @@ class WebViewController: UIViewController {
 
         toolbar = bar
         updateShieldIcon(shieldBtn)
+        showToolbar()
     }
 
     private func toolbarButton(systemName: String, action: Selector) -> UIButton {

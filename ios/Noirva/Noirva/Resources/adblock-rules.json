@@ -1,0 +1,46 @@
+[
+  {
+    "trigger": { "url-filter": "doubleclick\\.net" },
+    "action": { "type": "block" }
+  },
+  {
+    "trigger": { "url-filter": "googleadservices\\.com" },
+    "action": { "type": "block" }
+  },
+  {
+    "trigger": { "url-filter": "googlesyndication\\.com" },
+    "action": { "type": "block" }
+  },
+  {
+    "trigger": { "url-filter": "/pagead/" },
+    "action": { "type": "block" }
+  },
+  {
+    "trigger": { "url-filter": "youtube\\.com/ptracking" },
+    "action": { "type": "block" }
+  },
+  {
+    "trigger": { "url-filter": "youtube\\.com/api/stats/ads" },
+    "action": { "type": "block" }
+  },
+  {
+    "trigger": { "url-filter": "youtube\\.com/get_midroll_" },
+    "action": { "type": "block" }
+  },
+  {
+    "trigger": { "url-filter": "youtube\\.com/pagead/adview" },
+    "action": { "type": "block" }
+  },
+  {
+    "trigger": { "url-filter": "google\\.com/pagead/" },
+    "action": { "type": "block" }
+  },
+  {
+    "trigger": { "url-filter": "&ad_type=" },
+    "action": { "type": "block" }
+  },
+  {
+    "trigger": { "url-filter": "adunit" },
+    "action": { "type": "block" }
+  }
+]
