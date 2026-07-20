@@ -15,6 +15,7 @@ const {
   DESKTOP_APP_WINDOW_MESSAGE,
   isAllowedDesktopAppTabUrl,
   isTrustedDesktopAppEntryUrl,
+  parseTrustedGoogleAccountUrl,
 } = guardContext.NoirvaDesktopWindowGuard
 
 const STORAGE_KEY = 'noirva.desktopAppWindowId'
@@ -29,6 +30,7 @@ function createFakes(initialWindows = [], initialTabs = []) {
   const storageState = {}
   const removed = []
   const updated = []
+  const updatedTabUrls = []
 
   return {
     removed,
@@ -39,8 +41,24 @@ function createFakes(initialWindows = [], initialTabs = []) {
         if (!tab) throw new Error(`No tab with id: ${id}`)
         return { ...tab }
       },
+      async query(query) {
+        if (query.windowId != null) {
+          return [...tabState.values()]
+            .filter((t) => t.windowId === query.windowId)
+            .map((t) => ({ ...t }))
+        }
+        return [...tabState.values()].map((t) => ({ ...t }))
+      },
+      async update(id, changes) {
+        const tab = tabState.get(id)
+        if (!tab) throw new Error(`No tab with id: ${id}`)
+        Object.assign(tab, changes)
+        updatedTabUrls.push([id, changes.url])
+        return { ...tab }
+      },
     },
     updated,
+    updatedTabUrls,
     windows: {
       async get(id) {
         const window = windowState.get(id)
@@ -374,6 +392,96 @@ describe('Noirva desktop window guard', () => {
     const restartedGuard = createGuard(fakes)
     assert.equal(await restartedGuard.handleWindowCreated({ id: 9, type: 'normal' }), true)
     assert.deepEqual(fakes.removed, [9])
+  })
+
+  it('recognizes trusted Google account URLs', () => {
+    assert.notEqual(parseTrustedGoogleAccountUrl('https://accounts.google.com/'), null)
+    assert.notEqual(parseTrustedGoogleAccountUrl('https://myaccount.google.com/'), null)
+    assert.notEqual(parseTrustedGoogleAccountUrl('https://accounts.google.com/signin/v2/identifier'), null)
+    assert.notEqual(parseTrustedGoogleAccountUrl('https://myaccount.google.com/data-and-privacy'), null)
+    assert.equal(parseTrustedGoogleAccountUrl('http://accounts.google.com/'), null)
+    assert.equal(parseTrustedGoogleAccountUrl('https://accounts.google.com.evildomain.com/'), null)
+    assert.equal(parseTrustedGoogleAccountUrl('not-a-url'), null)
+    assert.equal(parseTrustedGoogleAccountUrl(''), null)
+    assert.equal(parseTrustedGoogleAccountUrl(null), null)
+  })
+
+  it('accepts Google account URLs as allowed desktop app tab URLs', () => {
+    assert.equal(isAllowedDesktopAppTabUrl('https://accounts.google.com/'), true)
+    assert.equal(isAllowedDesktopAppTabUrl('https://myaccount.google.com/'), true)
+    assert.equal(isAllowedDesktopAppTabUrl('https://accounts.google.com/signin'), true)
+    assert.equal(isAllowedDesktopAppTabUrl('https://myaccount.google.com/data-and-privacy'), true)
+    assert.equal(isAllowedDesktopAppTabUrl('http://accounts.google.com/'), false)
+    assert.equal(isAllowedDesktopAppTabUrl('https://google.com/'), false)
+  })
+
+  it('registers a content script sender on accounts.google.com', async () => {
+    const fakes = createFakes([
+      { id: 7, type: 'app' },
+    ], [
+      { id: 70, windowId: 7, url: 'https://www.youtube.com/?tube_app=1' },
+      { id: 71, windowId: 7, url: 'https://accounts.google.com/signin' },
+    ])
+    fakes.storageState[STORAGE_KEY] = { windowId: 7, tabId: 70 }
+    const guard = createGuard(fakes)
+
+    assert.equal(
+      await guard.isAppWindowSender({
+        frameId: 0,
+        url: 'https://accounts.google.com/signin',
+        tab: { id: 71, windowId: 7 },
+      }),
+      true,
+    )
+    assert.deepEqual(plain(fakes.storageState[STORAGE_KEY]), { windowId: 7, tabId: 71 })
+  })
+
+  it('forwards an account-page Dock-reopen URL to the app window before closing', async () => {
+    const fakes = createFakes([
+      { id: 7, type: 'app', focused: false },
+      { id: 9, type: 'normal', focused: true },
+    ], [
+      { id: 70, windowId: 7, url: 'https://www.youtube.com/watch?v=abc' },
+      { id: 90, windowId: 9, url: 'https://accounts.google.com/signin' },
+    ])
+    fakes.storageState[STORAGE_KEY] = { windowId: 7, tabId: 70 }
+    const guard = createGuard(fakes)
+
+    assert.equal(await guard.handleWindowCreated({ id: 9, type: 'normal' }), true)
+    assert.deepEqual(fakes.removed, [9])
+    assert.deepEqual(plain(fakes.updatedTabUrls), [[70, 'https://accounts.google.com/signin']])
+  })
+
+  it('forwards a YouTube Dock-reopen URL to the app window before closing', async () => {
+    const fakes = createFakes([
+      { id: 7, type: 'app', focused: false },
+      { id: 9, type: 'normal', focused: true },
+    ], [
+      { id: 70, windowId: 7, url: 'https://www.youtube.com/watch?v=abc' },
+      { id: 90, windowId: 9, url: 'https://www.youtube.com/account' },
+    ])
+    fakes.storageState[STORAGE_KEY] = { windowId: 7, tabId: 70 }
+    const guard = createGuard(fakes)
+
+    assert.equal(await guard.handleWindowCreated({ id: 9, type: 'normal' }), true)
+    assert.deepEqual(fakes.removed, [9])
+    assert.deepEqual(plain(fakes.updatedTabUrls), [[70, 'https://www.youtube.com/account']])
+  })
+
+  it('closes an untrusted Dock-reopen window without forwarding the URL', async () => {
+    const fakes = createFakes([
+      { id: 7, type: 'app', focused: false },
+      { id: 9, type: 'normal', focused: true },
+    ], [
+      { id: 70, windowId: 7, url: 'https://www.youtube.com/watch?v=abc' },
+      { id: 90, windowId: 9, url: 'https://evil.com/phish' },
+    ])
+    fakes.storageState[STORAGE_KEY] = { windowId: 7, tabId: 70 }
+    const guard = createGuard(fakes)
+
+    assert.equal(await guard.handleWindowCreated({ id: 9, type: 'normal' }), true)
+    assert.deepEqual(fakes.removed, [9])
+    assert.deepEqual(fakes.updatedTabUrls, [])
   })
 
   it('clears stale or closed app-window registrations', async () => {

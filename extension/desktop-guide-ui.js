@@ -553,7 +553,20 @@
           document.body.append(navigationHost)
         }
       }
-      if (!navigationHost) return
+
+      // Fallback: on pages without a masthead (Account, Your data on YouTube,
+      // etc.), create a fixed-position navigation bar so the back button is
+      // always available.
+      if (!navigationHost) {
+        navigationHost = document.getElementById('tube-desktop-studio-navigation')
+        if (!navigationHost) {
+          navigationHost = createElement('nav', {
+            id: 'tube-desktop-studio-navigation',
+          })
+          navigationHost.setAttribute('aria-label', 'Noirva navigation')
+          document.body.append(navigationHost)
+        }
+      }
 
       const guideButton = mastheadStart?.querySelector('#guide-button')
       let backButton = document.getElementById(DESKTOP_BACK_ID)
