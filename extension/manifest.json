@@ -73,6 +73,14 @@
     },
     {
       "matches": [
+        "*://accounts.google.com/*",
+        "*://myaccount.google.com/*"
+      ],
+      "js": ["account-back.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
         "http://127.0.0.1/*",
         "http://localhost/*",
         "https://*.ngrok-free.app/*",

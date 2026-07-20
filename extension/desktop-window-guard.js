@@ -26,8 +26,24 @@
     return parseTrustedYouTubeUrl(value)?.searchParams.get('tube_app') === '1'
   }
 
+  function parseTrustedGoogleAccountUrl(value) {
+    try {
+      const url = new URL(value)
+      if (url.protocol !== 'https:') return null
+      if (
+        url.hostname !== 'accounts.google.com' &&
+        url.hostname !== 'myaccount.google.com'
+      ) {
+        return null
+      }
+      return url
+    } catch {
+      return null
+    }
+  }
+
   function isAllowedDesktopAppTabUrl(value) {
-    return parseTrustedYouTubeUrl(value) !== null
+    return parseTrustedYouTubeUrl(value) !== null || parseTrustedGoogleAccountUrl(value) !== null
   }
 
   function createDesktopWindowGuard({

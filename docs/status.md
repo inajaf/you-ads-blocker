@@ -15,5 +15,16 @@
 - Back-arrow fix is uncommitted on ai-setup-and-studio-back — awaiting commit
   confirmation, then push + PR (user asked to hold the push).
 
+## 2026-07-20 — Desktop app Google account pages support
+- Fixed separate Chrome window opening on YouTube Account/Your data pages:
+  added `parseTrustedGoogleAccountUrl` to `extension/desktop-window-guard.js`
+  and extended `isAllowedDesktopAppTabUrl` to accept `accounts.google.com`
+  and `myaccount.google.com`.
+- Added back button on Google account pages: new content script entry in
+  `manifest.json` for `*://accounts.google.com/*` and `*://myaccount.google.com/*`,
+  new `extension/account-back.js` that detects Noirva desktop app mode and
+  injects a fixed-position back button styled consistently with the existing UI.
+- npm test 76/76, npm run build, npm run build:extension all green.
+
 ## Known issues
 -
