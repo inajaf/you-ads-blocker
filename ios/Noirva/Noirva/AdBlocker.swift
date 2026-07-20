@@ -6,6 +6,7 @@ import Foundation
 class AdBlocker: ObservableObject {
     @Published var blockList: [String] = []
     @Published var injectScript: String = ""
+    @Published var enabled: Bool = true
 
     func loadAssets() {
         blockList = loadBlockList()
@@ -32,7 +33,12 @@ class AdBlocker: ObservableObject {
 
     /// Returns true if the given URL should be blocked (contains a blocklist substring).
     func shouldBlock(_ url: URL) -> Bool {
+        guard enabled else { return false }
         let urlString = url.absoluteString
         return blockList.contains { urlString.contains($0) }
+    }
+
+    func toggle() {
+        enabled.toggle()
     }
 }
