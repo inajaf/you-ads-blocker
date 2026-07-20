@@ -31,6 +31,7 @@ class MainActivity : Activity() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.parseColor("#0F0F0F"))
+            fitsSystemWindows = true
         }
 
         // Header row
