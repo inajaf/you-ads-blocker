@@ -17,10 +17,8 @@ class MainActivity : Activity() {
     private lateinit var webView: WebView
     private lateinit var adBlocker: AdBlocker
     private var shieldEnabled = true
-    private var blockedCount = 0
     private lateinit var shieldToggle: FrameLayout
     private lateinit var shieldKnob: View
-    private lateinit var statusLabel: TextView
     private lateinit var shieldIcon: ImageView
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -42,7 +40,6 @@ class MainActivity : Activity() {
             setPadding(dp(16), dp(10), dp(16), dp(14))
             setBackgroundColor(Color.parseColor("#0F0F0F"))
         }
-        // Gradient overlay
         val gradientDrawable = GradientDrawable(
             GradientDrawable.Orientation.TOP_BOTTOM,
             intArrayOf(Color.parseColor("#1A201A"), Color.parseColor("#0F0F0F"))
@@ -63,7 +60,6 @@ class MainActivity : Activity() {
         }
         row1.addView(appName, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
 
-        // Search button (36x36 circle)
         val searchBtn = ImageView(this).apply {
             setImageResource(R.drawable.ic_search)
             val bg = GradientDrawable()
@@ -96,35 +92,24 @@ class MainActivity : Activity() {
         cardParams.topMargin = dp(10)
         header.addView(card, cardParams)
 
-        // Shield icon (28x28)
+        // Shield icon (28x28) — custom drawn, no tint
         shieldIcon = ImageView(this).apply {
             setImageDrawable(ShieldDrawable(dp(28), Color.parseColor("#5FCA6B")))
             scaleType = ImageView.ScaleType.FIT_CENTER
+            setOnClickListener { toggleShield() }
         }
         card.addView(shieldIcon, LinearLayout.LayoutParams(dp(28), dp(28)))
 
-        // Status text column
-        val statusCol = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-        }
-        val statusColParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-        statusColParams.marginStart = dp(12)
-        card.addView(statusCol, statusColParams)
-
+        // "Protection active" label only
         val protectionLabel = TextView(this).apply {
             text = "Protection active"
             setTextColor(Color.WHITE)
             textSize = 13f
             setTypeface(null, Typeface.BOLD)
         }
-        statusCol.addView(protectionLabel)
-
-        statusLabel = TextView(this).apply {
-            text = "0 ads blocked this session"
-            setTextColor(Color.parseColor("#9A9A9A"))
-            textSize = 11.5f
-        }
-        statusCol.addView(statusLabel)
+        val labelParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        labelParams.marginStart = dp(12)
+        card.addView(protectionLabel, labelParams)
 
         // Toggle switch (40x24)
         shieldToggle = FrameLayout(this).apply {
@@ -133,8 +118,7 @@ class MainActivity : Activity() {
             bg.setColor(Color.parseColor("#5FCA6B"))
             background = bg
         }
-        val toggleParams = LinearLayout.LayoutParams(dp(40), dp(24))
-        card.addView(shieldToggle, toggleParams)
+        card.addView(shieldToggle, LinearLayout.LayoutParams(dp(40), dp(24)))
 
         // Toggle knob (18x18 circle)
         shieldKnob = View(this).apply {
@@ -145,18 +129,13 @@ class MainActivity : Activity() {
         }
         shieldToggle.addView(shieldKnob, FrameLayout.LayoutParams(dp(18), dp(18)))
 
-        // Position knob to right (on state)
         shieldToggle.post {
             val knobParams = shieldKnob.layoutParams as FrameLayout.LayoutParams
             knobParams.gravity = Gravity.END or Gravity.CENTER_VERTICAL
             shieldKnob.layoutParams = knobParams
         }
 
-        val toggleTap = object : Runnable {
-            override fun run() { toggleShield() }
-        }
         shieldToggle.setOnClickListener { toggleShield() }
-        shieldIcon.setOnClickListener { toggleShield() }
 
         root.addView(header, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
@@ -199,7 +178,6 @@ class MainActivity : Activity() {
         shieldEnabled = !shieldEnabled
         updateShieldUI()
         animateShield()
-        statusLabel.text = "$blockedCount ads blocked this session"
         webView.reload()
     }
 
@@ -239,8 +217,6 @@ class MainActivity : Activity() {
     private fun updateShieldUI() {
         val bg = shieldToggle.background as? GradientDrawable
         bg?.setColor(if (shieldEnabled) Color.parseColor("#5FCA6B") else Color.parseColor("#888888"))
-        val knobBg = shieldKnob.background as? GradientDrawable
-        knobBg?.setColor(Color.parseColor("#0F0F0F"))
         val knobParams = shieldKnob.layoutParams as? FrameLayout.LayoutParams
         if (shieldEnabled) {
             knobParams?.gravity = Gravity.END or Gravity.CENTER_VERTICAL

@@ -39,9 +39,7 @@ class WebViewController: UIViewController {
     private var webView: WKWebView!
     private var shieldToggle: UIView!
     private var shieldKnob: UIView!
-    private var statusLabel: UILabel!
     private var shieldEnabled = true
-    private var blockedCount = 0
 
     private let green = UIColor(red: 0.37, green: 0.79, blue: 0.42, alpha: 1.0)
     private let darkBg = UIColor(red: 0.06, green: 0.06, blue: 0.06, alpha: 1.0)
@@ -111,7 +109,7 @@ class WebViewController: UIViewController {
         setupHeader()
 
         NSLayoutConstraint.activate([
-            webView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 130),
+            webView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 110),
             webView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             webView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             webView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
@@ -127,7 +125,6 @@ class WebViewController: UIViewController {
         header.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(header)
 
-        // Gradient background
         let gradient = CAGradientLayer()
         gradient.colors = [gradientTop.cgColor, darkBg.cgColor]
         gradient.startPoint = CGPoint(x: 0.5, y: 0)
@@ -139,7 +136,7 @@ class WebViewController: UIViewController {
             header.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             header.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             header.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            header.heightAnchor.constraint(equalToConstant: 130),
+            header.heightAnchor.constraint(equalToConstant: 110),
         ])
 
         // Row 1: App name + search button
@@ -154,7 +151,6 @@ class WebViewController: UIViewController {
             row1.heightAnchor.constraint(equalToConstant: 24),
         ])
 
-        // App name
         let appName = UILabel()
         appName.translatesAutoresizingMaskIntoConstraints = false
         appName.text = "Noirva"
@@ -163,7 +159,6 @@ class WebViewController: UIViewController {
         appName.setContentCompressionResistancePriority(.required, for: .horizontal)
         row1.addSubview(appName)
 
-        // Search button (circle)
         let searchBtn = UIButton(type: .system)
         searchBtn.translatesAutoresizingMaskIntoConstraints = false
         searchBtn.backgroundColor = UIColor(white: 1.0, alpha: 0.06)
@@ -177,7 +172,6 @@ class WebViewController: UIViewController {
         NSLayoutConstraint.activate([
             appName.leadingAnchor.constraint(equalTo: row1.leadingAnchor),
             appName.centerYAnchor.constraint(equalTo: row1.centerYAnchor),
-
             searchBtn.trailingAnchor.constraint(equalTo: row1.trailingAnchor),
             searchBtn.centerYAnchor.constraint(equalTo: row1.centerYAnchor),
             searchBtn.widthAnchor.constraint(equalToConstant: 36),
@@ -200,37 +194,33 @@ class WebViewController: UIViewController {
             card.heightAnchor.constraint(equalToConstant: 48),
         ])
 
-        // Shield icon in card
+        // Shield icon — draw colored image, no tint override
         let shieldIcon = UIImageView()
         shieldIcon.translatesAutoresizingMaskIntoConstraints = false
-        shieldIcon.image = makeShieldImage(size: 28)
-        shieldIcon.tintColor = green
+        if let img = makeShieldImage(size: 28) {
+            shieldIcon.image = img.withRenderingMode(.alwaysOriginal)
+        }
+        shieldIcon.contentMode = .scaleAspectFit
+        shieldIcon.clipsToBounds = true
         card.addSubview(shieldIcon)
 
-        // Status text column
-        let statusCol = UIView()
-        statusCol.translatesAutoresizingMaskIntoConstraints = false
-        card.addSubview(statusCol)
+        let shieldTap = UITapGestureRecognizer(target: self, action: #selector(toggleShield))
+        shieldIcon.isUserInteractionEnabled = true
+        shieldIcon.addGestureRecognizer(shieldTap)
 
         let protectionLabel = UILabel()
         protectionLabel.translatesAutoresizingMaskIntoConstraints = false
         protectionLabel.text = "Protection active"
         protectionLabel.textColor = .white
         protectionLabel.font = .systemFont(ofSize: 13, weight: .bold)
-        statusCol.addSubview(protectionLabel)
-
-        statusLabel = UILabel()
-        statusLabel.translatesAutoresizingMaskIntoConstraints = false
-        statusLabel.text = "0 ads blocked this session"
-        statusLabel.textColor = UIColor(red: 0.6, green: 0.6, blue: 0.6, alpha: 1.0)
-        statusLabel.font = .systemFont(ofSize: 11.5)
-        statusCol.addSubview(statusLabel)
+        card.addSubview(protectionLabel)
 
         // Toggle switch
         shieldToggle = UIView()
         shieldToggle.translatesAutoresizingMaskIntoConstraints = false
         shieldToggle.backgroundColor = green
         shieldToggle.layer.cornerRadius = 12
+        shieldToggle.isUserInteractionEnabled = true
         card.addSubview(shieldToggle)
 
         shieldKnob = UIView()
@@ -248,17 +238,9 @@ class WebViewController: UIViewController {
             shieldIcon.widthAnchor.constraint(equalToConstant: 28),
             shieldIcon.heightAnchor.constraint(equalToConstant: 28),
 
-            statusCol.leadingAnchor.constraint(equalTo: shieldIcon.trailingAnchor, constant: 12),
-            statusCol.centerYAnchor.constraint(equalTo: card.centerYAnchor),
-            statusCol.trailingAnchor.constraint(lessThanOrEqualTo: shieldToggle.leadingAnchor, constant: -12),
-
-            protectionLabel.leadingAnchor.constraint(equalTo: statusCol.leadingAnchor),
-            protectionLabel.topAnchor.constraint(equalTo: statusCol.topAnchor),
-            protectionLabel.trailingAnchor.constraint(equalTo: statusCol.trailingAnchor),
-
-            statusLabel.leadingAnchor.constraint(equalTo: statusCol.leadingAnchor),
-            statusLabel.topAnchor.constraint(equalTo: protectionLabel.bottomAnchor, constant: 1),
-            statusLabel.trailingAnchor.constraint(equalTo: statusCol.trailingAnchor),
+            protectionLabel.leadingAnchor.constraint(equalTo: shieldIcon.trailingAnchor, constant: 12),
+            protectionLabel.centerYAnchor.constraint(equalTo: card.centerYAnchor),
+            protectionLabel.trailingAnchor.constraint(lessThanOrEqualTo: shieldToggle.leadingAnchor, constant: -12),
 
             shieldToggle.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -14),
             shieldToggle.centerYAnchor.constraint(equalTo: card.centerYAnchor),
@@ -306,9 +288,7 @@ class WebViewController: UIViewController {
         return image
     }
 
-    @objc private func searchTapped() {
-        // TODO: open search
-    }
+    @objc private func searchTapped() {}
 
     @objc private func toggleShield() {
         shieldEnabled.toggle()
@@ -316,8 +296,6 @@ class WebViewController: UIViewController {
 
         UIView.animate(withDuration: 0.25, delay: 0, usingSpringWithDamping: 0.6, initialSpringVelocity: 3, options: [], animations: {
             self.shieldToggle.backgroundColor = self.shieldEnabled ? self.green : .gray
-            let offsetX: CGFloat = self.shieldEnabled ? 0 : -16
-            self.shieldKnob.center.x = self.shieldToggle.bounds.midX + offsetX
             if self.shieldEnabled {
                 self.shieldKnob.center.x = self.shieldToggle.bounds.maxX - 12
             } else {
@@ -325,7 +303,6 @@ class WebViewController: UIViewController {
             }
         })
 
-        statusLabel.text = "\(blockedCount) ads blocked this session"
         webView.reload()
     }
 }
