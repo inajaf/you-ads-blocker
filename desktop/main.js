@@ -4,6 +4,7 @@ const { spawn } = require('child_process')
 const { app, BrowserWindow, dialog, Menu, session, shell } = require('electron')
 const path = require('path')
 const fs = require('fs')
+const { resolveProjectPath } = require('./project-path')
 const { classifyElectronNavigation, createChromeHandoffArgs } = require('./chrome-auth')
 
 // Keep YouTube rendering consistent with the Chromium engine bundled in this
@@ -21,7 +22,7 @@ app.userAgentFallback = chromeUserAgent
 app.setName('Noirva')
 
 // --- Load the shared ad-host blocklist (single source of truth in ../adblock) ---
-const hostsPath = path.join(__dirname, '..', 'adblock', 'hosts.json')
+const hostsPath = resolveProjectPath('adblock', 'hosts.json')
 let blockList = []
 try {
   const parsed = JSON.parse(fs.readFileSync(hostsPath, 'utf8'))
@@ -56,8 +57,8 @@ let chromeHandoffStarted = false
 
 function findExtensionDir() {
   const candidates = [
-    path.join(__dirname, '..', 'dist-extension'),
-    path.join(__dirname, '..', 'extension'),
+    resolveProjectPath('dist-extension'),
+    resolveProjectPath('extension'),
   ]
   return candidates.find((dir) => fs.existsSync(path.join(dir, 'manifest.json')))
 }
@@ -141,7 +142,7 @@ function createWindow() {
     width: 1200,
     height: 800,
     title: 'Noirva',
-    icon: path.join(__dirname, '..', 'assets', 'brand', 'noirva-logo-v2-512.png'),
+    icon: resolveProjectPath('assets', 'brand', 'noirva-logo-v2-512.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

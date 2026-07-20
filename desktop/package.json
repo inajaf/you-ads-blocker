@@ -10,10 +10,56 @@
     "prelogin": "cd .. && npm run build:extension",
     "login": "node login-and-start.mjs",
     "prestart:electron": "cd .. && npm run build:extension",
-    "start:electron": "electron ."
+    "start:electron": "electron .",
+    "dist": "npm run build:extension && electron-builder --mac",
+    "dist:dmg": "npm run build:extension && electron-builder --mac dmg"
+  },
+  "build": {
+    "appId": "com.noirva.desktop",
+    "productName": "Noirva",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "**/*",
+      "!release/"
+    ],
+    "extraResources": [
+      {
+        "from": "../extension",
+        "to": "extension",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "../adblock",
+        "to": "adblock",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "../assets",
+        "to": "assets",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "../dist-extension",
+        "to": "dist-extension",
+        "filter": ["**/*"]
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.entertainment",
+      "icon": "../assets/brand/noirva-logo-v2.icns",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        }
+      ]
+    }
   },
   "devDependencies": {
-    "electron": "^43.1.1"
+    "electron": "^43.1.1",
+    "electron-builder": "^26.15.3"
   },
   "dependencies": {
     "rcedit": "^5.0.2"

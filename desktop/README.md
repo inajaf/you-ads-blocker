@@ -12,6 +12,37 @@ system Chrome installation is never modified. On Windows the original private
 old Chrome icon is already running in the macOS Dock or Windows taskbar, close
 that window once and start Noirva again so the OS can load the refreshed icon.
 
+## Gatekeeper (unsigned build)
+
+The pre-built DMG release is **unsigned** (no paid Apple Developer ID). macOS will
+block it by default. To run it anyway:
+
+### Option A — Right-click → Open (permanent)
+
+1. Right-click (or Ctrl-click) **Noirva.app** in Finder
+2. Select **Open** from the context menu
+3. Click **Open** in the dialog — the app opens and macOS remembers your choice
+
+### Option B — System Settings (per-app override)
+
+1. Try opening the app normally — it will be blocked
+2. Go to **System Settings → Privacy & Security**
+3. Scroll down to the Security section — you'll see a message about Noirva
+4. Click **Open Anyway**, then confirm with Touch ID or password
+
+### Option C — Remove quarantine attribute (Terminal)
+
+```sh
+xattr -dr com.apple.quarantine /path/to/Noirva.app
+```
+
+### Why this happens
+
+Noirva is not signed with a paid Apple Developer certificate ($99/yr) and not
+notarized through Apple's scanning service. The app is safe — it contains only
+an embedded Chromium engine and the Noirva extension source code. Review the
+source at [github.com/inajaf/you-ads-blocker](https://github.com/inajaf/you-ads-blocker).
+
 ## Prerequisites
 
 1. Install the root dependencies and build the extension:
