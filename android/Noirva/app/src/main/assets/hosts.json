@@ -1,0 +1,17 @@
+{
+  "_comment": "Shared ad/tracker blocklist. Ported 1:1 from extension/rules.json urlFilters. A request is blocked if its URL contains any of these substrings. Brave-style network blocking (technique #1).",
+  "block": [
+    "doubleclick.net",
+    "googleadservices.com",
+    "googlesyndication.com",
+    "/pagead/",
+    "youtube.com/ptracking",
+    "youtube.com/api/stats/ads",
+    "youtube.com/get_midroll_",
+    "youtube.com/pagead/adview",
+    "google.com/pagead/",
+    "/api/stats/ads",
+    "&ad_type=",
+    "adunit"
+  ]
+}
