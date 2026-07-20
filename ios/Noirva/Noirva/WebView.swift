@@ -1,76 +1,175 @@
 import SwiftUI
 import WebKit
 
-/// UIViewRepresentable wrapper around WKWebView with two-layer ad blocking:
-///   1. Network layer — WKNavigationDelegate blocks requests matching the blocklist.
-///   2. Page layer — WKUserScript injects ad-stripping JS at document-start.
-struct WebView: UIViewRepresentable {
+struct WebView: UIViewControllerRepresentable {
     @ObservedObject var adBlocker: AdBlocker
 
     func makeCoordinator() -> Coordinator {
         Coordinator(adBlocker: adBlocker)
     }
 
-    func makeUIView(context: Context) -> WKWebView {
-        let config = WKWebViewConfiguration()
-        config.allowsInlineMediaPlayback = true
-        config.mediaTypesRequiringUserActionForPlayback = []
-
-        // Register the inject script to run at document-start in the main world.
-        if !adBlocker.injectScript.isEmpty {
-            let userScript = WKUserScript(
-                source: adBlocker.injectScript,
-                injectionTime: .atDocumentEnd,
-                forMainFrameOnly: false
-            )
-            config.userContentController.addUserScript(userScript)
-        }
-
-        let webView = WKWebView(frame: .zero, configuration: config)
-        webView.navigationDelegate = context.coordinator
-        webView.allowsBackForwardNavigationGestures = true
-
-        // Use a mobile Chrome user-agent so YouTube serves the phone site.
-        webView.customUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1"
-
-        // Load YouTube mobile.
-        if let url = URL(string: "https://m.youtube.com") {
-            webView.load(URLRequest(url: url))
-        }
-
-        return webView
+    func makeUIViewController(context: Context) -> WebViewController {
+        WebViewController(coordinator: context.coordinator, adBlocker: adBlocker)
     }
 
-    func updateUIView(_ uiView: WKWebView, context: Context) {}
-
-    // MARK: - Coordinator (Navigation Delegate)
+    func updateUIViewController(_ vc: WebViewController, context: Context) {}
 
     class Coordinator: NSObject, WKNavigationDelegate {
         let adBlocker: AdBlocker
+        weak var webView: WKWebView?
 
         init(adBlocker: AdBlocker) {
             self.adBlocker = adBlocker
         }
 
-        // Network-layer blocking: cancel navigation AND subresource requests matching the blocklist.
-        func webView(
-            _ webView: WKWebView,
-            decidePolicyFor navigationAction: WKNavigationAction,
-            decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
-        ) {
-            if let url = navigationAction.request.url, adBlocker.shouldBlock(url) {
+        func webView(_ webView: WKWebView, decidePolicyFor navAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+            self.webView = webView
+            if let url = navAction.request.url, adBlocker.shouldBlock(url) {
                 decisionHandler(.cancel)
                 return
             }
             decisionHandler(.allow)
         }
+    }
+}
 
-        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-            // Page loaded successfully.
+class WebViewController: UIViewController {
+    private let coordinator: WebView.Coordinator
+    private let adBlocker: AdBlocker
+    private var webView: WKWebView!
+    private var shieldBtn: UIButton!
+    private var toolbar: UIView!
+
+    init(coordinator: WebView.Coordinator, adBlocker: AdBlocker) {
+        self.coordinator = coordinator
+        self.adBlocker = adBlocker
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = .systemBackground
+        compileRulesThenSetup()
+    }
+
+    private func compileRulesThenSetup() {
+        guard let rulesURL = Bundle.main.url(forResource: "adblock-rules", withExtension: "json"),
+              let json = try? String(contentsOf: rulesURL, encoding: .utf8) else {
+            setupWebView(with: nil)
+            return
         }
 
-        func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-            // Navigation failed — YouTube will retry.
+        WKContentRuleListStore.default().compileContentRuleList(
+            forIdentifier: "noirva-adblock",
+            encodedContentRuleList: json
+        ) { [weak self] ruleList, error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    NSLog("[Noirva] WKContentRuleList compile error: %@", error.localizedDescription)
+                }
+                self?.setupWebView(with: ruleList)
+            }
         }
+    }
+
+    private func setupWebView(with ruleList: WKContentRuleList?) {
+        let config = WKWebViewConfiguration()
+        config.allowsInlineMediaPlayback = true
+        config.mediaTypesRequiringUserActionForPlayback = []
+
+        if let rules = ruleList {
+            config.userContentController.add(rules)
+        }
+
+        if !adBlocker.injectScript.isEmpty {
+            let script = WKUserScript(source: adBlocker.injectScript, injectionTime: .atDocumentStart, forMainFrameOnly: false)
+            config.userContentController.addUserScript(script)
+        }
+
+        if let domLayerURL = Bundle.main.url(forResource: "dom-layer", withExtension: "js"),
+           let domLayerJS = try? String(contentsOf: domLayerURL, encoding: .utf8), !domLayerJS.isEmpty {
+            let domScript = WKUserScript(source: domLayerJS, injectionTime: .atDocumentEnd, forMainFrameOnly: false)
+            config.userContentController.addUserScript(domScript)
+        }
+
+        webView = WKWebView(frame: .zero, configuration: config)
+        webView.translatesAutoresizingMaskIntoConstraints = false
+        webView.navigationDelegate = coordinator
+        webView.allowsBackForwardNavigationGestures = true
+        webView.customUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1"
+        view.addSubview(webView)
+
+        setupToolbar()
+
+        NSLayoutConstraint.activate([
+            webView.topAnchor.constraint(equalTo: toolbar.bottomAnchor),
+            webView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            webView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            webView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+        ])
+
+        if let url = URL(string: "https://m.youtube.com") {
+            webView.load(URLRequest(url: url))
+        }
+    }
+
+    private func setupToolbar() {
+        let bar = UIVisualEffectView(effect: UIBlurEffect(style: .systemMaterial))
+        bar.translatesAutoresizingMaskIntoConstraints = false
+
+        let contentView = bar.contentView
+
+        let shield = makeButton(systemName: "shield.fill", action: #selector(toggleShield))
+        shieldBtn = shield
+        let reload = makeButton(systemName: "arrow.clockwise", action: #selector(reloadPage))
+
+        contentView.addSubview(shield)
+        contentView.addSubview(reload)
+        view.addSubview(bar)
+
+        NSLayoutConstraint.activate([
+            bar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            bar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            bar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            bar.heightAnchor.constraint(equalToConstant: 44),
+
+            shield.trailingAnchor.constraint(equalTo: reload.leadingAnchor, constant: -2),
+            shield.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+            shield.widthAnchor.constraint(equalToConstant: 44),
+            shield.heightAnchor.constraint(equalToConstant: 44),
+
+            reload.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -6),
+            reload.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+            reload.widthAnchor.constraint(equalToConstant: 44),
+            reload.heightAnchor.constraint(equalToConstant: 44),
+        ])
+
+        updateShieldIcon()
+        toolbar = bar
+    }
+
+    private func makeButton(systemName: String, action: Selector) -> UIButton {
+        let btn = UIButton(type: .system)
+        btn.translatesAutoresizingMaskIntoConstraints = false
+        let config = UIImage.SymbolConfiguration(pointSize: 20, weight: .medium)
+        btn.setImage(UIImage(systemName: systemName, withConfiguration: config), for: .normal)
+        btn.addTarget(self, action: action, for: .touchUpInside)
+        return btn
+    }
+
+    private func updateShieldIcon() {
+        let name = adBlocker.enabled ? "shield.fill" : "shield.slash"
+        let config = UIImage.SymbolConfiguration(pointSize: 20, weight: .medium)
+        shieldBtn.setImage(UIImage(systemName: name, withConfiguration: config), for: .normal)
+        shieldBtn.tintColor = adBlocker.enabled ? .systemGreen : .gray
+    }
+
+    @objc private func reloadPage() { webView.reload() }
+
+    @objc private func toggleShield() {
+        adBlocker.toggle()
+        updateShieldIcon()
     }
 }

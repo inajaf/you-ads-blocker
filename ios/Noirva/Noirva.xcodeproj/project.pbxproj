@@ -14,6 +14,8 @@
 		A1000005 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A2000005 /* Assets.xcassets */; };
 		A1000006 /* hosts.json in Resources */ = {isa = PBXBuildFile; fileRef = A2000006 /* hosts.json */; };
 		A1000007 /* inject.js in Resources */ = {isa = PBXBuildFile; fileRef = A2000007 /* inject.js */; };
+		A1000008 /* adblock-rules.json in Resources */ = {isa = PBXBuildFile; fileRef = A2000009 /* adblock-rules.json */; };
+		A1000009 /* dom-layer.js in Resources */ = {isa = PBXBuildFile; fileRef = A200000A /* dom-layer.js */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -24,6 +26,8 @@
 		A2000005 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A2000006 /* hosts.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = hosts.json; sourceTree = "<group>"; };
 		A2000007 /* inject.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = inject.js; sourceTree = "<group>"; };
+		A2000009 /* adblock-rules.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "adblock-rules.json"; sourceTree = "<group>"; };
+		A200000A /* dom-layer.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = "dom-layer.js"; sourceTree = "<group>"; };
 		A2000008 /* Noirva.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Noirva.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -72,6 +76,8 @@
 			children = (
 				A2000006 /* hosts.json */,
 				A2000007 /* inject.js */,
+				A200000A /* dom-layer.js */,
+				A2000009 /* adblock-rules.json */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -137,6 +143,8 @@
 				A1000005 /* Assets.xcassets in Resources */,
 				A1000006 /* hosts.json in Resources */,
 				A1000007 /* inject.js in Resources */,
+				A1000009 /* dom-layer.js in Resources */,
+				A1000008 /* adblock-rules.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -283,7 +291,6 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = ANWJF8JNR6;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Noirva;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -311,7 +318,6 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = ANWJF8JNR6;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Noirva;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -354,6 +360,7 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
 	};
 	rootObject = A8000001 /* Project object */;
 }

@@ -13,16 +13,17 @@
 const fs = require('fs')
 const path = require('path')
 const { webFrame } = require('electron')
+const { resolveProjectPath } = require('./project-path')
 
 const ELECTRON_GUIDE_STORAGE_KEY = 'tube.electronDesktopGuideVersion'
 const NOIRVA_LOGO_PATH = ['extension', 'icons', 'noirva-logo-v2-128.png']
 
 function readProjectFile(...segments) {
-  return fs.readFileSync(path.join(__dirname, '..', ...segments), 'utf8')
+  return fs.readFileSync(resolveProjectPath(...segments), 'utf8')
 }
 
 function readProjectImageDataUrl(segments) {
-  const bytes = fs.readFileSync(path.join(__dirname, '..', ...segments))
+  const bytes = fs.readFileSync(resolveProjectPath(...segments))
   return `data:image/png;base64,${bytes.toString('base64')}`
 }
 
