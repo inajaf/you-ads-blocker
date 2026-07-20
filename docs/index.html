@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Noirva - Ad-Free YouTube Experience</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'noirva-green': '#5FCA6B',
+                        'noirva-dark': '#0F0F0F',
+                        'noirva-gray': '#1C211C',
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .gradient-bg {
+            background: linear-gradient(135deg, #5FCA6B 0%, #4CAF50 100%);
+        }
+        .card-hover {
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .card-hover:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 40px rgba(95, 202, 107, 0.15);
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- Hero Section -->
+    <section class="gradient-bg text-white py-20 px-6">
+        <div class="max-w-4xl mx-auto text-center">
+            <div class="flex items-center justify-center gap-3 mb-6">
+                <svg class="w-12 h-12" viewBox="0 0 26 26" fill="none">
+                    <path d="M13 3L21 6.5V11.5C21 15.5 16 19.7 13 22.5C10 19.7 5 15.5 5 11.5V6.5L13 3Z" fill="white"/>
+                    <path d="M9.5 12L11.3 13.8L14.7 10.2" stroke="#5FCA6B" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <h1 class="text-4xl md:text-5xl font-bold">Noirva</h1>
+            </div>
+            <p class="text-xl md:text-2xl mb-8 text-green-100">Ad-free YouTube, redefined.</p>
+            <p class="text-lg mb-10 text-green-50 max-w-2xl mx-auto">
+                Experience YouTube without interruptions. Noirva blocks ads at the network level, 
+                filters API responses, and cleans up the DOM — all while keeping your browsing private.
+            </p>
+            <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                <a href="https://github.com/inajaf/you-ads-blocker/releases/download/v1.0.0/Noirva-v1.0.0.apk" 
+                   class="bg-white text-noirva-green px-8 py-4 rounded-xl font-semibold hover:bg-green-50 transition flex items-center justify-center gap-2">
+                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M17.523 2.094a.396.396 0 0 0-.046-.003h-1.15c-.56 0-1.015.456-1.015 1.015v.297c0 .56.456 1.015 1.015 1.015.12 0 .235-.022.342-.062l.006.003 3.152 1.814c.202.116.333.332.333.568v.004c0 .236-.131.452-.333.568l-3.152 1.814-.006.003a1.013 1.013 0 0 1-.342-.062v.297c0 .56.456 1.015 1.015 1.015h1.15c.015 0 .03-.001.046-.003A10.555 10.555 0 0 0 22 12c0-5.523-4.477-10-10-10S2 6.477 2 12c0 4.953 3.604 9.072 8.365 9.85a.396.396 0 0 0 .046.003h1.15c.56 0 1.015-.456 1.015-1.015v-.297a1.015 1.015 0 0 0-1.015-1.015 1.015 1.015 0 0 0-.342.062l-.006-.003-3.152-1.814a.783.783 0 0 1-.333-.568v-.004c0-.236.131-.452.333-.568l3.152-1.814.006-.003c.107.04.222.062.342.062V5.124c0-.56-.456-1.015-1.015-1.015h-1.15a.396.396 0 0 0-.046-.003A10.555 10.555 0 0 0 2 12c0 5.523 4.477 10 10 10s10-4.477 10-10c0-4.953-3.604-9.072-8.365-9.85z"/>
+                    </svg>
+                    Download for Android
+                </a>
+                <a href="https://github.com/inajaf/you-ads-blocker/releases/download/v1.0.0/Noirva-1.0.0-arm64.dmg" 
+                   class="bg-noirva-dark text-white px-8 py-4 rounded-xl font-semibold hover:bg-gray-800 transition flex items-center justify-center gap-2">
+                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
+                    </svg>
+                    Download for macOS
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="py-20 px-6">
+        <div class="max-w-6xl mx-auto">
+            <h2 class="text-3xl font-bold text-center mb-4 text-noirva-dark">Three Layers of Protection</h2>
+            <p class="text-gray-600 text-center mb-12 max-w-2xl mx-auto">
+                Noirva uses a multi-layered approach to ensure you never see an ad again.
+            </p>
+            <div class="grid md:grid-cols-3 gap-8">
+                <!-- Layer 1 -->
+                <div class="bg-white p-8 rounded-2xl shadow-sm card-hover border border-gray-100">
+                    <div class="w-14 h-14 bg-green-100 rounded-xl flex items-center justify-center mb-6">
+                        <svg class="w-7 h-7 text-noirva-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-3 text-noirva-dark">Network Rules</h3>
+                    <p class="text-gray-600">
+                        Blocks ad requests before they even load. Our curated rule list stops 
+                        tracking scripts, analytics, and ad networks at the network level.
+                    </p>
+                </div>
+                <!-- Layer 2 -->
+                <div class="bg-white p-8 rounded-2xl shadow-sm card-hover border border-gray-100">
+                    <div class="w-14 h-14 bg-green-100 rounded-xl flex items-center justify-center mb-6">
+                        <svg class="w-7 h-7 text-noirva-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-3 text-noirva-dark">API Filtering</h3>
+                    <p class="text-gray-600">
+                        Intercepts YouTube's API responses and strips out ad placements, 
+                        sponsored content, and promotional data before it reaches your screen.
+                    </p>
+                </div>
+                <!-- Layer 3 -->
+                <div class="bg-white p-8 rounded-2xl shadow-sm card-hover border border-gray-100">
+                    <div class="w-14 h-14 bg-green-100 rounded-xl flex items-center justify-center mb-6">
+                        <svg class="w-7 h-7 text-noirva-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-3 text-noirva-dark">DOM Cleanup</h3>
+                    <p class="text-gray-600">
+                        Removes any remaining ad elements from the page. Even if something 
+                        slips through, our DOM layer cleans up the visual clutter.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works -->
+    <section class="bg-white py-20 px-6">
+        <div class="max-w-4xl mx-auto">
+            <h2 class="text-3xl font-bold text-center mb-12 text-noirva-dark">How It Works</h2>
+            <div class="space-y-8">
+                <div class="flex items-start gap-6">
+                    <div class="w-10 h-10 bg-noirva-green text-white rounded-full flex items-center justify-center font-bold flex-shrink-0">1</div>
+                    <div>
+                        <h3 class="text-lg font-semibold mb-2 text-noirva-dark">Network Interception</h3>
+                        <p class="text-gray-600">When you load YouTube, Noirva's network rules immediately block connections to ad servers, tracking pixels, and analytics endpoints.</p>
+                    </div>
+                </div>
+                <div class="flex items-start gap-6">
+                    <div class="w-10 h-10 bg-noirva-green text-white rounded-full flex items-center justify-center font-bold flex-shrink-0">2</div>
+                    <div>
+                        <h3 class="text-lg font-semibold mb-2 text-noirva-dark">Response Filtering</h3>
+                        <p class="text-gray-600">As YouTube's API responses arrive, Noirva parses them in real-time and removes any ad placements, sponsored cards, or promotional content.</p>
+                    </div>
+                </div>
+                <div class="flex items-start gap-6">
+                    <div class="w-10 h-10 bg-noirva-green text-white rounded-full flex items-center justify-center font-bold flex-shrink-0">3</div>
+                    <div>
+                        <h3 class="text-lg font-semibold mb-2 text-noirva-dark">DOM Cleanup</h3>
+                        <p class="text-gray-600">Finally, Noirva scans the rendered page and removes any remaining ad elements, placeholders, or promotional banners that made it through.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Download Section -->
+    <section class="py-20 px-6 bg-gray-100">
+        <div class="max-w-4xl mx-auto text-center">
+            <h2 class="text-3xl font-bold mb-4 text-noirva-dark">Get Noirva</h2>
+            <p class="text-gray-600 mb-10">Available for Android and macOS. iOS coming soon.</p>
+            <div class="grid sm:grid-cols-2 gap-6 max-w-2xl mx-auto">
+                <!-- Android -->
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+                    <div class="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center mx-auto mb-4">
+                        <svg class="w-6 h-6 text-noirva-green" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M6 18c0 .55.45 1 1 1h1v3.5c0 .83.67 1.5 1.5 1.5s1.5-.67 1.5-1.5V19h2v3.5c0 .83.67 1.5 1.5 1.5s1.5-.67 1.5-1.5V19h1c.55 0 1-.45 1-1V7H6v11zM3.5 7C2.67 7 2 7.67 2 8.5v7c0 .83.67 1.5 1.5 1.5S5 16.33 5 15.5v-7C5 7.67 4.33 7 3.5 7zm17 0c-.83 0-1.5.67-1.5 1.5v7c0 .83.67 1.5 1.5 1.5s1.5-.67 1.5-1.5v-7c0-.83-.67-1.5-1.5-1.5zm-4.97-5.84l1.3-1.3c.2-.2.2-.51 0-.71-.2-.2-.51-.2-.71 0l-1.48 1.48C13.85 1.23 12.95 1 12 1c-.96 0-1.86.23-2.66.63L7.85.15c-.2-.2-.51-.2-.71 0-.2.2-.2.51 0 .71l1.31 1.31C6.97 3.26 6 5.01 6 7h12c0-1.99-.97-3.75-2.47-4.84zM10 5H9V4h1v1zm5 0h-1V4h1v1z"/>
+                        </svg>
+                    </div>
+                    <h3 class="font-semibold mb-2 text-noirva-dark">Android</h3>
+                    <p class="text-sm text-gray-500 mb-4">APK • 10MB • Android 8.0+</p>
+                    <a href="https://github.com/inajaf/you-ads-blocker/releases/download/v1.0.0/Noirva-v1.0.0.apk" 
+                       class="block w-full bg-noirva-green text-white py-3 rounded-xl font-semibold hover:bg-green-600 transition">
+                        Download APK
+                    </a>
+                </div>
+                <!-- macOS -->
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+                    <div class="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center mx-auto mb-4">
+                        <svg class="w-6 h-6 text-noirva-green" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
+                        </svg>
+                    </div>
+                    <h3 class="font-semibold mb-2 text-noirva-dark">macOS</h3>
+                    <p class="text-sm text-gray-500 mb-4">DMG • 119MB • macOS 12+</p>
+                    <a href="https://github.com/inajaf/you-ads-blocker/releases/download/v1.0.0/Noirva-1.0.0-arm64.dmg" 
+                       class="block w-full bg-noirva-dark text-white py-3 rounded-xl font-semibold hover:bg-gray-800 transition">
+                        Download DMG
+                    </a>
+                </div>
+            </div>
+            <!-- iOS Notice -->
+            <div class="mt-8 bg-blue-50 border border-blue-200 rounded-2xl p-6 max-w-2xl mx-auto">
+                <div class="flex items-start gap-4">
+                    <svg class="w-6 h-6 text-blue-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <div class="text-left">
+                        <h4 class="font-semibold text-blue-900 mb-1">iOS Users</h4>
+                        <p class="text-blue-700 text-sm">
+                            Noirva for iOS is available as source code. Clone the repository, 
+                            open <code class="bg-blue-100 px-1 rounded">ios/Noirva.xcodeproj</code> in Xcode, 
+                            and build to your device. An Apple Developer account is required for installation.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FAQ Section -->
+    <section class="py-20 px-6">
+        <div class="max-w-3xl mx-auto">
+            <h2 class="text-3xl font-bold text-center mb-12 text-noirva-dark">Frequently Asked Questions</h2>
+            <div class="space-y-6">
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                    <h3 class="font-semibold mb-2 text-noirva-dark">Is Noirva safe to use?</h3>
+                    <p class="text-gray-600">Yes. Noirva is open-source and only blocks ad-related network requests. It doesn't collect any data or track your browsing.</p>
+                </div>
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                    <h3 class="font-semibold mb-2 text-noirva-dark">Will this break YouTube?</h3>
+                    <p class="text-gray-600">No. Noirva only blocks ads. Videos, comments, likes, and all other YouTube features work normally.</p>
+                </div>
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                    <h3 class="font-semibold mb-2 text-noirva-dark">How do I install the Android APK?</h3>
+                    <p class="text-gray-600">Download the APK, then enable "Install from Unknown Sources" in your device's Settings → Security. Open the APK file to install.</p>
+                </div>
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                    <h3 class="font-semibold mb-2 text-noirva-dark">macOS says the app is damaged. What do I do?</h3>
+                    <p class="text-gray-600">Right-click (or Control-click) the Noirva app and select "Open". This bypasses Gatekeeper on the first launch. The app is signed and safe.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="bg-noirva-dark text-white py-12 px-6">
+        <div class="max-w-4xl mx-auto text-center">
+            <div class="flex items-center justify-center gap-2 mb-4">
+                <svg class="w-8 h-8" viewBox="0 0 26 26" fill="none">
+                    <path d="M13 3L21 6.5V11.5C21 15.5 16 19.7 13 22.5C10 19.7 5 15.5 5 11.5V6.5L13 3Z" fill="#5FCA6B"/>
+                    <path d="M9.5 12L11.3 13.8L14.7 10.2" stroke="#0F0F0F" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <span class="text-xl font-bold">Noirva</span>
+            </div>
+            <p class="text-gray-400 mb-6">Ad-free YouTube, redefined.</p>
+            <div class="flex justify-center gap-6 mb-8">
+                <a href="https://github.com/inajaf/you-ads-blocker" class="text-gray-400 hover:text-white transition">
+                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                        <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/>
+                    </svg>
+                </a>
+            </div>
+            <p class="text-gray-500 text-sm">Open source under MIT License</p>
+        </div>
+    </footer>
+</body>
+</html>
