@@ -37,17 +37,15 @@ class WebViewController: UIViewController {
     private let coordinator: WebView.Coordinator
     private let adBlocker: AdBlocker
     private var webView: WKWebView!
-    private var shieldBadge: UIView!
-    private var shieldDot: UIView!
-    private var shieldLabel: UILabel!
-    private var shieldIcon: UIImageView!
+    private var shieldToggle: UIView!
+    private var shieldKnob: UIView!
+    private var statusLabel: UILabel!
     private var shieldEnabled = true
+    private var blockedCount = 0
 
     private let green = UIColor(red: 0.37, green: 0.79, blue: 0.42, alpha: 1.0)
     private let darkBg = UIColor(red: 0.06, green: 0.06, blue: 0.06, alpha: 1.0)
-    private let badgeBg = UIColor(red: 0.18, green: 0.22, blue: 0.18, alpha: 1.0)
-    private let badgeOnText = UIColor(red: 0.52, green: 0.80, blue: 0.52, alpha: 1.0)
-    private let dotGreen = UIColor(red: 0.45, green: 0.80, blue: 0.45, alpha: 1.0)
+    private let gradientTop = UIColor(red: 0.11, green: 0.13, blue: 0.11, alpha: 1.0)
 
     init(coordinator: WebView.Coordinator, adBlocker: AdBlocker) {
         self.coordinator = coordinator
@@ -113,7 +111,7 @@ class WebViewController: UIViewController {
         setupHeader()
 
         NSLayoutConstraint.activate([
-            webView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 56),
+            webView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 130),
             webView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             webView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             webView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
@@ -127,101 +125,179 @@ class WebViewController: UIViewController {
     private func setupHeader() {
         let header = UIView()
         header.translatesAutoresizingMaskIntoConstraints = false
-        header.backgroundColor = darkBg
         view.addSubview(header)
+
+        // Gradient background
+        let gradient = CAGradientLayer()
+        gradient.colors = [gradientTop.cgColor, darkBg.cgColor]
+        gradient.startPoint = CGPoint(x: 0.5, y: 0)
+        gradient.endPoint = CGPoint(x: 0.5, y: 1)
+        header.layer.insertSublayer(gradient, at: 0)
+        header.tag = 100
 
         NSLayoutConstraint.activate([
             header.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             header.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             header.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            header.heightAnchor.constraint(equalToConstant: 56),
+            header.heightAnchor.constraint(equalToConstant: 130),
         ])
 
-        // Shield icon — standalone green shield SVG, animated
-        shieldIcon = UIImageView()
-        shieldIcon.translatesAutoresizingMaskIntoConstraints = false
-        shieldIcon.image = makeShieldImage()
-        shieldIcon.tintColor = green
-        shieldIcon.isUserInteractionEnabled = true
-        header.addSubview(shieldIcon)
-
-        let tapShield = UITapGestureRecognizer(target: self, action: #selector(toggleShield))
-        shieldIcon.addGestureRecognizer(tapShield)
-
-        // Shield badge (green dot + ON), trailing
-        shieldBadge = UIView()
-        shieldBadge.translatesAutoresizingMaskIntoConstraints = false
-        shieldBadge.backgroundColor = badgeBg
-        shieldBadge.layer.cornerRadius = 16
-        header.addSubview(shieldBadge)
-
-        shieldDot = UIView()
-        shieldDot.translatesAutoresizingMaskIntoConstraints = false
-        shieldDot.backgroundColor = dotGreen
-        shieldDot.layer.cornerRadius = 3.5
-        shieldBadge.addSubview(shieldDot)
-
-        shieldLabel = UILabel()
-        shieldLabel.translatesAutoresizingMaskIntoConstraints = false
-        shieldLabel.text = "ON"
-        shieldLabel.textColor = badgeOnText
-        shieldLabel.font = .systemFont(ofSize: 12, weight: .bold)
-        shieldBadge.addSubview(shieldLabel)
-
-        let tapBadge = UITapGestureRecognizer(target: self, action: #selector(toggleShield))
-        shieldBadge.addGestureRecognizer(tapBadge)
+        // Row 1: App name + search button
+        let row1 = UIView()
+        row1.translatesAutoresizingMaskIntoConstraints = false
+        header.addSubview(row1)
 
         NSLayoutConstraint.activate([
-            // Shield icon: 26x26, leading 14
-            shieldIcon.leadingAnchor.constraint(equalTo: header.leadingAnchor, constant: 14),
-            shieldIcon.centerYAnchor.constraint(equalTo: header.centerYAnchor),
-            shieldIcon.widthAnchor.constraint(equalToConstant: 26),
-            shieldIcon.heightAnchor.constraint(equalToConstant: 26),
+            row1.topAnchor.constraint(equalTo: header.topAnchor, constant: 10),
+            row1.leadingAnchor.constraint(equalTo: header.leadingAnchor, constant: 16),
+            row1.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -16),
+            row1.heightAnchor.constraint(equalToConstant: 24),
+        ])
 
-            // Shield badge: trailing
-            shieldBadge.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -14),
-            shieldBadge.centerYAnchor.constraint(equalTo: header.centerYAnchor),
-            shieldBadge.heightAnchor.constraint(equalToConstant: 32),
+        // App name
+        let appName = UILabel()
+        appName.translatesAutoresizingMaskIntoConstraints = false
+        appName.text = "Noirva"
+        appName.textColor = .white
+        appName.font = .systemFont(ofSize: 17, weight: .heavy)
+        appName.setContentCompressionResistancePriority(.required, for: .horizontal)
+        row1.addSubview(appName)
 
-            // Dot inside badge
-            shieldDot.leadingAnchor.constraint(equalTo: shieldBadge.leadingAnchor, constant: 11),
-            shieldDot.centerYAnchor.constraint(equalTo: shieldBadge.centerYAnchor),
-            shieldDot.widthAnchor.constraint(equalToConstant: 7),
-            shieldDot.heightAnchor.constraint(equalToConstant: 7),
+        // Search button (circle)
+        let searchBtn = UIButton(type: .system)
+        searchBtn.translatesAutoresizingMaskIntoConstraints = false
+        searchBtn.backgroundColor = UIColor(white: 1.0, alpha: 0.06)
+        searchBtn.layer.cornerRadius = 18
+        searchBtn.tintColor = .white
+        let searchConfig = UIImage.SymbolConfiguration(pointSize: 19, weight: .regular)
+        searchBtn.setImage(UIImage(systemName: "magnifyingglass", withConfiguration: searchConfig), for: .normal)
+        searchBtn.addTarget(self, action: #selector(searchTapped), for: .touchUpInside)
+        row1.addSubview(searchBtn)
 
-            // Label inside badge
-            shieldLabel.leadingAnchor.constraint(equalTo: shieldDot.trailingAnchor, constant: 5),
-            shieldLabel.trailingAnchor.constraint(equalTo: shieldBadge.trailingAnchor, constant: -11),
-            shieldLabel.centerYAnchor.constraint(equalTo: shieldBadge.centerYAnchor),
+        NSLayoutConstraint.activate([
+            appName.leadingAnchor.constraint(equalTo: row1.leadingAnchor),
+            appName.centerYAnchor.constraint(equalTo: row1.centerYAnchor),
+
+            searchBtn.trailingAnchor.constraint(equalTo: row1.trailingAnchor),
+            searchBtn.centerYAnchor.constraint(equalTo: row1.centerYAnchor),
+            searchBtn.widthAnchor.constraint(equalToConstant: 36),
+            searchBtn.heightAnchor.constraint(equalToConstant: 36),
+        ])
+
+        // Row 2: Status card
+        let card = UIView()
+        card.translatesAutoresizingMaskIntoConstraints = false
+        card.backgroundColor = UIColor(white: 1.0, alpha: 0.05)
+        card.layer.cornerRadius = 12
+        card.layer.borderWidth = 1
+        card.layer.borderColor = UIColor(white: 1.0, alpha: 0.07).cgColor
+        header.addSubview(card)
+
+        NSLayoutConstraint.activate([
+            card.topAnchor.constraint(equalTo: row1.bottomAnchor, constant: 10),
+            card.leadingAnchor.constraint(equalTo: header.leadingAnchor, constant: 16),
+            card.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -16),
+            card.heightAnchor.constraint(equalToConstant: 48),
+        ])
+
+        // Shield icon in card
+        let shieldIcon = UIImageView()
+        shieldIcon.translatesAutoresizingMaskIntoConstraints = false
+        shieldIcon.image = makeShieldImage(size: 28)
+        shieldIcon.tintColor = green
+        card.addSubview(shieldIcon)
+
+        // Status text column
+        let statusCol = UIView()
+        statusCol.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(statusCol)
+
+        let protectionLabel = UILabel()
+        protectionLabel.translatesAutoresizingMaskIntoConstraints = false
+        protectionLabel.text = "Protection active"
+        protectionLabel.textColor = .white
+        protectionLabel.font = .systemFont(ofSize: 13, weight: .bold)
+        statusCol.addSubview(protectionLabel)
+
+        statusLabel = UILabel()
+        statusLabel.translatesAutoresizingMaskIntoConstraints = false
+        statusLabel.text = "0 ads blocked this session"
+        statusLabel.textColor = UIColor(red: 0.6, green: 0.6, blue: 0.6, alpha: 1.0)
+        statusLabel.font = .systemFont(ofSize: 11.5)
+        statusCol.addSubview(statusLabel)
+
+        // Toggle switch
+        shieldToggle = UIView()
+        shieldToggle.translatesAutoresizingMaskIntoConstraints = false
+        shieldToggle.backgroundColor = green
+        shieldToggle.layer.cornerRadius = 12
+        card.addSubview(shieldToggle)
+
+        shieldKnob = UIView()
+        shieldKnob.translatesAutoresizingMaskIntoConstraints = false
+        shieldKnob.backgroundColor = darkBg
+        shieldKnob.layer.cornerRadius = 9
+        shieldToggle.addSubview(shieldKnob)
+
+        let tapToggle = UITapGestureRecognizer(target: self, action: #selector(toggleShield))
+        shieldToggle.addGestureRecognizer(tapToggle)
+
+        NSLayoutConstraint.activate([
+            shieldIcon.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 14),
+            shieldIcon.centerYAnchor.constraint(equalTo: card.centerYAnchor),
+            shieldIcon.widthAnchor.constraint(equalToConstant: 28),
+            shieldIcon.heightAnchor.constraint(equalToConstant: 28),
+
+            statusCol.leadingAnchor.constraint(equalTo: shieldIcon.trailingAnchor, constant: 12),
+            statusCol.centerYAnchor.constraint(equalTo: card.centerYAnchor),
+            statusCol.trailingAnchor.constraint(lessThanOrEqualTo: shieldToggle.leadingAnchor, constant: -12),
+
+            protectionLabel.leadingAnchor.constraint(equalTo: statusCol.leadingAnchor),
+            protectionLabel.topAnchor.constraint(equalTo: statusCol.topAnchor),
+            protectionLabel.trailingAnchor.constraint(equalTo: statusCol.trailingAnchor),
+
+            statusLabel.leadingAnchor.constraint(equalTo: statusCol.leadingAnchor),
+            statusLabel.topAnchor.constraint(equalTo: protectionLabel.bottomAnchor, constant: 1),
+            statusLabel.trailingAnchor.constraint(equalTo: statusCol.trailingAnchor),
+
+            shieldToggle.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -14),
+            shieldToggle.centerYAnchor.constraint(equalTo: card.centerYAnchor),
+            shieldToggle.widthAnchor.constraint(equalToConstant: 40),
+            shieldToggle.heightAnchor.constraint(equalToConstant: 24),
+
+            shieldKnob.trailingAnchor.constraint(equalTo: shieldToggle.trailingAnchor, constant: -3),
+            shieldKnob.centerYAnchor.constraint(equalTo: shieldToggle.centerYAnchor),
+            shieldKnob.widthAnchor.constraint(equalToConstant: 18),
+            shieldKnob.heightAnchor.constraint(equalToConstant: 18),
         ])
     }
 
-    private func makeShieldImage() -> UIImage? {
-        let size = CGSize(width: 26, height: 26)
-        UIGraphicsBeginImageContextWithOptions(size, false, 0)
+    private func makeShieldImage(size: CGFloat) -> UIImage? {
+        let sz = CGSize(width: size, height: size)
+        UIGraphicsBeginImageContextWithOptions(sz, false, 0)
         guard let _ = UIGraphicsGetCurrentContext() else { return nil }
 
+        let s = size / 26.0
         let shield = UIBezierPath()
-        shield.move(to: CGPoint(x: 13, y: 3))
-        shield.addLine(to: CGPoint(x: 21, y: 6.5))
-        shield.addLine(to: CGPoint(x: 21, y: 11.5))
-        shield.addCurve(to: CGPoint(x: 13, y: 22.5),
-                        controlPoint1: CGPoint(x: 21, y: 15.5),
-                        controlPoint2: CGPoint(x: 16, y: 19.7))
-        shield.addCurve(to: CGPoint(x: 5, y: 11.5),
-                        controlPoint1: CGPoint(x: 10, y: 19.7),
-                        controlPoint2: CGPoint(x: 5, y: 15.5))
+        shield.move(to: CGPoint(x: 13*s, y: 3*s))
+        shield.addLine(to: CGPoint(x: 21*s, y: 6.5*s))
+        shield.addLine(to: CGPoint(x: 21*s, y: 11.5*s))
+        shield.addCurve(to: CGPoint(x: 13*s, y: 22.5*s),
+                        controlPoint1: CGPoint(x: 21*s, y: 15.5*s),
+                        controlPoint2: CGPoint(x: 16*s, y: 19.7*s))
+        shield.addCurve(to: CGPoint(x: 5*s, y: 11.5*s),
+                        controlPoint1: CGPoint(x: 10*s, y: 19.7*s),
+                        controlPoint2: CGPoint(x: 5*s, y: 15.5*s))
         shield.close()
 
         green.setFill()
         shield.fill()
 
         let check = UIBezierPath()
-        check.lineWidth = 1.8
-        check.move(to: CGPoint(x: 9.5, y: 12))
-        check.addLine(to: CGPoint(x: 11.3, y: 13.8))
-        check.addLine(to: CGPoint(x: 14.7, y: 10.2))
-
+        check.lineWidth = 1.8 * s
+        check.move(to: CGPoint(x: 9.5*s, y: 12*s))
+        check.addLine(to: CGPoint(x: 11.3*s, y: 13.8*s))
+        check.addLine(to: CGPoint(x: 14.7*s, y: 10.2*s))
         darkBg.setStroke()
         check.stroke()
 
@@ -230,27 +306,26 @@ class WebViewController: UIViewController {
         return image
     }
 
+    @objc private func searchTapped() {
+        // TODO: open search
+    }
+
     @objc private func toggleShield() {
         shieldEnabled.toggle()
         adBlocker.toggle()
 
-        let on = shieldEnabled
-        shieldDot.backgroundColor = on ? dotGreen : .gray
-        shieldLabel.text = on ? "ON" : "OFF"
-        shieldLabel.textColor = on ? badgeOnText : .gray
-        shieldBadge.backgroundColor = on ? badgeBg : UIColor(red: 0.22, green: 0.16, blue: 0.16, alpha: 1.0)
-
-        // Pulse animation
-        UIView.animate(withDuration: 0.15, delay: 0, usingSpringWithDamping: 0.5, initialSpringVelocity: 3, options: [], animations: {
-            self.shieldIcon.transform = on
-                ? CGAffineTransform(scaleX: 1.3, y: 1.3)
-                : CGAffineTransform(scaleX: 0.8, y: 0.8)
-        }, completion: { _ in
-            UIView.animate(withDuration: 0.2, delay: 0, usingSpringWithDamping: 0.6, initialSpringVelocity: 2, options: [], animations: {
-                self.shieldIcon.transform = .identity
-            })
+        UIView.animate(withDuration: 0.25, delay: 0, usingSpringWithDamping: 0.6, initialSpringVelocity: 3, options: [], animations: {
+            self.shieldToggle.backgroundColor = self.shieldEnabled ? self.green : .gray
+            let offsetX: CGFloat = self.shieldEnabled ? 0 : -16
+            self.shieldKnob.center.x = self.shieldToggle.bounds.midX + offsetX
+            if self.shieldEnabled {
+                self.shieldKnob.center.x = self.shieldToggle.bounds.maxX - 12
+            } else {
+                self.shieldKnob.center.x = self.shieldToggle.bounds.minX + 12
+            }
         })
 
+        statusLabel.text = "\(blockedCount) ads blocked this session"
         webView.reload()
     }
 }

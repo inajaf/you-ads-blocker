@@ -17,9 +17,10 @@ class MainActivity : Activity() {
     private lateinit var webView: WebView
     private lateinit var adBlocker: AdBlocker
     private var shieldEnabled = true
-    private lateinit var shieldDot: View
-    private lateinit var shieldText: TextView
-    private lateinit var shieldBadge: LinearLayout
+    private var blockedCount = 0
+    private lateinit var shieldToggle: FrameLayout
+    private lateinit var shieldKnob: View
+    private lateinit var statusLabel: TextView
     private lateinit var shieldIcon: ImageView
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -35,58 +36,127 @@ class MainActivity : Activity() {
             fitsSystemWindows = true
         }
 
-        // Header row
+        // Header container with gradient
         val header = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(10), dp(16), dp(14))
+            setBackgroundColor(Color.parseColor("#0F0F0F"))
+        }
+        // Gradient overlay
+        val gradientDrawable = GradientDrawable(
+            GradientDrawable.Orientation.TOP_BOTTOM,
+            intArrayOf(Color.parseColor("#1A201A"), Color.parseColor("#0F0F0F"))
+        )
+        header.background = gradientDrawable
+
+        // Row 1: App name + search button
+        val row1 = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+
+        val appName = TextView(this).apply {
+            text = "Noirva"
+            setTextColor(Color.WHITE)
+            textSize = 17f
+            setTypeface(null, Typeface.BOLD)
+        }
+        row1.addView(appName, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+
+        // Search button (36x36 circle)
+        val searchBtn = ImageView(this).apply {
+            setImageResource(R.drawable.ic_search)
+            val bg = GradientDrawable()
+            bg.shape = GradientDrawable.RECTANGLE
+            bg.cornerRadius = dp(18).toFloat()
+            bg.setColor(Color.parseColor("#0FFFFFFF"))
+            background = bg
+            scaleType = ImageView.ScaleType.CENTER_INSIDE
+            setColorFilter(Color.WHITE)
+            setPadding(dp(8), dp(8), dp(8), dp(8))
+        }
+        row1.addView(searchBtn, LinearLayout.LayoutParams(dp(36), dp(36)))
+
+        header.addView(row1, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+
+        // Row 2: Status card
+        val card = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(14), dp(10), dp(14), dp(10))
-            setBackgroundColor(Color.parseColor("#0F0F0F"))
-        }
-
-        // Shield icon — standalone green shield, animated
-        shieldIcon = ImageView(this).apply {
-            setImageDrawable(ShieldDrawable(dp(26), Color.parseColor("#5FCA6B")))
-            scaleType = ImageView.ScaleType.FIT_CENTER
-            setOnClickListener { toggleShield() }
-        }
-        val shieldIconParams = LinearLayout.LayoutParams(dp(26), dp(26))
-        header.addView(shieldIcon, shieldIconParams)
-
-        // Spacer — pushes badge to trailing edge
-        val spacer = View(this)
-        header.addView(spacer, LinearLayout.LayoutParams(0, 0, 1f))
-
-        // Shield badge (green dot + ON)
-        shieldBadge = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
             val bg = GradientDrawable()
-            bg.cornerRadius = dp(20).toFloat()
-            bg.setColor(Color.parseColor("#2E3830"))
+            bg.cornerRadius = dp(12).toFloat()
+            bg.setColor(Color.parseColor("#0DFFFFFF"))
+            bg.setStroke(1, Color.parseColor("#12FFFFFF"))
             background = bg
-            setPadding(dp(11), dp(8), dp(11), dp(8))
-            setOnClickListener { toggleShield() }
         }
-        val badgeParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT, dp(32))
-        header.addView(shieldBadge, badgeParams)
+        val cardParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, dp(48))
+        cardParams.topMargin = dp(10)
+        header.addView(card, cardParams)
 
-        shieldDot = View(this).apply {
+        // Shield icon (28x28)
+        shieldIcon = ImageView(this).apply {
+            setImageDrawable(ShieldDrawable(dp(28), Color.parseColor("#5FCA6B")))
+            scaleType = ImageView.ScaleType.FIT_CENTER
+        }
+        card.addView(shieldIcon, LinearLayout.LayoutParams(dp(28), dp(28)))
+
+        // Status text column
+        val statusCol = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        val statusColParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        statusColParams.marginStart = dp(12)
+        card.addView(statusCol, statusColParams)
+
+        val protectionLabel = TextView(this).apply {
+            text = "Protection active"
+            setTextColor(Color.WHITE)
+            textSize = 13f
+            setTypeface(null, Typeface.BOLD)
+        }
+        statusCol.addView(protectionLabel)
+
+        statusLabel = TextView(this).apply {
+            text = "0 ads blocked this session"
+            setTextColor(Color.parseColor("#9A9A9A"))
+            textSize = 11.5f
+        }
+        statusCol.addView(statusLabel)
+
+        // Toggle switch (40x24)
+        shieldToggle = FrameLayout(this).apply {
+            val bg = GradientDrawable()
+            bg.cornerRadius = dp(12).toFloat()
+            bg.setColor(Color.parseColor("#5FCA6B"))
+            background = bg
+        }
+        val toggleParams = LinearLayout.LayoutParams(dp(40), dp(24))
+        card.addView(shieldToggle, toggleParams)
+
+        // Toggle knob (18x18 circle)
+        shieldKnob = View(this).apply {
             val bg = GradientDrawable()
             bg.shape = GradientDrawable.OVAL
-            bg.setColor(Color.parseColor("#72CC72"))
+            bg.setColor(Color.parseColor("#0F0F0F"))
             background = bg
         }
-        shieldBadge.addView(shieldDot, LinearLayout.LayoutParams(dp(7), dp(7)))
+        shieldToggle.addView(shieldKnob, FrameLayout.LayoutParams(dp(18), dp(18)))
 
-        shieldText = TextView(this).apply {
-            text = "ON"
-            setTextColor(Color.parseColor("#88CC88"))
-            textSize = 12f
-            setTypeface(null, Typeface.BOLD)
-            setPadding(dp(5), 0, 0, 0)
+        // Position knob to right (on state)
+        shieldToggle.post {
+            val knobParams = shieldKnob.layoutParams as FrameLayout.LayoutParams
+            knobParams.gravity = Gravity.END or Gravity.CENTER_VERTICAL
+            shieldKnob.layoutParams = knobParams
         }
-        shieldBadge.addView(shieldText)
+
+        val toggleTap = object : Runnable {
+            override fun run() { toggleShield() }
+        }
+        shieldToggle.setOnClickListener { toggleShield() }
+        shieldIcon.setOnClickListener { toggleShield() }
 
         root.addView(header, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
@@ -129,13 +199,13 @@ class MainActivity : Activity() {
         shieldEnabled = !shieldEnabled
         updateShieldUI()
         animateShield()
+        statusLabel.text = "$blockedCount ads blocked this session"
         webView.reload()
     }
 
     private fun animateShield() {
         shieldIcon.animate().cancel()
         if (shieldEnabled) {
-            // Pulse up then back
             shieldIcon.scaleX = 1f
             shieldIcon.scaleY = 1f
             shieldIcon.animate()
@@ -151,7 +221,6 @@ class MainActivity : Activity() {
                 }
                 .start()
         } else {
-            // Shake down
             shieldIcon.animate()
                 .scaleX(0.8f).scaleY(0.8f)
                 .setDuration(150)
@@ -168,14 +237,17 @@ class MainActivity : Activity() {
     }
 
     private fun updateShieldUI() {
-        val green = Color.parseColor("#5FCA6B")
-        val gray = Color.parseColor("#888888")
-        val dotBg = shieldDot.background as? GradientDrawable
-        dotBg?.setColor(if (shieldEnabled) green else gray)
-        shieldText.text = if (shieldEnabled) "ON" else "OFF"
-        shieldText.setTextColor(if (shieldEnabled) Color.parseColor("#88CC88") else gray)
-        val badgeBg = shieldBadge.background as? GradientDrawable
-        badgeBg?.setColor(if (shieldEnabled) Color.parseColor("#2E3830") else Color.parseColor("#382828"))
+        val bg = shieldToggle.background as? GradientDrawable
+        bg?.setColor(if (shieldEnabled) Color.parseColor("#5FCA6B") else Color.parseColor("#888888"))
+        val knobBg = shieldKnob.background as? GradientDrawable
+        knobBg?.setColor(Color.parseColor("#0F0F0F"))
+        val knobParams = shieldKnob.layoutParams as? FrameLayout.LayoutParams
+        if (shieldEnabled) {
+            knobParams?.gravity = Gravity.END or Gravity.CENTER_VERTICAL
+        } else {
+            knobParams?.gravity = Gravity.START or Gravity.CENTER_VERTICAL
+        }
+        shieldKnob.layoutParams = knobParams
     }
 
     private fun dp(value: Int): Int {
