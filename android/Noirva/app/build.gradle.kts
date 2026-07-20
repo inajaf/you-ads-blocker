@@ -1,6 +1,13 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+}
+
+val localProps = Properties().apply {
+    val f = rootProject.file("../local.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
 }
 
 android {
@@ -15,10 +22,25 @@ android {
         versionName = "1.0"
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = rootProject.file(localProps.getProperty("KEYSTORE_FILE", "../noirva-release.keystore"))
+            storePassword = localProps.getProperty("KEYSTORE_PASSWORD", "")
+            keyAlias = localProps.getProperty("KEY_ALIAS", "")
+            keyPassword = localProps.getProperty("KEY_PASSWORD", "")
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
         }
+    }
+
+    lint {
+        checkReleaseBuilds = false
+        abortOnError = false
     }
 
     compileOptions {

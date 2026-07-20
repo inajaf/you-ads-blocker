@@ -44,3 +44,8 @@ CLAUDE.local.md
 *.sw?
 ios/Noirva/build/
 mobile-app-header-design-options/
+
+# Android signing (never commit secrets)
+local.properties
+*.keystore
+*.jks
