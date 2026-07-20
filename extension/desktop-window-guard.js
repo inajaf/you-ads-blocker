@@ -26,8 +26,24 @@
     return parseTrustedYouTubeUrl(value)?.searchParams.get('tube_app') === '1'
   }
 
+  function parseTrustedGoogleAccountUrl(value) {
+    try {
+      const url = new URL(value)
+      if (url.protocol !== 'https:') return null
+      if (
+        url.hostname === 'accounts.google.com' ||
+        url.hostname === 'myaccount.google.com'
+      ) {
+        return url
+      }
+      return null
+    } catch {
+      return null
+    }
+  }
+
   function isAllowedDesktopAppTabUrl(value) {
-    return parseTrustedYouTubeUrl(value) !== null
+    return parseTrustedYouTubeUrl(value) !== null || parseTrustedGoogleAccountUrl(value) !== null
   }
 
   function createDesktopWindowGuard({
@@ -194,7 +210,24 @@
         ])
         if (!liveAppWindow || liveCreatedWindow.type !== 'normal') return false
 
+        // Find the tab in the new window and get its URL before closing.
+        const newWindowTabs = await tabs.query({ windowId: createdWindow.id })
+        const targetTab = newWindowTabs?.[0]
+        const targetUrl = targetTab?.url
+
+        // Close the new window.
         await windows.remove(createdWindow.id)
+
+        // If the new window had a YouTube URL, navigate the app window there
+        // so the user doesn't lose their place (e.g. Account, Your data on YouTube).
+        if (targetUrl && isAllowedDesktopAppTabUrl(targetUrl)) {
+          const appTabs = await tabs.query({ windowId: liveAppWindow.id, active: true })
+          const activeTab = appTabs?.[0]
+          if (activeTab) {
+            await tabs.update(activeTab.id, { url: targetUrl })
+          }
+        }
+
         const focusChanges =
           liveAppWindow.state === 'minimized'
             ? { focused: true, state: 'normal' }
@@ -229,5 +262,6 @@
     DESKTOP_APP_WINDOW_MESSAGE,
     isAllowedDesktopAppTabUrl,
     isTrustedDesktopAppEntryUrl,
+    parseTrustedGoogleAccountUrl,
   })
 })(globalThis)
