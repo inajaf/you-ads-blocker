@@ -126,6 +126,16 @@ class MainActivity : Activity() {
         header.addView(LinearLayout(this), LinearLayout.LayoutParams(
             0, dp(14), 0f))
 
+        // Privacy info
+        val privacyInfo = TextView(this).apply {
+            text = "Safe to login — we don't store your data"
+            setTextColor(Color.parseColor("#888888"))
+            textSize = 11f
+            gravity = Gravity.CENTER
+        }
+        header.addView(privacyInfo, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+
         root.addView(header, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
 

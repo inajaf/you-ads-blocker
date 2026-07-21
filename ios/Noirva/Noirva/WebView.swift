@@ -42,6 +42,8 @@ class WebViewController: UIViewController {
     private var shieldEnabled = true
     private var protectionLabel: UILabel!
     private var shieldIcon: UIImageView!
+    private var headerHeightConstraint: NSLayoutConstraint?
+    private var headerView: UIView?
 
     private let green = UIColor(red: 0.373, green: 0.788, blue: 0.420, alpha: 1.0) // #5FCA6B
     private let darkBg = UIColor(red: 0.059, green: 0.059, blue: 0.059, alpha: 1.0) // #0F0F0F
@@ -111,7 +113,7 @@ class WebViewController: UIViewController {
         setupHeader()
 
         NSLayoutConstraint.activate([
-            webView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 72),
+            webView.topAnchor.constraint(equalTo: headerView!.bottomAnchor),
             webView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             webView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             webView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
@@ -124,24 +126,25 @@ class WebViewController: UIViewController {
 
     private func setupHeader() {
         // Header container
-        let header = UIView()
-        header.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(header)
+        headerView = UIView()
+        headerView!.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(headerView!)
 
         // Gradient background: #1C211C → #0F0F0F
         let gradient = CAGradientLayer()
         gradient.colors = [greenTop.cgColor, darkBg.cgColor]
         gradient.startPoint = CGPoint(x: 0.5, y: 0)
         gradient.endPoint = CGPoint(x: 0.5, y: 1)
-        header.layer.insertSublayer(gradient, at: 0)
-        header.tag = 100
+        headerView!.layer.insertSublayer(gradient, at: 0)
+        headerView!.tag = 100
 
         NSLayoutConstraint.activate([
-            header.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            header.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            header.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            header.heightAnchor.constraint(equalToConstant: 72),
+            headerView!.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            headerView!.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            headerView!.trailingAnchor.constraint(equalTo: headerView!.trailingAnchor),
         ])
+        headerHeightConstraint = headerView!.heightAnchor.constraint(equalToConstant: 72)
+        headerHeightConstraint?.isActive = true
 
         // Status card
         let card = UIView()
@@ -150,12 +153,12 @@ class WebViewController: UIViewController {
         card.layer.cornerRadius = 12
         card.layer.borderWidth = 1
         card.layer.borderColor = UIColor(white: 1.0, alpha: 0.07).cgColor // #12FFFFFF
-        header.addSubview(card)
+        headerView!.addSubview(card)
 
         NSLayoutConstraint.activate([
-            card.topAnchor.constraint(equalTo: header.topAnchor, constant: 10),
-            card.leadingAnchor.constraint(equalTo: header.leadingAnchor, constant: 16),
-            card.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -16),
+            card.topAnchor.constraint(equalTo: headerView!.topAnchor, constant: 10),
+            card.leadingAnchor.constraint(equalTo: headerView!.leadingAnchor, constant: 16),
+            card.trailingAnchor.constraint(equalTo: headerView!.trailingAnchor, constant: -16),
             card.heightAnchor.constraint(equalToConstant: 48),
         ])
 
@@ -222,14 +225,31 @@ class WebViewController: UIViewController {
         // Bottom spacer 14dp
         let spacer = UIView()
         spacer.translatesAutoresizingMaskIntoConstraints = false
-        header.addSubview(spacer)
+        headerView!.addSubview(spacer)
+
+        // Privacy info
+        let privacyInfo = UILabel()
+        privacyInfo.translatesAutoresizingMaskIntoConstraints = false
+        privacyInfo.text = "Safe to login — we don't store your data"
+        privacyInfo.textColor = UIColor(red: 0.533, green: 0.533, blue: 0.533, alpha: 1.0) // #888888
+        privacyInfo.font = .systemFont(ofSize: 11)
+        privacyInfo.textAlignment = .center
+        headerView!.addSubview(privacyInfo)
+
         NSLayoutConstraint.activate([
             spacer.topAnchor.constraint(equalTo: card.bottomAnchor),
-            spacer.leadingAnchor.constraint(equalTo: header.leadingAnchor),
-            spacer.trailingAnchor.constraint(equalTo: header.trailingAnchor),
-            spacer.heightAnchor.constraint(equalToConstant: 14),
-            spacer.bottomAnchor.constraint(equalTo: header.bottomAnchor),
+            spacer.leadingAnchor.constraint(equalTo: headerView!.leadingAnchor),
+            spacer.trailingAnchor.constraint(equalTo: headerView!.trailingAnchor),
+            spacer.heightAnchor.constraint(equalToConstant: 8),
+
+            privacyInfo.topAnchor.constraint(equalTo: spacer.bottomAnchor),
+            privacyInfo.leadingAnchor.constraint(equalTo: headerView!.leadingAnchor, constant: 16),
+            privacyInfo.trailingAnchor.constraint(equalTo: headerView!.trailingAnchor, constant: -16),
+            privacyInfo.bottomAnchor.constraint(equalTo: headerView!.bottomAnchor, constant: -4),
         ])
+
+        // Update header height to accommodate privacy info
+        headerHeightConstraint?.constant = 86
     }
 
     private func makeShieldImage(size: CGFloat, fillColor: UIColor? = nil) -> UIImage? {
