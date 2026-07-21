@@ -1,8 +1,9 @@
 import { test, expect } from '@playwright/test';
 
-// Key routes of the app (see src/App.tsx). /watch/:id and /channel/:id need
+// Key routes (see src/App.tsx): `/` is the public marketing landing page; the
+// video app now lives under `/app`. /app/watch/:id and /app/channel/:id need
 // real content ids, so they are covered indirectly through navigation tests later.
-const pages = ['/', '/search', '/library', '/settings', '/import'];
+const pages = ['/', '/app', '/app/search', '/app/library', '/app/settings', '/app/import'];
 
 // Console noise that is expected in dev and must not fail the smoke test
 // (e.g. remote catalog backends being unreachable in an offline/dev environment).

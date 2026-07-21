@@ -7,10 +7,18 @@ Cinema-dark React PWA for browsing videos with best-effort ad filtering and no A
 | Layer | Location | Notes |
 |-------|----------|-------|
 | UI | `src/` | React 19, TypeScript strict, Vite PWA, HLS.js, IndexedDB |
+| Landing | `src/landing/` | Marketing page at `/` (own scoped CSS + fonts); also the GitHub Pages bundle |
 | Proxy | `vite-plugin-proxy.ts` + `server/` | Media proxy with allowlisted hosts; also `netlify/` functions |
 | Extension | `extension/` | Chrome Manifest V3 ad-block companion (Noirva Shield) |
 | Desktop | `desktop/` | Chrome App Mode wrapper |
 | Android | `android/` | Native WebView wrapper backed by `adblock/` |
+
+**Routing:** `/` is the public landing page; the video app lives under `/app`
+via `<BrowserRouter basename="/app">` (see `src/appRoutes.ts` and
+`docs/decisions.md`). Internal app links stay absolute (`to="/search"`) — the
+basename prefixes them. `npm run build:pages` builds the landing-only static
+bundle (base `/you-ads-blocker/` → `dist-pages/`) deployed to GitHub Pages by
+`.github/workflows/pages.yml`; `npm run build` (Netlify, full SPA) is separate.
 
 ## Commands (gate: `npm test && npm run build`)
 
@@ -56,3 +64,10 @@ scroll at 390px width.
 
 `npm test && npm run build` — all green, changes in a branch, meaningful commit message.
 UI check (`./scripts/ui-check.sh`) required after frontend changes.
+
+## Maintaining this file
+
+Keep this file for knowledge useful to almost every future agent session in this project.
+Do not repeat what the codebase already shows; point to the authoritative file or command instead.
+Prefer rewriting or pruning existing entries over appending new ones.
+When updating this file, preserve this bar for all agents and keep entries concise.
