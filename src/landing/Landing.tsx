@@ -147,6 +147,14 @@ export function Landing() {
           <a className="nv-nav-link" href="#faq">
             FAQ
           </a>
+          <a
+            className="nv-nav-kofi-btn"
+            href="https://ko-fi.com/S3G523MDAE"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Fund the Project 💵
+          </a>
           <a className="nv-nav-cta" href="#download">
             Download
           </a>
@@ -401,7 +409,11 @@ export function Landing() {
       </section>
 
       {/* SUPPORT */}
-      <KofiWidget />
+      <div className="nv-kofi" data-reveal>
+        <div className="nv-kofi-inner">
+          <div id="kofi-widget" />
+        </div>
+      </div>
 
       {/* FOOTER */}
       <footer className="nv-footer">
