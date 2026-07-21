@@ -1,11 +1,7 @@
 /** Static content for the Noirva landing page, ported from the design source. */
 
-export const DOWNLOADS = {
-  apkUrl:
-    'https://github.com/inajaf/you-ads-blocker/releases/download/v1.0.0/Noirva-v1.0.0.apk',
-  dmgUrl:
-    'https://github.com/inajaf/you-ads-blocker/releases/download/v1.0.0/Noirva-1.0.0-arm64.dmg',
-} as const
+// Download URLs live in ./platforms.ts (PLATFORMS) — see there for why they
+// use the "latest release" URL convention.
 
 export interface Layer {
   num: number
