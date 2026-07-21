@@ -30,6 +30,9 @@ class MainActivity : Activity() {
     private var customViewCallback: WebChromeClient.CustomViewCallback? = null
     private var originalSystemUiVisibility = 0
 
+    // Pull-to-refresh
+    private lateinit var swipeRefresh: SwipeRefreshLayout
+
     private val green = Color.parseColor("#5FCA6B")
     private val darkBg = Color.parseColor("#0F0F0F")
     private val greenTop = Color.parseColor("#1C211C")
@@ -150,6 +153,11 @@ class MainActivity : Activity() {
                         adBlocker.injectScripts(view)
                     }
                 }
+
+                override fun onPageFinished(view: WebView?, url: String?) {
+                    super.onPageFinished(view, url)
+                    swipeRefresh.isRefreshing = false
+                }
             }
             webChromeClient = object : WebChromeClient() {
                 override fun onShowCustomView(view: View, callback: CustomViewCallback) {
@@ -199,7 +207,7 @@ class MainActivity : Activity() {
         }
 
         // SwipeRefreshLayout wraps the WebView for pull-to-refresh
-        val swipeRefresh = SwipeRefreshLayout(this).apply {
+        swipeRefresh = SwipeRefreshLayout(this).apply {
             setColorSchemeColors(green)
             setProgressBackgroundColorSchemeColor(darkBg)
             setOnRefreshListener {
