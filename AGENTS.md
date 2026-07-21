@@ -33,6 +33,10 @@ npx oxlint .            # lint (config in .oxlintrc.json)
 
 ## Code rules
 
+- Landing page downloads (`src/landing/platforms.ts`) link via
+  `releases/latest/download/<filename>` — never pin a version tag. Release
+  asset filenames must stay stable across versions (see `docs/decisions.md`,
+  2026-07-21) or the landing page's download links 404.
 - TypeScript in `src/`; extension/desktop code stays plain JS where it already is — match the file's existing style.
 - No swallowed errors: handle promise rejections, log with context, never empty `catch`.
 - Clean up side effects: abort fetches, remove listeners/observers in effect cleanup.
