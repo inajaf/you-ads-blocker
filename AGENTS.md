@@ -9,7 +9,7 @@ Cinema-dark React PWA for browsing videos with best-effort ad filtering and no A
 | UI | `src/` | React 19, TypeScript strict, Vite PWA, HLS.js, IndexedDB |
 | Landing | `src/landing/` | Marketing page at `/` (own scoped CSS + fonts); also the GitHub Pages bundle |
 | Proxy | `vite-plugin-proxy.ts` + `server/` | Media proxy with allowlisted hosts; also `netlify/` functions |
-| Extension | `extension/` | Chrome Manifest V3 ad-block companion (Noirva Shield) |
+| Extension | `extension/` | Chrome Manifest V3 ad-block companion (AdVoid Shield) |
 | Desktop | `desktop/` | Chrome App Mode wrapper |
 | Android | `android/` | Native WebView wrapper backed by `adblock/` |
 

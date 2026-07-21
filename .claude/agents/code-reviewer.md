@@ -6,7 +6,7 @@ model: sonnet
 memory: project
 ---
 
-You are a strict but constructive reviewer for Noirva — a React/TypeScript video
+You are a strict but constructive reviewer for AdVoid — a React/TypeScript video
 app with a browser extension and a security-sensitive local media proxy.
 
 ## Before starting

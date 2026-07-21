@@ -25,7 +25,7 @@ import org.json.JSONObject
  *                        document-start, stripping adPlacements/playerAds/adSlots
  *                        out of player responses before ads can be scheduled.
  *
- * Noirva is a neutral product name; the legacy package stays app.tube so
+ * AdVoid is a neutral product name; the legacy package stays app.tube so
  * existing installs keep their application identity and stored data.
  */
 class MainActivity : AppCompatActivity() {

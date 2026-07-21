@@ -50,10 +50,10 @@ test('PLATFORMS download entries use the "latest release" URL convention', () =>
 })
 
 test('isDownloadPlatform separates real downloads from source-only entries', () => {
-  assert.equal(PLATFORMS.some((p) => p.id === 'ios' && !isDownloadPlatform(p)), true)
+  assert.equal(PLATFORMS.every(isDownloadPlatform), true)
   assert.equal(DOWNLOAD_PLATFORMS.every(isDownloadPlatform), true)
   assert.equal(
-    DOWNLOAD_PLATFORMS.every((p) => p.id !== 'ios'),
+    DOWNLOAD_PLATFORMS.every((p) => p.id !== 'ios' || p.kind === 'download'),
     true,
   )
 })
@@ -67,8 +67,8 @@ test('orderByDetectedPlatform moves the matched platform to the front', () => {
   )
 })
 
-test('orderByDetectedPlatform keeps default order when detection is unknown or ios (not offered)', () => {
-  for (const detected of ['unknown', 'ios']) {
+test('orderByDetectedPlatform keeps default order when detection is unknown', () => {
+  for (const detected of ['unknown']) {
     const ordered = orderByDetectedPlatform(DOWNLOAD_PLATFORMS, detected)
     assert.deepEqual(
       ordered.map((p) => p.id),

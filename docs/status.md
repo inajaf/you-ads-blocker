@@ -22,7 +22,7 @@
 ## 2026-07-21 — Fixed broken Android download link, data-driven landing platforms
 
 ### Done
-- Fixed 404'd Android download link: was hardcoded to `Noirva-v1.0.0.apk`,
+- Fixed 404'd Android download link: was hardcoded to `AdVoid-v1.0.0.apk`,
   real asset is `app-release.apk`. All download hrefs now use
   `releases/latest/download/<filename>` so a version bump alone can't break
   them again (verified with `curl -sI` — both resolve 302, not 404).
@@ -104,7 +104,7 @@
   and `myaccount.google.com`.
 - Added back button on Google account pages: new content script entry in
   `manifest.json` for `*://accounts.google.com/*` and `*://myaccount.google.com/*`,
-  new `extension/account-back.js` that detects Noirva desktop app mode and
+  new `extension/account-back.js` that detects AdVoid desktop app mode and
   injects a fixed-position back button styled consistently with the existing UI.
 - Added fallback navigation bar for YouTube pages without masthead (Account,
   Your data on YouTube, etc.) in `desktop-guide-ui.js` — back button stays

@@ -22,8 +22,8 @@ for two platforms.
 
 ## 2026-07-21 — Landing download links use `releases/latest/download/<file>`, and a platform data model replaces hand-coded buttons
 Reason: The Android link 404'd — it was hardcoded to `v1.0.0`'s `.apk` filename
-(`Noirva-v1.0.0.apk`), but the real uploaded asset is named `app-release.apk`
-(the `Noirva-v1.0.0.apk` text was only a GitHub release *label*, not the
+(`AdVoid-v1.0.0.apk`), but the real uploaded asset is named `app-release.apk`
+(the `AdVoid-v1.0.0.apk` text was only a GitHub release *label*, not the
 filename). The macOS `.dmg` link happened to match and worked, but was pinned
 to `v1.0.0` the same fragile way — any future version bump would 404 it too.
 Approach: every download href in `src/landing/platforms.ts` now uses GitHub's
@@ -32,8 +32,8 @@ Approach: every download href in `src/landing/platforms.ts` now uses GitHub's
 — which always resolves to whatever release is currently tagged latest, so a
 version bump alone no longer breaks the link.
 **Constraint this places on future releases: asset filenames must stay stable
-across versions (e.g. always `app-release.apk` / `Noirva-1.0.0-arm64.dmg`,
-never a version-numbered rename like `Noirva-1.1.0-arm64.dmg`).** The landing
+across versions (e.g. always `app-release.apk` / `AdVoid-1.0.0-arm64.dmg`,
+never a version-numbered rename like `AdVoid-1.1.0-arm64.dmg`).** The landing
 page links to these exact filenames; renaming an asset on a future release
 404s the site regardless of the `latest` convention. Whoever cuts the next
 release must keep the filenames unchanged (or update

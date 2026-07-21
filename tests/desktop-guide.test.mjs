@@ -93,7 +93,7 @@ describe('desktop first-run guide model', () => {
       new URL('../extension/content.js', import.meta.url),
       'utf8',
     )
-    assert.equal(manifest.name, 'Noirva Shield')
+    assert.equal(manifest.name, 'AdVoid Shield')
     assert.equal(manifest.icons['128'], 'icons/noirva-logo-v2-128.png')
     assert.ok(
       manifest.web_accessible_resources.some((entry) =>

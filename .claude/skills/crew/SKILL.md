@@ -9,7 +9,7 @@ Model: the main session is the **first mate** — the user's single point of
 contact. It does not implement project work itself while a crew is live; it
 dispatches, supervises, and reports. Crewmates do the work in isolation.
 
-Adapted for Noirva: Claude Code agent teams + worktree isolation replace
+Adapted for AdVoid: Claude Code agent teams + worktree isolation replace
 firstmate's tmux windows and bash watchers; this repo's AGENTS.md rules and
 Definition of Done replace firstmate's project modes (we are effectively
 "direct-PR": a hook blocks pushing to main).

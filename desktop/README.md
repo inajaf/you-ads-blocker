@@ -1,4 +1,4 @@
-# Noirva Desktop
+# AdVoid Desktop
 
 YouTube in a clean standalone window with ad filtering, back-button navigation, and Google sign-in support.
 
@@ -14,25 +14,25 @@ For Windows install steps (SmartScreen bypass), see the [root README](../README.
 The app is unsigned (no Apple Developer ID). Pick one:
 
 **Right-click → Open (permanent)**
-1. Right-click **Noirva.app** in Finder
+1. Right-click **AdVoid.app** in Finder
 2. Select **Open** → click **Open** in the dialog
 
 **Or** remove the quarantine flag in Terminal:
 
 ```sh
-xattr -dr com.apple.quarantine /path/to/Noirva.app
+xattr -dr com.apple.quarantine /path/to/AdVoid.app
 ```
 
-**Or** go to **System Settings → Privacy & Security**, find the Noirva message and click **Open Anyway**.
+**Or** go to **System Settings → Privacy & Security**, find the AdVoid message and click **Open Anyway**.
 
 ### 2. Move to Applications
 
-Drag **Noirva.app** into your **Applications** folder.
+Drag **AdVoid.app** into your **Applications** folder.
 
 ### 3. Launch
 
-Open Noirva from Applications (or Spotlight). YouTube loads with ad blocking and desktop navigation enabled.
+Open AdVoid from Applications (or Spotlight). YouTube loads with ad blocking and desktop navigation enabled.
 
 ## First sign-in
 
-Click **Sign in** — a clean Chrome window opens. Sign into your Google account, then close it. Noirva remembers your session.
+Click **Sign in** — a clean Chrome window opens. Sign into your Google account, then close it. AdVoid remembers your session.
