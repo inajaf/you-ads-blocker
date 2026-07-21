@@ -135,10 +135,7 @@ export function Landing() {
           <div className="nv-logo">
             <div className="nv-logo-dot" />
           </div>
-          <span className="nv-brand-name nv-display">AdVoid</span>
-        </div>
-        <div className="nv-nav-center">
-          <KofiWidget />
+          <span className="nv-brand-name nv-display">Noirva</span>
         </div>
         <div className="nv-nav-links">
           <a className="nv-nav-link" href="#how">
@@ -150,6 +147,7 @@ export function Landing() {
           <a className="nv-nav-link" href="#faq">
             FAQ
           </a>
+          <KofiWidget />
           <a className="nv-nav-cta" href="#download">
             Download
           </a>
