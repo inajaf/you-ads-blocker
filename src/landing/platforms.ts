@@ -82,13 +82,15 @@ export const PLATFORMS: readonly Platform[] = [
   },
   {
     id: 'ios',
-    kind: 'source',
+    kind: 'download',
     name: 'iOS',
     icon: 'apple',
     spec: 'Source · Xcode build',
-    bodyPrefix: 'Clone the repo, open ',
-    codePath: 'ios/Noirva.xcodeproj',
-    bodySuffix: ' in Xcode, and build to your device. Apple Developer account required.',
+    href: `${RELEASES_LATEST}/Noirva-iOS-Source.zip`,
+    ctaLabel: 'Download for iOS',
+    downloadLabel: 'Download Source',
+    primary: false,
+    note: 'Build in Xcode, sign with free Apple ID',
   },
 ] as const
 
