@@ -44,6 +44,7 @@ npx oxlint .            # lint (config in .oxlintrc.json)
 - No secrets or API keys in code or logs — the project's premise is "no API keys".
 - New logic gets a unit test in `tests/*.test.mjs` (node:test).
 - Commits: short imperative messages matching existing history. Work in a branch + PR; do not push to main.
+- Commits must never include AI co-author attribution (no `Co-Authored-By: Claude` or similar trailers).
 - Forbidden: disabling or deleting failing tests to get green, reading/printing `.env` or secrets.
 
 ## UI check loop (mandatory after frontend changes)
