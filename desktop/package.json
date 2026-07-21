@@ -13,7 +13,7 @@
     "start:electron": "electron .",
     "dist": "npm run build:extension && electron-builder --mac",
     "dist:dmg": "npm run build:extension && electron-builder --mac dmg",
-    "dist:win": "npm run build:extension && electron-builder --win"
+    "dist:win": "cd .. && npm run build:extension && cd desktop && electron-builder --win"
   },
   "build": {
     "appId": "com.noirva.desktop",
