@@ -20,6 +20,7 @@ class MainActivity : Activity() {
     private lateinit var shieldToggle: FrameLayout
     private lateinit var shieldKnob: View
     private lateinit var shieldIcon: ImageView
+    private lateinit var protectionLabel: TextView
 
     private val green = Color.parseColor("#5FCA6B")
     private val darkBg = Color.parseColor("#0F0F0F")
@@ -50,38 +51,7 @@ class MainActivity : Activity() {
         )
         header.background = gradientDrawable
 
-        // Row 1: App name + search button (height 24)
-        val row1 = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            minimumHeight = dp(24)
-        }
-
-        val appName = TextView(this).apply {
-            text = "Noirva"
-            setTextColor(Color.WHITE)
-            textSize = 17f
-            setTypeface(null, Typeface.BOLD)
-        }
-        row1.addView(appName, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-
-        // Search button: 36x36 circle, rgba(255,255,255,.06) bg
-        val searchBtn = ImageView(this).apply {
-            setImageResource(R.drawable.ic_search)
-            val bg = GradientDrawable()
-            bg.cornerRadius = dp(18).toFloat()
-            bg.setColor(0x0FFFFFFF.toInt())
-            background = bg
-            scaleType = ImageView.ScaleType.CENTER_INSIDE
-            setColorFilter(Color.WHITE)
-            setPadding(dp(8), dp(8), dp(8), dp(8))
-        }
-        row1.addView(searchBtn, LinearLayout.LayoutParams(dp(36), dp(36)))
-
-        header.addView(row1, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
-
-        // Row 2: Status card (height 48)
+        // Status card (height 48)
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -106,7 +76,7 @@ class MainActivity : Activity() {
         card.addView(shieldIcon, LinearLayout.LayoutParams(dp(28), dp(28)))
 
         // "Protection active" label
-        val protectionLabel = TextView(this).apply {
+        protectionLabel = TextView(this).apply {
             text = "Protection active"
             setTextColor(Color.WHITE)
             textSize = 13f
@@ -226,6 +196,13 @@ class MainActivity : Activity() {
         // Toggle background
         val toggleBg = shieldToggle.background as? GradientDrawable
         toggleBg?.setColor(if (shieldEnabled) green else Color.parseColor("#888888"))
+
+        // Update label text and color
+        protectionLabel.text = if (shieldEnabled) "Protection active" else "Protection paused"
+        protectionLabel.setTextColor(if (shieldEnabled) Color.WHITE else Color.parseColor("#888888"))
+
+        // Update shield icon color
+        shieldIcon.setImageDrawable(ShieldDrawable(dp(28), if (shieldEnabled) green else Color.parseColor("#888888")))
 
         // Knob position — pixel-based like iOS
         val targetX = if (shieldEnabled) {
