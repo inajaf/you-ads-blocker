@@ -34,7 +34,7 @@ npm run build:extension
 npm run dev
 ```
 
-Open `http://127.0.0.1:5173`. Load `dist-extension/` in Chrome Extensions for Shield support.
+Open `http://127.0.0.1:5173/app`. Load `dist-extension/` in Chrome Extensions for Shield support.
 
 ### Build
 

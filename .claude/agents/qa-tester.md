@@ -17,15 +17,18 @@ the ceiling. No `tools` restriction: use the Playwright MCP browser tools
    (start it in the background if it is not up).
 
 ## Test pass — for each affected functionality (all of them on a full pass)
-Walk these flows in the browser via Playwright MCP, observing like a human:
-- **Home** `/`: content loads, cards render, thumbnails/skeletons behave, no layout shift.
-- **Search** `/search`: type a query, submit, results render, empty-query and no-results states.
-- **Watch** `/watch/:id`: open a video from home/search, player loads, play/pause,
+`/` is the marketing landing page; the video app lives under `/app`. Walk
+these flows in the browser via Playwright MCP, observing like a human:
+- **Landing** `/`: marketing page loads, reveal-on-scroll animations, FAQ
+  accordion, download links.
+- **App home** `/app`: content loads, cards render, thumbnails/skeletons behave, no layout shift.
+- **Search** `/app/search`: type a query, submit, results render, empty-query and no-results states.
+- **Watch** `/app/watch/:id`: open a video from home/search, player loads, play/pause,
   seek, quality/settings controls, back navigation.
-- **Channel** `/channel/:id`: open from a video, content lists render.
-- **Library** `/library`: add/remove items, state persists after reload.
-- **Settings** `/settings`: toggle each option, verify effect and persistence.
-- **Import** `/import`: paste a link, verify the flow's feedback.
+- **Channel** `/app/channel/:id`: open from a video, content lists render.
+- **Library** `/app/library`: add/remove items, state persists after reload.
+- **Settings** `/app/settings`: toggle each option, verify effect and persistence.
+- **Import** `/app/import`: paste a link, verify the flow's feedback.
 
 For every screen also judge UX:
 - loading, empty, and error states exist and look intentional
