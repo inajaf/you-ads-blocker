@@ -1,5 +1,41 @@
 # Project status
 
+## 2026-07-21 — Marketing landing page + `/app` route move + GitHub Pages deploy
+
+### Done
+- New marketing landing page ported from the `.dc` design source into idiomatic
+  React/TS: `src/landing/Landing.tsx` + scoped `src/landing/landing.css`,
+  `content.ts` (layers/steps/marquee/download URLs), `faq.ts` (accordion data +
+  pure `toggleFaq`/`faqVisual` helpers), `useRevealOnScroll.ts`
+  (IntersectionObserver in `useEffect`, disconnected in cleanup, respects
+  `prefers-reduced-motion`). Fonts loaded via injected `<link>` on mount
+  (removed on unmount), not globally. Apple glyph rendered as inline SVG.
+- Routing: landing owns `/`; the whole video app moved under `/app` via
+  `<BrowserRouter basename="/app">` (see `src/appRoutes.ts` + decisions.md).
+  Zero churn on internal links — they auto-prefix; deep links `/app/watch/:id`
+  stay shareable.
+- PWA manifest: `start_url`/`id` → `/app`, `share_target.action` →
+  `/app/import`, `scope` stays `/`.
+- GitHub Pages: landing-only static bundle — `landing.html` +
+  `src/landing/landing-entry.tsx`, `npm run build:pages` (base
+  `/you-ads-blocker/` → `dist-pages/`, `scripts/pages-index.mjs` renames to
+  `index.html`), workflow `.github/workflows/pages.yml`. Netlify `npm run
+  build` unchanged.
+- Tests: `tests/landing-faq.test.mjs` covers `toggleFaq`/`faqVisual` and
+  `isAppPath`. `tests/ui/smoke.spec.ts` updated to the new routes (`/`, `/app`,
+  `/app/*`).
+- Verified: `npm test` 88/88, `npm run build` + `npm run build:pages` green,
+  UI check 12/12. Hands-on browser pass — landing renders (fonts, animations,
+  gradient, device mock, FAQ accordion toggles with 45° icon rotation),
+  relocated app works (`/app` home, search `/app/search?q=…`, watch deep link
+  `/app/watch/:id`, BottomNav client-nav), Pages bundle serves under
+  `/you-ads-blocker/` with correctly-prefixed assets and no console errors.
+
+### Known issues
+- None from this change. (`/app/watch/:id` still shows the pre-existing
+  "Desktop protection required" gate in desktop browsers without the Shield
+  extension — unchanged behaviour, unrelated to the route move.)
+
 ## Done
 - 2026-07-19: AI-dev setup installed (AGENTS.md, Playwright UI checks, Claude agents/hooks).
 - 2026-07-19: Committed on branch ai-setup-and-studio-back: AI-dev setup + window-guard
