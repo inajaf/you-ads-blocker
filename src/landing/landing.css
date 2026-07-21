@@ -1111,6 +1111,18 @@
   align-items: center;
   gap: 12px;
 }
+.nv-footer-center {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+}
+.nv-footer-center .nv-kofi {
+  padding: 0;
+}
+.nv-footer-center .nv-kofi-inner {
+  max-width: none;
+  margin: 0;
+}
 .nv-footer-logo {
   width: 26px;
   height: 26px;

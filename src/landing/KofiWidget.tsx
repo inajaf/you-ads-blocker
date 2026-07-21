@@ -25,11 +25,5 @@ export function KofiWidget() {
     load()
   }, [])
 
-  return (
-    <div className="nv-kofi" data-reveal>
-      <div className="nv-kofi-inner">
-        <div ref={ref} />
-      </div>
-    </div>
-  )
+  return <div ref={ref} />
 }

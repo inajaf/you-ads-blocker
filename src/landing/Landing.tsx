@@ -408,9 +408,6 @@ export function Landing() {
         </div>
       </section>
 
-      {/* SUPPORT */}
-      <KofiWidget />
-
       {/* FOOTER */}
       <footer className="nv-footer">
         <div className="nv-footer-brand">
@@ -421,6 +418,9 @@ export function Landing() {
             <div className="nv-footer-name nv-display">Noirva</div>
             <div className="nv-footer-tag">Ad-free YouTube, redefined.</div>
           </div>
+        </div>
+        <div className="nv-footer-center">
+          <KofiWidget />
         </div>
         <div className="nv-footer-links">
           <a
