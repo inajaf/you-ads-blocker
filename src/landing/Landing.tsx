@@ -132,11 +132,13 @@ export function Landing() {
       {/* NAV */}
       <nav className="nv-nav">
         <div className="nv-brand">
-          <KofiWidget />
           <div className="nv-logo">
             <div className="nv-logo-dot" />
           </div>
           <span className="nv-brand-name nv-display">Noirva</span>
+        </div>
+        <div className="nv-nav-center">
+          <KofiWidget />
         </div>
         <div className="nv-nav-links">
           <a className="nv-nav-link" href="#how">
@@ -408,7 +410,7 @@ export function Landing() {
             <div className="nv-footer-logo-dot" />
           </div>
           <div>
-            <div className="nv-footer-name nv-display">Noirva</div>
+            <div className="nv-footer-name nv-display">AdVoid</div>
             <div className="nv-footer-tag">Ad-free YouTube, redefined.</div>
           </div>
         </div>

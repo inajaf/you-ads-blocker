@@ -222,14 +222,18 @@
   position: sticky;
   top: 0;
   z-index: 50;
-  display: flex;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
   align-items: center;
-  justify-content: space-between;
   gap: 16px;
   padding: 20px clamp(20px, 5vw, 64px);
   backdrop-filter: blur(14px);
   background: rgba(8, 8, 10, 0.72);
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.nv-nav-center {
+  display: flex;
+  justify-content: center;
 }
 .nv-brand {
   display: flex;
@@ -1178,7 +1182,4 @@
 .kofi-img {
   height: 24px;
   border-radius: 4px;
-}
-.nv-nav .kofi-button {
-  margin-right: 16px;
 }
