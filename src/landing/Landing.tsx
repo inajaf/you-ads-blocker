@@ -135,7 +135,7 @@ export function Landing() {
           <div className="nv-logo">
             <div className="nv-logo-dot" />
           </div>
-          <span className="nv-brand-name nv-display">Noirva</span>
+          <span className="nv-brand-name nv-display">AdVoid</span>
         </div>
         <div className="nv-nav-center">
           <KofiWidget />
