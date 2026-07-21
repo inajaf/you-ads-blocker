@@ -247,11 +247,12 @@
   box-shadow: 0 0 22px rgba(255, 77, 77, 0.45);
   flex-shrink: 0;
 }
-.nv-logo-dot {
-  width: 11px;
-  height: 11px;
-  background: var(--nv-bg);
-  border-radius: 3px;
+.nv-logo-img {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  flex-shrink: 0;
+  object-fit: cover;
 }
 .nv-brand-name {
   font-weight: 700;
@@ -1121,11 +1122,12 @@
   justify-content: center;
   flex-shrink: 0;
 }
-.nv-footer-logo-dot {
-  width: 9px;
-  height: 9px;
-  background: var(--nv-bg);
-  border-radius: 3px;
+.nv-footer-logo-img {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  object-fit: cover;
 }
 .nv-footer-name {
   font-weight: 700;

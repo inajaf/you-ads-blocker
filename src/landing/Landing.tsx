@@ -132,10 +132,8 @@ export function Landing() {
       {/* NAV */}
       <nav className="nv-nav">
         <div className="nv-brand">
-          <div className="nv-logo">
-            <div className="nv-logo-dot" />
-          </div>
-          <span className="nv-brand-name nv-display">Noirva</span>
+          <img src="/noirva-logo-v2-192.png" alt="AdVoid logo" className="nv-logo-img" />
+          <span className="nv-brand-name nv-display">AdVoid</span>
         </div>
         <div className="nv-nav-links">
           <a className="nv-nav-link" href="#how">
@@ -405,7 +403,7 @@ export function Landing() {
       <footer className="nv-footer">
         <div className="nv-footer-brand">
           <div className="nv-footer-logo">
-            <div className="nv-footer-logo-dot" />
+            <img src="/noirva-logo-v2-192.png" alt="AdVoid logo" className="nv-footer-logo-img" />
           </div>
           <div>
             <div className="nv-footer-name nv-display">AdVoid</div>
