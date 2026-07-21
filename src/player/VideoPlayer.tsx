@@ -9,6 +9,7 @@ import {
   type PlaySource,
 } from './sources'
 import { canUseMse, playAdaptiveMse, type MseSession } from './mse'
+import { Maximize, Minimize } from 'lucide-react'
 
 interface Props {
   data: VideoStreamsResponse
@@ -78,6 +79,8 @@ export function VideoPlayer({ data, startAt = 0, onProgress }: Props) {
   const [status, setStatus] = useState<string | null>(null)
   /** Forces effect re-run on every quality change (even same index retry). */
   const [switchGen, setSwitchGen] = useState(0)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const wrapRef = useRef<HTMLDivElement>(null)
 
   const source: PlaySource | null = sources[sourceIdx] || null
   const key = `${sourceKey(source)}#${switchGen}`
@@ -363,6 +366,39 @@ export function VideoPlayer({ data, startAt = 0, onProgress }: Props) {
     setSwitchGen((g) => g + 1)
   }
 
+  const toggleFullscreen = () => {
+    const el = wrapRef.current
+    if (!el) return
+    const doc = document as Document & { webkitFullscreenElement?: Element | null; webkitExitFullscreen?: () => Promise<void> }
+    const elAny = el as HTMLDivElement & { webkitRequestFullscreen?: () => Promise<void> }
+    if (!doc.fullscreenElement && !doc.webkitFullscreenElement) {
+      if (el.requestFullscreen) {
+        el.requestFullscreen()
+      } else if (elAny.webkitRequestFullscreen) {
+        elAny.webkitRequestFullscreen()
+      }
+    } else {
+      if (doc.exitFullscreen) {
+        doc.exitFullscreen()
+      } else if (doc.webkitExitFullscreen) {
+        doc.webkitExitFullscreen()
+      }
+    }
+  }
+
+  useEffect(() => {
+    const onFs = () => {
+      const doc = document as Document & { webkitFullscreenElement?: Element | null }
+      setIsFullscreen(!!(doc.fullscreenElement || doc.webkitFullscreenElement))
+    }
+    document.addEventListener('fullscreenchange', onFs)
+    document.addEventListener('webkitfullscreenchange', onFs)
+    return () => {
+      document.removeEventListener('fullscreenchange', onFs)
+      document.removeEventListener('webkitfullscreenchange', onFs)
+    }
+  }, [])
+
   if (!sources.length) {
     return (
       <div className="player-wrap">
@@ -375,14 +411,24 @@ export function VideoPlayer({ data, startAt = 0, onProgress }: Props) {
   const playing = sources[sourceIdx]
 
   return (
-    <div className="player-wrap">
-      <video
-        ref={videoRef}
-        className="player-video"
-        controls
-        playsInline
-        poster={data.thumbnailUrl}
-      />
+    <div className="player-wrap" ref={wrapRef}>
+      <div className="player-viewport">
+        <video
+          ref={videoRef}
+          className="player-video"
+          controls
+          playsInline
+          poster={data.thumbnailUrl}
+        />
+        <button
+          type="button"
+          className="player-expand"
+          onClick={toggleFullscreen}
+          aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+        >
+          {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
+        </button>
+      </div>
       <audio ref={audioRef} preload="auto" style={{ display: 'none' }} />
       <div className="player-bar">
         <label className="quality-label">

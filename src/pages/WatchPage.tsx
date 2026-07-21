@@ -64,7 +64,9 @@ async function fetchLightMeta(id: string): Promise<LightMeta> {
 function PlayerSkeleton() {
   return (
     <div className="player-wrap player-state" aria-live="polite">
-      <div className="player-video skeleton player-skeleton" />
+      <div className="player-viewport">
+        <div className="player-video skeleton player-skeleton" />
+      </div>
       <span className="sr-only">Preparing player</span>
     </div>
   )
@@ -73,8 +75,10 @@ function PlayerSkeleton() {
 function ShieldGate({ onRetry }: { onRetry: () => void }) {
   return (
     <section className="player-wrap player-state shield-gate" aria-live="polite">
-      <div className="shield-gate-icon" aria-hidden="true">
-        <ShieldAlert size={28} />
+      <div className="player-viewport">
+        <div className="shield-gate-icon" aria-hidden="true">
+          <ShieldAlert size={28} />
+        </div>
       </div>
       <div>
         <p className="eyebrow">Desktop protection required</p>
@@ -235,7 +239,9 @@ export function WatchPage() {
           {streamLoading && <PlayerSkeleton />}
           {streamErr && (
             <div className="player-wrap player-state stream-error" role="alert">
-              <Smartphone size={28} aria-hidden="true" />
+              <div className="player-viewport">
+                <Smartphone size={28} aria-hidden="true" />
+              </div>
               <h2>Mobile stream is unavailable</h2>
               <p className="muted">{streamErr}</p>
               <div className="row embed-actions">

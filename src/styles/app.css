@@ -382,7 +382,45 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
 
 .player-wrap { position: sticky; z-index: 20; top: 0; overflow: hidden; background: #000; }
+.player-viewport { position: relative; width: 100%; }
 .player-video { display: block; width: 100%; aspect-ratio: 16 / 9; background: #000; }
+.player-wrap:fullscreen,
+.player-wrap:-webkit-full-screen {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background: #000;
+}
+.player-wrap:fullscreen .player-video,
+.player-wrap:-webkit-full-screen .player-video {
+  width: 100%;
+  max-height: 100vh;
+  aspect-ratio: auto;
+}
+.player-expand {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  z-index: 10;
+  transition: background 0.2s, opacity 0.2s;
+  opacity: 0.7;
+}
+.player-expand:hover,
+.player-expand:focus-visible {
+  background: rgba(0, 0, 0, 0.85);
+  opacity: 1;
+}
 .yt-embed-host { position: relative; width: 100%; aspect-ratio: 16 / 9; overflow: hidden; background: #000; }
 .yt-embed-host iframe,
 .yt-iframe,
