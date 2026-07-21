@@ -1,5 +1,24 @@
 # Project status
 
+## 2026-07-21 — Compact hero buttons with platform dropdown
+
+### Done
+- Replaced the flat row of hero download buttons with a compact layout:
+  primary button for the visitor's detected platform (e.g. "Download for
+  Android" on an Android device) and an "Other platforms" dropdown for the
+  remaining download options.
+- Dropdown closes on outside click, uses `aria-expanded`/`aria-haspopup`
+  for accessibility, and renders menu items as `<a>` links for keyboard
+  navigation.
+- Detection + reordering logic unchanged (from `detectPlatform.ts` /
+  `orderByDetectedPlatform`); only the hero rendering changed.
+- CSS additions: `.nv-dropdown`, `.nv-dropdown-trigger`, `.nv-dropdown-menu`,
+  `.nv-dropdown-item` scoped under `.noirva-landing` (no style leakage).
+- Verified: `npm test` 96/96, `npm run build` green, UI check 12/12.
+
+### Known issues
+- None from this change.
+
 ## 2026-07-21 — Fixed broken Android download link, data-driven landing platforms
 
 ### Done

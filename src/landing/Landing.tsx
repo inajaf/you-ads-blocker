@@ -77,8 +77,10 @@ function PlatformCard({ platform }: { platform: Platform }) {
 
 export function Landing() {
   const rootRef = useRef<HTMLDivElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
   const [open, setOpen] = useState<ReadonlySet<number>>(() => new Set())
   const [detected, setDetected] = useState<DetectedPlatform>('unknown')
+  const [dropdownOpen, setDropdownOpen] = useState(false)
 
   useRevealOnScroll(rootRef)
 
@@ -89,7 +91,20 @@ export function Landing() {
     setDetected(detectPlatform())
   }, [])
 
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    if (!dropdownOpen) return
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [dropdownOpen])
+
   const heroPlatforms = orderByDetectedPlatform(DOWNLOAD_PLATFORMS, detected)
+  const [primaryPlatform, ...otherPlatforms] = heroPlatforms
 
   // Load the marketing fonts scoped to this page (not the app's global head).
   // Created here and removed on unmount so the app shell stays unaffected.
@@ -163,15 +178,40 @@ export function Landing() {
             private.
           </p>
           <div className="nv-hero-actions" data-reveal>
-            {heroPlatforms.map((platform, i) => (
-              <a
-                key={platform.id}
-                className={`nv-btn ${i === 0 ? 'nv-btn-primary' : 'nv-btn-ghost'}`}
-                href={platform.href}
-              >
-                <HeroPlatformIcon icon={platform.icon} /> {platform.ctaLabel}
-              </a>
-            ))}
+            <a className="nv-btn nv-btn-primary" href={primaryPlatform.href}>
+              <HeroPlatformIcon icon={primaryPlatform.icon} /> {primaryPlatform.ctaLabel}
+            </a>
+            {otherPlatforms.length > 0 && (
+              <div className="nv-dropdown" ref={dropdownRef}>
+                <button
+                  type="button"
+                  className="nv-btn nv-btn-ghost nv-dropdown-trigger"
+                  onClick={() => setDropdownOpen((prev) => !prev)}
+                  aria-expanded={dropdownOpen}
+                  aria-haspopup="true"
+                >
+                  Other platforms
+                  <span className="nv-dropdown-chevron" aria-hidden="true">
+                    ▾
+                  </span>
+                </button>
+                {dropdownOpen && (
+                  <div className="nv-dropdown-menu" role="menu">
+                    {otherPlatforms.map((platform) => (
+                      <a
+                        key={platform.id}
+                        className="nv-dropdown-item"
+                        href={platform.href}
+                        role="menuitem"
+                        onClick={() => setDropdownOpen(false)}
+                      >
+                        <HeroPlatformIcon icon={platform.icon} /> {platform.ctaLabel}
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Hero device mock: before/after ad-free */}

@@ -4,6 +4,22 @@
 Reason: ...
 Alternatives: ... -->
 
+## 2026-07-21 — Hero download CTA: primary button + "Other platforms" dropdown
+Reason: The previous flat row of two equal-weight buttons (Android + macOS)
+didn't visually prioritize the visitor's detected platform. On mobile, two
+full-width buttons compete for attention; the user's actual platform should
+be the obvious first action.
+Approach: render only the detected (or default primary) platform as the
+highlighted `.nv-btn-primary` CTA. Remaining download platforms go into an
+"Other platforms" dropdown (`.nv-dropdown`), which toggles on click and
+closes on outside click. Uses `aria-expanded` / `aria-haspopup` for
+accessibility; menu items are `<a>` links for keyboard navigation. Detection
+and reordering logic unchanged (`detectPlatform.ts` /
+`orderByDetectedPlatform`); only the hero rendering changed.
+Alternatives: (a) keep the flat row — simpler, but no visual hierarchy;
+(b) show all buttons in a grid — too wide on mobile; (c) tabs — overkill
+for two platforms.
+
 ## 2026-07-21 — Landing download links use `releases/latest/download/<file>`, and a platform data model replaces hand-coded buttons
 Reason: The Android link 404'd — it was hardcoded to `v1.0.0`'s `.apk` filename
 (`Noirva-v1.0.0.apk`), but the real uploaded asset is named `app-release.apk`
