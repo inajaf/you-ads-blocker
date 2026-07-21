@@ -1,5 +1,34 @@
 # Project status
 
+## 2026-07-21 — Renamed Noirva to AdVoid
+
+### Done
+- Renamed all user-visible references from "Noirva" to "AdVoid" across:
+  - Android: app label, theme names, manifest, strings.xml
+  - iOS: log messages, app struct name (NoirvaApp → AdVoidApp)
+  - Desktop: productName, description in package.json
+  - Landing page: all UI text, FAQ, content sections
+  - Components: UpdateToast, InstallBanner, HomePage, WatchPage, SettingsPage
+  - Extension: manifest name/description (Noirva Shield → AdVoid Shield)
+  - Config: vite.config.ts PWA names, root package.json description
+  - Documentation: all READMEs, AGENTS.md, decisions.md, status.md
+  - Tests: updated assertions to match new name
+- Created new GitHub release v1.2.0 with renamed assets:
+  - AdVoid-1.0.0-arm64.dmg (macOS)
+  - AdVoid-Setup-1.0.0.exe (Windows)
+  - AdVoid-iOS-Source.zip (iOS source)
+  - app-release.apk (Android, unchanged for compatibility)
+- Updated landing page download links in `src/landing/platforms.ts` to use new asset names
+- Pushed all changes to origin/main (2 commits)
+
+### Known issues
+- Old v1.1.0 release still exists with Noirva-named assets (kept for backwards compatibility)
+- Android APK keeps name `app-release.apk` to avoid breaking existing install links
+- iOS README still references actual Xcode project filesystem paths (Noirva.xcodeproj) - renaming would break project structure
+- Android build cache artifacts still contain old Noirva references (will be cleaned on next clean build)
+
+## Previous status entries...
+
 ## 2026-07-21 — Compact hero buttons with platform dropdown
 
 ### Done
