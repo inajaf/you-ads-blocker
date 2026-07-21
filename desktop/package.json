@@ -12,7 +12,8 @@
     "prestart:electron": "cd .. && npm run build:extension",
     "start:electron": "electron .",
     "dist": "npm run build:extension && electron-builder --mac",
-    "dist:dmg": "npm run build:extension && electron-builder --mac dmg"
+    "dist:dmg": "npm run build:extension && electron-builder --mac dmg",
+    "dist:win": "npm run build:extension && electron-builder --win"
   },
   "build": {
     "appId": "com.noirva.desktop",
@@ -53,6 +54,15 @@
         {
           "target": "dmg",
           "arch": ["x64", "arm64"]
+        }
+      ]
+    },
+    "win": {
+      "icon": "../assets/brand/noirva-logo-v2.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
         }
       ]
     }
