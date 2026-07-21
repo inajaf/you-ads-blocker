@@ -395,6 +395,37 @@
   justify-content: center;
 }
 
+/* platform icons row */
+.nv-platform-icons {
+  display: flex;
+  gap: 24px;
+  justify-content: center;
+  margin-top: 32px;
+}
+.nv-platform-icon-link {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: var(--nv-muted);
+  text-decoration: none;
+  transition: color 0.2s ease, transform 0.2s ease;
+}
+.nv-platform-icon-link:hover {
+  color: var(--nv-text);
+  transform: translateY(-2px);
+}
+.nv-platform-icon-link .nv-platform-icon,
+.nv-platform-icon-link .nv-apple {
+  width: 32px;
+  height: 32px;
+}
+.nv-platform-icon-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
 /* buttons */
 .nv-btn {
   display: inline-flex;
@@ -434,6 +465,12 @@
   border-color: rgba(255, 255, 255, 0.24);
 }
 .nv-apple {
+  display: inline-flex;
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.125em;
+}
+.nv-platform-icon {
   display: inline-flex;
   width: 1em;
   height: 1em;

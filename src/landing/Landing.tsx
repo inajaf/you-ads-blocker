@@ -27,16 +27,33 @@ function AppleMark({ className }: { className?: string }) {
   )
 }
 
-/** Small icon used inline in a hero button (Apple mark scales via `.nv-apple`'s 1em sizing). */
+/** Android robot icon (Material Design). */
+function AndroidMark({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 448 512"
+      fill="currentColor"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M0 96C0 60.7 28.7 32 64 32H384c35.3 0 64 28.7 64 64V416c0 35.3-28.7 64-64 64H64c-35.3 0-64-28.7-64-64V96zM64 96V416H384V96c0-17.7-14.3-32-32-32H96C78.3 64 64 78.3 64 96zM128 160c0-17.7 14.3-32 32-32h32c17.7 0 32 14.3 32 32v48c0 17.7-14.3 32-32 32H160c-17.7 0-32-14.3-32-32V160zm192-32h32c17.7 0 32 14.3 32 32v48c0 17.7-14.3 32-32 32H320c-17.7 0-32-14.3-32-32V160c0-17.7 14.3-32 32-32zM160 384c-17.7 0-32 14.3-32 32s14.3 32 32 32h32c17.7 0 32-14.3 32-32s-14.3-32-32-32H160zm128 0c-17.7 0-32 14.3-32 32s14.3 32 32 32h32c17.7 0 32-14.3 32-32s-14.3-32-32-32H288z" />
+    </svg>
+  )
+}
+
+/** Small icon used inline in a hero button (scales via class sizing). */
 function HeroPlatformIcon({ icon }: { icon: PlatformIcon }) {
   if (icon === 'apple') return <AppleMark className="nv-apple" />
-  return <span style={{ fontSize: '19px' }}>▲</span>
+  if (icon === 'android') return <AndroidMark className="nv-platform-icon" />
+  return null
 }
 
 /** Icon used inside a `.nv-dl-card`, which sets its own icon font-size. */
 function CardPlatformIcon({ icon }: { icon: PlatformIcon }) {
   if (icon === 'apple') return <AppleMark className="nv-apple" />
-  return <>▲</>
+  if (icon === 'android') return <AndroidMark className="nv-platform-icon" />
+  return null
 }
 
 const PRIMARY_DOWNLOAD =
@@ -77,10 +94,8 @@ function PlatformCard({ platform }: { platform: Platform }) {
 
 export function Landing() {
   const rootRef = useRef<HTMLDivElement>(null)
-  const dropdownRef = useRef<HTMLDivElement>(null)
   const [open, setOpen] = useState<ReadonlySet<number>>(() => new Set())
   const [detected, setDetected] = useState<DetectedPlatform>('unknown')
-  const [dropdownOpen, setDropdownOpen] = useState(false)
 
   useRevealOnScroll(rootRef)
 
@@ -90,18 +105,6 @@ export function Landing() {
   useEffect(() => {
     setDetected(detectPlatform())
   }, [])
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    if (!dropdownOpen) return
-    const handleClickOutside = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setDropdownOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [dropdownOpen])
 
   const heroPlatforms = orderByDetectedPlatform(DOWNLOAD_PLATFORMS, detected)
   const [primaryPlatform, ...otherPlatforms] = heroPlatforms
@@ -181,37 +184,22 @@ export function Landing() {
             <a className="nv-btn nv-btn-primary" href={primaryPlatform.href}>
               <HeroPlatformIcon icon={primaryPlatform.icon} /> {primaryPlatform.ctaLabel}
             </a>
-            {otherPlatforms.length > 0 && (
-              <div className="nv-dropdown" ref={dropdownRef}>
-                <button
-                  type="button"
-                  className="nv-btn nv-btn-ghost nv-dropdown-trigger"
-                  onClick={() => setDropdownOpen((prev) => !prev)}
-                  aria-expanded={dropdownOpen}
-                  aria-haspopup="true"
-                >
-                  Other platforms
-                  <span className="nv-dropdown-chevron" aria-hidden="true">
-                    ▾
-                  </span>
-                </button>
-                {dropdownOpen && (
-                  <div className="nv-dropdown-menu" role="menu">
-                    {otherPlatforms.map((platform) => (
-                      <a
-                        key={platform.id}
-                        className="nv-dropdown-item"
-                        href={platform.href}
-                        role="menuitem"
-                        onClick={() => setDropdownOpen(false)}
-                      >
-                        <HeroPlatformIcon icon={platform.icon} /> {platform.ctaLabel}
-                      </a>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+            <a className="nv-btn nv-btn-ghost" href={otherPlatforms[0]?.href ?? primaryPlatform.href}>
+              <HeroPlatformIcon icon={otherPlatforms[0]?.icon ?? primaryPlatform.icon} /> {otherPlatforms[0]?.ctaLabel ?? 'Download'}
+            </a>
+          </div>
+          <div className="nv-platform-icons" data-reveal>
+            {PLATFORMS.map((platform) => (
+              <a
+                key={platform.id}
+                className="nv-platform-icon-link"
+                href={platform.kind === 'download' ? platform.href : `#${platform.id}`}
+                title={platform.name}
+              >
+                <CardPlatformIcon icon={platform.icon} />
+                <span className="nv-platform-icon-label nv-mono">{platform.name}</span>
+              </a>
+            ))}
           </div>
 
           {/* Hero device mock: before/after ad-free */}
