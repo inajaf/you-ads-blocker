@@ -417,7 +417,7 @@ export function Landing() {
           >
             GitHub
           </a>
-          <span className="nv-license nv-mono">MIT License</span>
+          <span className="nv-license nv-mono">CC BY-NC-SA 4.0</span>
         </div>
       </footer>
     </div>
