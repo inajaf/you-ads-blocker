@@ -27,7 +27,7 @@ export function SettingsPage() {
         <h2>Playback &amp; ads</h2>
         <p className="muted small">
           Desktop opens the <strong>official YouTube embed</strong> only after
-          Noirva Shield confirms its filtering rules are enabled. Without the
+          AdVoid Shield confirms its filtering rules are enabled. Without the
           extension the iframe is not loaded.
         </p>
         <p className="muted small">

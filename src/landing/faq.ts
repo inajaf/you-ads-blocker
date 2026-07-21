@@ -1,5 +1,5 @@
 /**
- * FAQ accordion data + pure view-state helpers for the Noirva landing page.
+ * FAQ accordion data + pure view-state helpers for the AdVoid landing page.
  *
  * Kept free of React so the toggle/visual logic is unit-testable in isolation
  * (see tests/landing-faq.test.mjs). The original design allows multiple FAQ
@@ -13,12 +13,12 @@ export interface FaqItem {
 
 export const FAQS: readonly FaqItem[] = [
   {
-    q: 'Is Noirva safe to use?',
-    a: "Yes. Noirva is open-source and only blocks ad-related network requests. It doesn't collect any data or track your browsing.",
+    q: 'Is AdVoid safe to use?',
+    a: "Yes. AdVoid is open-source and only blocks ad-related network requests. It doesn't collect any data or track your browsing.",
   },
   {
     q: 'Will this break YouTube?',
-    a: 'No. Noirva only blocks ads. Videos, comments, likes, and all other YouTube features work normally.',
+    a: 'No. AdVoid only blocks ads. Videos, comments, likes, and all other YouTube features work normally.',
   },
   {
     q: 'How do I install the Android APK?',
@@ -26,7 +26,7 @@ export const FAQS: readonly FaqItem[] = [
   },
   {
     q: 'macOS says the app is damaged. What do I do?',
-    a: 'Right-click (or Control-click) the Noirva app and select "Open". This bypasses Gatekeeper on first launch. The app is signed and safe.',
+    a: 'Right-click (or Control-click) the AdVoid app and select "Open". This bypasses Gatekeeper on first launch. The app is signed and safe.',
   },
 ] as const
 

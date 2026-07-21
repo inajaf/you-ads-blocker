@@ -2,7 +2,7 @@
   "name": "noirva-desktop",
   "version": "1.0.0",
   "private": true,
-  "description": "Noirva desktop video window with supported Google sign-in and ad filtering.",
+  "description": "AdVoid desktop video window with supported Google sign-in and ad filtering.",
   "main": "main.js",
   "scripts": {
     "prestart": "cd .. && npm run build:extension",
@@ -17,7 +17,7 @@
   },
   "build": {
     "appId": "com.noirva.desktop",
-    "productName": "Noirva",
+    "productName": "AdVoid",
     "directories": {
       "output": "release"
     },

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Noirva Shield",
+  "name": "AdVoid Shield",
   "version": "1.3.5",
-  "description": "Noirva filters known YouTube ad requests while you watch. No API keys.",
+  "description": "AdVoid filters known YouTube ad requests while you watch. No API keys.",
   "permissions": [
     "declarativeNetRequest",
     "declarativeNetRequestWithHostAccess",
@@ -29,7 +29,7 @@
   },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Noirva Shield",
+    "default_title": "AdVoid Shield",
     "default_icon": {
       "16": "icons/noirva-logo-v2-16.png",
       "48": "icons/noirva-logo-v2-48.png",

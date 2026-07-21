@@ -61,8 +61,8 @@ export default defineConfig(({ mode }) => {
           type: 'module',
         },
         manifest: {
-          name: 'Noirva',
-          short_name: 'Noirva',
+          name: 'AdVoid',
+          short_name: 'AdVoid',
           description:
             'Install from a browser link. Focused video playback with best-effort ad filtering and no API keys.',
           theme_color: '#0f0f0f',

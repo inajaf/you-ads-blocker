@@ -132,6 +132,7 @@ export function Landing() {
       {/* NAV */}
       <nav className="nv-nav">
         <div className="nv-brand">
+          <KofiWidget />
           <div className="nv-logo">
             <div className="nv-logo-dot" />
           </div>
@@ -146,14 +147,6 @@ export function Landing() {
           </a>
           <a className="nv-nav-link" href="#faq">
             FAQ
-          </a>
-          <a
-            className="nv-nav-kofi-btn"
-            href="https://ko-fi.com/S3G523MDAE"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Fund the Project 💵
           </a>
           <a className="nv-nav-cta" href="#download">
             Download
@@ -178,7 +171,7 @@ export function Landing() {
             <span className="nv-gradient-text">redefined.</span>
           </h1>
           <p className="nv-hero-sub" data-reveal>
-            Noirva blocks ads at the network level, filters API responses, and
+            AdVoid blocks ads at the network level, filters API responses, and
             cleans up the DOM — all while keeping your browsing completely
             private.
           </p>
@@ -204,7 +197,7 @@ export function Landing() {
                 <span className="nv-dot nv-dot-yellow" />
                 <span className="nv-dot nv-dot-green" />
                 <span className="nv-mock-url nv-mono">
-                  youtube.com · protected by Noirva
+                  youtube.com · protected by AdVoid
                 </span>
               </div>
               <div className="nv-mock-body">
@@ -343,7 +336,7 @@ export function Landing() {
       {/* DOWNLOAD */}
       <section id="download" className="nv-download">
         <h2 className="nv-h2 nv-display" data-reveal>
-          Get Noirva
+          Get AdVoid
         </h2>
         <p className="nv-lead" data-reveal>
           Available for Android and macOS. iOS available as source.
@@ -403,7 +396,7 @@ export function Landing() {
           <h2 className="nv-cta-title nv-display">Watch without the wait.</h2>
           <p className="nv-cta-sub">Free. Open source. No tracking, ever.</p>
           <a className="nv-btn nv-cta-btn" href="#download">
-            Download Noirva
+            Download AdVoid
           </a>
         </div>
       </section>
@@ -418,9 +411,6 @@ export function Landing() {
             <div className="nv-footer-name nv-display">Noirva</div>
             <div className="nv-footer-tag">Ad-free YouTube, redefined.</div>
           </div>
-        </div>
-        <div className="nv-footer-center">
-          <KofiWidget />
         </div>
         <div className="nv-footer-links">
           <a

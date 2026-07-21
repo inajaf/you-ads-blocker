@@ -1111,18 +1111,6 @@
   align-items: center;
   gap: 12px;
 }
-.nv-footer-center {
-  flex: 1;
-  display: flex;
-  justify-content: center;
-}
-.nv-footer-center .nv-kofi {
-  padding: 0;
-}
-.nv-footer-center .nv-kofi-inner {
-  max-width: none;
-  margin: 0;
-}
 .nv-footer-logo {
   width: 26px;
   height: 26px;
@@ -1167,34 +1155,30 @@
 }
 
 /* ---------- kofi support ---------- */
-.nv-kofi {
-  padding: 0 clamp(20px, 5vw, 64px) clamp(40px, 6vh, 80px);
-}
-.nv-kofi-inner {
-  max-width: 400px;
-  margin: 0 auto;
-  text-align: center;
-}
-.nv-kofi-inner iframe {
-  border: none;
-  margin: 0 auto;
-}
-.nv-nav-kofi-btn {
+.kofi-button {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 9px 18px;
-  border-radius: 999px;
-  background: #a855f7;
+  padding: 8px 16px;
+  border-radius: 8px;
+  background-color: #a855f7;
   color: #fff !important;
   font-weight: 600;
   font-size: 14px;
+  text-decoration: none;
   transition:
     transform 0.2s ease,
     box-shadow 0.2s ease;
 }
-.nv-nav-kofi-btn:hover {
+.kofi-button:hover {
   color: #fff !important;
   transform: translateY(-2px);
   box-shadow: 0 10px 30px rgba(168, 85, 247, 0.4);
+}
+.kofi-img {
+  height: 24px;
+  border-radius: 4px;
+}
+.nv-nav .kofi-button {
+  margin-right: 16px;
 }

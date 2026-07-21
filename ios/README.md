@@ -1,4 +1,4 @@
-# Noirva — iOS WebView wrapper
+# AdVoid — iOS WebView wrapper
 
 A minimal native iOS app that loads the **real** `m.youtube.com` full-screen
 (no browser chrome — looks like the YouTube app) and blocks ads **Brave-style**,
@@ -13,7 +13,7 @@ Two layers of blocking, both consumed from `/adblock` (single source of truth):
 2. **Page layer** — `WKUserScript` injects `Resources/inject.js` at document-end
    in the main world, stripping `adPlacements` / `playerAds` / `adSlots` out of
    player responses before ads can be scheduled. It logs
-   `[Noirva Shield] page hooks active`.
+   `[AdVoid Shield] page hooks active`.
 
 You stay logged into your Google account; subscriptions, history and
 recommendations are untouched.
@@ -41,7 +41,7 @@ recommendations are untouched.
 2. Open the Xcode project:
 
    ```sh
-   open Noirva/Noirva.xcodeproj
+   open AdVoid/Noirva.xcodeproj
    ```
 
 3. Select your development team in **Signing & Capabilities**.
@@ -55,12 +55,12 @@ recommendations are untouched.
 1. Run the app and open an ad-heavy video (music videos and long uploads are
    good tests). There should be **no pre-roll ad** and no mid-roll interruptions.
 
-2. In Xcode, check the console for `[Noirva Shield] page hooks active` — this
+2. In Xcode, check the console for `[AdVoid Shield] page hooks active` — this
    confirms the inject script is running.
 
 3. For deeper inspection, enable the Web Inspector:
    - On your device: Settings → Safari → Advanced → Web Inspector (ON)
-   - On Mac: Safari → Develop → [your device] → [Noirva page]
+   - On Mac: Safari → Develop → [your device] → [AdVoid page]
 
 ---
 
@@ -69,10 +69,10 @@ recommendations are untouched.
 ```
 ios/
 ├── scripts/
-│   └── sync-adblock.mjs              # copies /adblock -> Noirva/Resources
+│   └── sync-adblock.mjs              # copies /adblock -> AdVoid/Resources
 └── Noirva/
     ├── Noirva.xcodeproj              # Xcode project
-    └── Noirva/
+└── AdVoid/
         ├── NoirvaApp.swift           # App entry point (SwiftUI)
         ├── ContentView.swift         # Root view
         ├── WebView.swift             # WKWebView wrapper with ad-blocking
@@ -108,7 +108,7 @@ ios/
   `document-start` injection via public API. The script runs at
   `document-end` (`atDocumentEnd`) which is early enough in practice — YouTube's
   player scripts load after the DOM is ready.
-- **Neutral naming for trademark reasons.** The app is named "Noirva". It is an
+- **Neutral naming for trademark reasons.** The app is named "AdVoid". It is an
   unofficial personal wrapper, not affiliated with or endorsed by YouTube/Google.
 - **Personal use.** This wrapper is intended for your own device. It is not
   suitable for distribution on the App Store (ad-block-on-YouTube policy).

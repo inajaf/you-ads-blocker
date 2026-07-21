@@ -1,4 +1,4 @@
-/** Static content for the Noirva landing page, ported from the design source. */
+/** Static content for the AdVoid landing page, ported from the design source. */
 
 // Download URLs live in ./platforms.ts (PLATFORMS) — see there for why they
 // use the "latest release" URL convention.
@@ -41,17 +41,17 @@ export const STEPS: readonly Step[] = [
   {
     num: 1,
     title: 'Network interception',
-    body: "When you load YouTube, Noirva's network rules immediately block connections to ad servers, tracking pixels, and analytics endpoints.",
+    body: "When you load YouTube, AdVoid's network rules immediately block connections to ad servers, tracking pixels, and analytics endpoints.",
   },
   {
     num: 2,
     title: 'Response filtering',
-    body: "As YouTube's API responses arrive, Noirva parses them in real time and removes ad placements, sponsored cards, and promotional content.",
+    body: "As YouTube's API responses arrive, AdVoid parses them in real time and removes ad placements, sponsored cards, and promotional content.",
   },
   {
     num: 3,
     title: 'DOM cleanup',
-    body: 'Finally, Noirva scans the rendered page and removes any remaining ad elements, placeholders, or banners that made it through.',
+    body: 'Finally, AdVoid scans the rendered page and removes any remaining ad elements, placeholders, or banners that made it through.',
   },
 ] as const
 

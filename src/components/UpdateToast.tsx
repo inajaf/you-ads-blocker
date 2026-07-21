@@ -27,7 +27,7 @@ export function UpdateToast() {
       </div>
       <div className="update-toast-copy">
         <strong>New version available</strong>
-        <p className="muted small">Reload to get the latest Noirva.</p>
+        <p className="muted small">Reload to get the latest AdVoid.</p>
       </div>
       <div className="update-toast-actions">
         <button

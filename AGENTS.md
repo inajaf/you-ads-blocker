@@ -1,4 +1,4 @@
-# You Ads Blocker (Noirva)
+# You Ads Blocker (AdVoid)
 
 Cinema-dark React PWA for browsing videos with best-effort ad filtering and no API keys.
 

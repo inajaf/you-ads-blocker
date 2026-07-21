@@ -2,7 +2,7 @@
   "name": "noirva",
   "private": true,
   "version": "2.0.0",
-  "description": "Noirva video app with best-effort ad filtering and no API keys.",
+  "description": "AdVoid video app with best-effort ad filtering and no API keys.",
   "type": "module",
   "scripts": {
     "dev": "npm run dev:local",

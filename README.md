@@ -1,14 +1,14 @@
-# Noirva
+# AdVoid
 
 YouTube in a clean standalone window. Ad blocking, back-button navigation, Google sign-in.
 
 ## Desktop app (macOS)
 
-Download the latest `Noirva-*-arm64.dmg` from [Releases](https://github.com/inajaf/you-ads-blocker/releases).
+Download the latest `AdVoid-*-arm64.dmg` from [Releases](https://github.com/inajaf/you-ads-blocker/releases).
 
 > **Cutting a release?** The landing page (`src/landing/platforms.ts`) links
 > directly to `releases/latest/download/<filename>` for each asset (currently
-> `app-release.apk` and `Noirva-1.0.0-arm64.dmg`). Keep these exact filenames
+> `app-release.apk` and `AdVoid-1.0.0-arm64.dmg`). Keep these exact filenames
 > stable across versions — don't embed the new version number in an asset
 > name — or the landing page's download links will 404. See
 > `docs/decisions.md` (2026-07-21).
@@ -18,13 +18,13 @@ Download the latest `Noirva-*-arm64.dmg` from [Releases](https://github.com/inaj
 The app isn't signed with an Apple Developer ID, so macOS blocks it. Pick one:
 
 **Right-click → Open (easiest)**
-1. Right-click **Noirva.app** in Finder → **Open**
+1. Right-click **AdVoid.app** in Finder → **Open**
 2. Click **Open** in the dialog
 
 **Or** run in Terminal:
 
 ```sh
-xattr -dr com.apple.quarantine /path/to/Noirva.app
+xattr -dr com.apple.quarantine /path/to/AdVoid.app
 ```
 
 **Or** go to **System Settings → Privacy & Security** → click **Open Anyway**.
@@ -33,7 +33,7 @@ Drag into **Applications** and launch. YouTube loads with ad blocking and deskto
 
 ## Desktop app (Windows)
 
-Download the latest `Noirva Setup *.exe` from [Releases](https://github.com/inajaf/you-ads-blocker/releases) and run the installer.
+Download the latest `AdVoid Setup *.exe` from [Releases](https://github.com/inajaf/you-ads-blocker/releases) and run the installer.
 
 ### Bypass SmartScreen
 

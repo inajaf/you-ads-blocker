@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct NoirvaApp: App {
+struct AdVoidApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()

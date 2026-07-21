@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.Noirva" parent="android:Theme.Material.NoActionBar">
+    <style name="Theme.AdVoid" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowNoTitle">true</item>
         <item name="android:windowFullscreen">false</item>
         <item name="android:statusBarColor">@android:color/transparent</item>

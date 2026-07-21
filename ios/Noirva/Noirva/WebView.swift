@@ -76,7 +76,7 @@ class WebViewController: UIViewController {
         ) { [weak self] ruleList, error in
             DispatchQueue.main.async {
                 if let error = error {
-                    NSLog("[Noirva] WKContentRuleList compile error: %@", error.localizedDescription)
+                    NSLog("[AdVoid] WKContentRuleList compile error: %@", error.localizedDescription)
                 }
                 self?.setupWebView(with: ruleList)
             }

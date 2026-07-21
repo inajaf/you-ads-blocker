@@ -84,7 +84,7 @@ export function InstallBanner() {
           <Check size={22} strokeWidth={2.4} />
         </div>
         <div className="install-banner-copy">
-          <strong>Noirva is installed</strong>
+          <strong>AdVoid is installed</strong>
           <p className="muted small install-banner-description">
             Open it from your Home Screen like any other app.
           </p>
@@ -132,7 +132,7 @@ export function InstallBanner() {
         )}
       </div>
       <div className="install-banner-copy">
-        <strong id="install-banner-title">Install Noirva on your phone</strong>
+        <strong id="install-banner-title">Install AdVoid on your phone</strong>
         <p className="muted small install-banner-description">
           Add it to your Home Screen for one-tap access and a full-screen app view.
         </p>
