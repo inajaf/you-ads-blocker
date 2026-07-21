@@ -12,8 +12,8 @@ import type { DetectedPlatform } from './detectPlatform'
 
 const RELEASES_LATEST = 'https://github.com/inajaf/you-ads-blocker/releases/latest/download'
 
-export type PlatformId = 'android' | 'macos' | 'ios'
-export type PlatformIcon = 'android' | 'apple'
+export type PlatformId = 'android' | 'macos' | 'windows' | 'ios'
+export type PlatformIcon = 'android' | 'apple' | 'windows'
 
 interface PlatformCommon {
   id: PlatformId
@@ -67,6 +67,18 @@ export const PLATFORMS: readonly Platform[] = [
     downloadLabel: 'Download DMG',
     primary: false,
     note: 'Right-click → Open on first launch',
+  },
+  {
+    id: 'windows',
+    kind: 'download',
+    name: 'Windows',
+    icon: 'windows',
+    spec: 'EXE · installer · Windows 10+',
+    href: `${RELEASES_LATEST}/Noirva-Setup-1.0.0.exe`,
+    ctaLabel: 'Download for Windows',
+    downloadLabel: 'Download EXE',
+    primary: false,
+    note: 'Click "More info" → Run anyway on SmartScreen',
   },
   {
     id: 'ios',

@@ -67,8 +67,8 @@ test('orderByDetectedPlatform moves the matched platform to the front', () => {
   )
 })
 
-test('orderByDetectedPlatform keeps default order when detection is unknown, ios, or windows (not yet offered)', () => {
-  for (const detected of ['unknown', 'ios', 'windows']) {
+test('orderByDetectedPlatform keeps default order when detection is unknown or ios (not offered)', () => {
+  for (const detected of ['unknown', 'ios']) {
     const ordered = orderByDetectedPlatform(DOWNLOAD_PLATFORMS, detected)
     assert.deepEqual(
       ordered.map((p) => p.id),
