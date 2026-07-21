@@ -63,5 +63,4 @@ export const MARQUEE_ITEMS: readonly string[] = [
   'NO ANALYTICS',
   'PRIVATE BY DESIGN',
   'OPEN SOURCE',
-  'CC BY-NC-SA 4.0',
 ] as const
