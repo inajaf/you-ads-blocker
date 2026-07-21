@@ -9,7 +9,8 @@
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { background: #08080a; color: #fff; font-family: 'IBM Plex Sans', sans-serif; }
+        html { overflow-x: hidden; }
+        body { background: #08080a; color: #fff; font-family: 'IBM Plex Sans', sans-serif; overflow-x: hidden; }
         
         /* Scrollbar */
         ::-webkit-scrollbar { width: 6px; }
@@ -28,7 +29,7 @@
         .hero { min-height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 120px 24px 60px; position: relative; overflow: hidden; }
         .hero::before { content: ''; position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 800px; height: 800px; background: radial-gradient(circle, rgba(95,202,107,0.08) 0%, transparent 70%); pointer-events: none; }
         .hero .badge { display: inline-block; padding: 8px 16px; background: rgba(95,202,107,0.1); border: 1px solid rgba(95,202,107,0.2); border-radius: 999px; font-size: 13px; color: #5FCA6B; margin-bottom: 32px; font-family: 'IBM Plex Mono', monospace; }
-        .hero h1 { font-size: clamp(48px, 8vw, 80px); font-weight: 700; line-height: 1.1; margin-bottom: 24px; max-width: 800px; }
+        .hero h1 { font-size: clamp(28px, 5vw, 56px); font-weight: 700; line-height: 1.1; margin-bottom: 24px; max-width: 500px; }
         .hero h1 span { color: #5FCA6B; }
         .hero p { font-size: 18px; color: #888; max-width: 600px; line-height: 1.6; margin-bottom: 40px; }
         .hero .buttons { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
@@ -51,9 +52,9 @@
         .terminal .line .ok { color: #5FCA6B; }
         
         /* Marquee */
-        .marquee { padding: 24px 0; border-top: 1px solid rgba(255,255,255,0.05); border-bottom: 1px solid rgba(255,255,255,0.05); overflow: hidden; white-space: nowrap; }
-        .marquee-inner { display: inline-flex; animation: scroll 20s linear infinite; }
-        .marquee-item { display: inline-flex; align-items: center; gap: 16px; padding: 0 16px; font-size: 13px; font-weight: 600; color: #666; text-transform: uppercase; letter-spacing: 1px; }
+        .marquee { padding: 24px 0; border-top: 1px solid rgba(255,255,255,0.05); border-bottom: 1px solid rgba(255,255,255,0.05); overflow: hidden; white-space: nowrap; position: relative; width: 100vw; margin-left: calc(-50vw + 50%); }
+        .marquee-inner { display: inline-flex; animation: scroll 30s linear infinite; }
+        .marquee-item { display: inline-flex; align-items: center; gap: 12px; padding: 0 12px; font-size: 11px; font-weight: 600; color: #666; text-transform: uppercase; letter-spacing: 1px; flex-shrink: 0; }
         .marquee-item .sep { color: #5FCA6B; }
         @keyframes scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
         
@@ -61,7 +62,7 @@
         section { padding: 100px 24px; }
         section .inner { max-width: 1000px; margin: 0 auto; }
         .section-label { font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #5FCA6B; margin-bottom: 16px; }
-        section h2 { font-size: 40px; font-weight: 700; margin-bottom: 16px; line-height: 1.2; }
+        section h2 { font-size: clamp(20px, 3.5vw, 32px); font-weight: 700; margin-bottom: 16px; line-height: 1.2; }
         section .subtitle { font-size: 16px; color: #888; margin-bottom: 60px; max-width: 600px; }
         
         /* Flow diagram */
@@ -111,7 +112,7 @@
         
         /* CTA */
         .cta { text-align: center; padding: 100px 24px; background: linear-gradient(180deg, #08080a 0%, #0d1a0f 50%, #08080a 100%); }
-        .cta h2 { font-size: 48px; font-weight: 700; margin-bottom: 16px; }
+        .cta h2 { font-size: clamp(32px, 6vw, 48px); font-weight: 700; margin-bottom: 16px; }
         .cta p { font-size: 16px; color: #888; margin-bottom: 32px; }
         
         /* Footer */
