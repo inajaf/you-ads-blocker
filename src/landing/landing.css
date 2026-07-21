@@ -929,13 +929,13 @@
 .nv-download-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 22px;
+  gap: 18px;
 }
 .nv-dl-card {
-  border-radius: 20px;
+  border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.09);
   background: linear-gradient(180deg, #141416, #0d0d0f);
-  padding: 34px;
+  padding: 24px;
   transition:
     transform 0.3s ease,
     border-color 0.3s ease;
@@ -949,36 +949,36 @@
   background: rgba(255, 255, 255, 0.02);
 }
 .nv-dl-icon {
-  font-size: 32px;
-  margin-bottom: 18px;
+  font-size: 28px;
+  margin-bottom: 14px;
   display: flex;
   align-items: center;
-  height: 34px;
+  height: 30px;
 }
 .nv-dl-title {
   font-weight: 600;
-  font-size: 24px;
-  margin: 0 0 8px;
+  font-size: 20px;
+  margin: 0 0 6px;
 }
 .nv-dl-meta {
   font-size: 13px;
   color: var(--nv-dim);
-  margin: 0 0 24px;
+  margin: 0 0 18px;
 }
 .nv-dl-btn {
-  padding: 13px 24px;
-  border-radius: 12px;
-  font-size: 15px;
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-size: 14px;
 }
 .nv-dl-note {
   font-size: 11px;
   color: var(--nv-dim);
-  margin: 16px 0 0;
+  margin: 12px 0 0;
 }
 .nv-dl-body {
   color: var(--nv-muted);
-  font-size: 14.5px;
-  line-height: 1.6;
+  font-size: 13.5px;
+  line-height: 1.5;
   margin: 0;
 }
 .nv-dl-body code {
