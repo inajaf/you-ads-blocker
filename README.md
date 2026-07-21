@@ -24,6 +24,14 @@ xattr -dr com.apple.quarantine /path/to/Noirva.app
 
 Drag into **Applications** and launch. YouTube loads with ad blocking and desktop navigation.
 
+## Desktop app (Windows)
+
+Download the latest `Noirva Setup *.exe` from [Releases](https://github.com/inajaf/you-ads-blocker/releases) and run the installer.
+
+### Bypass SmartScreen
+
+The app isn't signed with a code-signing certificate, so Windows SmartScreen may warn that it's unrecognized. Click **More info** → **Run anyway** to continue.
+
 ---
 
 ## Web app (for developers)

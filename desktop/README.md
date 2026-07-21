@@ -4,7 +4,8 @@ YouTube in a clean standalone window with ad filtering, back-button navigation, 
 
 ## Download
 
-Grab the latest DMG from [Releases](https://github.com/inajaf/you-ads-blocker/releases).
+Grab the latest DMG (macOS) or `Setup *.exe` (Windows) from [Releases](https://github.com/inajaf/you-ads-blocker/releases).
+For Windows install steps (SmartScreen bypass), see the [root README](../README.md#desktop-app-windows).
 
 ## Install on macOS
 

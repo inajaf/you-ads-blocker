@@ -36,3 +36,17 @@ SPA → `dist/`) is untouched. Deploy via `.github/workflows/pages.yml` using th
 modern Actions Pages flow (`configure-pages@v5 enablement:true`).
 Alternatives: a second dedicated Vite config file — more duplication than a
 single `mode` branch in `vite.config.ts`.
+
+## 2026-07-21 — Windows desktop build via CI, published to existing v1.0.0 release
+Decision: add an `electron-builder` `win` (nsis, x64) target to `desktop/package.json`
+and a `.github/workflows/desktop-windows-build.yml` workflow (windows-latest,
+`workflow_dispatch` + `v*` tags) that builds the installer and uploads it as an
+asset on the existing `v1.0.0` GitHub release via `gh release upload --clobber`,
+instead of cutting a new tag/release.
+Reason: no Windows machine available locally to build/sign electron-builder's NSIS
+installer; CI is the only way to produce a real `.exe`. Attaching to `v1.0.0` keeps
+one release with Android/macOS/Windows assets together rather than fragmenting
+downloads across tags.
+Alternatives: a new `v1.0.1` tag per platform build (rejected — fragments the
+release users download from); code-signing the binary (rejected — no cert
+available, matches the project's existing unsigned-macOS posture).

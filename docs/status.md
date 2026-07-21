@@ -71,5 +71,21 @@
 - npm test 82/82, npm run build, npm run build:extension green. Playwright UI
   check 10/10 (5 pages × 2 checks).
 
+## 2026-07-21 — Windows desktop build (build infra only, on fm/noirva-windows-build)
+- Added `win` (nsis, x64) electron-builder target to `desktop/package.json`
+  using the existing `assets/brand/noirva-logo-v2.ico`, plus a `dist:win` script.
+- Added `.github/workflows/desktop-windows-build.yml`: builds on `windows-latest`
+  (`workflow_dispatch` + `v*` tags) and uploads the resulting `.exe` to the
+  existing `v1.0.0` release via `gh release upload --clobber`. See
+  `docs/decisions.md` for the "attach to existing release" rationale.
+- README: added a "Desktop app (Windows)" section (download + SmartScreen
+  bypass, mirrors the macOS Gatekeeper note).
+- Not run: the workflow itself was not triggered from here (no Windows build
+  credentials available in this session) — needs a manual `workflow_dispatch`
+  run post-merge to confirm the `.exe` lands on the v1.0.0 release.
+- Out of scope / untouched: `src/landing/`, `vite.config.ts`,
+  `.github/workflows/pages.yml` (parallel `noirva-landing` task owns those).
+- npm test / npm run build: no-op check, this task doesn't touch `src/`.
+
 ## Known issues
 -

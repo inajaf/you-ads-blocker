@@ -1,0 +1,49 @@
+name: Desktop Windows build
+
+on:
+  workflow_dispatch: {}
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install desktop dependencies
+        working-directory: desktop
+        run: npm ci
+
+      - name: Build Windows installer
+        working-directory: desktop
+        run: npm run dist:win
+
+      - name: Locate installer
+        id: installer
+        shell: bash
+        run: |
+          installer=$(find desktop/release -maxdepth 1 -name '*.exe' | head -n 1)
+          if [ -z "$installer" ]; then
+            echo "No .exe installer found in desktop/release" >&2
+            exit 1
+          fi
+          echo "path=$installer" >> "$GITHUB_OUTPUT"
+
+      - name: Upload installer to v1.0.0 release
+        run: gh release upload v1.0.0 "${{ steps.installer.outputs.path }}" --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
