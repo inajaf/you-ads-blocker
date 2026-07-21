@@ -440,6 +440,47 @@
   vertical-align: -0.125em;
 }
 
+/* dropdown */
+.nv-dropdown {
+  position: relative;
+}
+.nv-dropdown-trigger {
+  gap: 6px;
+}
+.nv-dropdown-chevron {
+  font-size: 12px;
+  transition: transform 0.2s ease;
+}
+.nv-dropdown-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 8px;
+  min-width: 220px;
+  background: #1a1a1e;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 6px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+  z-index: 50;
+}
+.nv-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  color: var(--nv-text);
+  font-size: 15px;
+  font-weight: 500;
+  transition: background 0.15s ease;
+  text-decoration: none;
+}
+.nv-dropdown-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--nv-text);
+}
+
 /* hero device mock */
 .nv-mock {
   position: relative;

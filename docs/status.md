@@ -1,5 +1,51 @@
 # Project status
 
+## 2026-07-21 — Compact hero buttons with platform dropdown
+
+### Done
+- Replaced the flat row of hero download buttons with a compact layout:
+  primary button for the visitor's detected platform (e.g. "Download for
+  Android" on an Android device) and an "Other platforms" dropdown for the
+  remaining download options.
+- Dropdown closes on outside click, uses `aria-expanded`/`aria-haspopup`
+  for accessibility, and renders menu items as `<a>` links for keyboard
+  navigation.
+- Detection + reordering logic unchanged (from `detectPlatform.ts` /
+  `orderByDetectedPlatform`); only the hero rendering changed.
+- CSS additions: `.nv-dropdown`, `.nv-dropdown-trigger`, `.nv-dropdown-menu`,
+  `.nv-dropdown-item` scoped under `.noirva-landing` (no style leakage).
+- Verified: `npm test` 96/96, `npm run build` green, UI check 12/12.
+
+### Known issues
+- None from this change.
+
+## 2026-07-21 — Fixed broken Android download link, data-driven landing platforms
+
+### Done
+- Fixed 404'd Android download link: was hardcoded to `Noirva-v1.0.0.apk`,
+  real asset is `app-release.apk`. All download hrefs now use
+  `releases/latest/download/<filename>` so a version bump alone can't break
+  them again (verified with `curl -sI` — both resolve 302, not 404).
+- Documented in `docs/decisions.md` (and README) that future releases must
+  keep asset filenames stable across versions, since the landing links to
+  them by exact name.
+- Refactored the hero CTA row + `#download` cards (previously duplicated
+  JSX) into a single `src/landing/platforms.ts` data list consumed by both;
+  adding a platform (Windows, once its build lands) is now a one-entry
+  addition. Windows deliberately **not** added yet — no release asset exists.
+- Added `src/landing/detectPlatform.ts` (pure, unit-tested): client-side OS
+  detection reorders/highlights the hero row toward the visitor's platform,
+  falls back to default order (Android primary) for unknown/iOS/Windows.
+  Detection runs in a `useEffect` on mount, not at module load.
+- 8 new unit tests (`tests/landing-platforms.test.mjs`) — 96/96 total pass.
+  `npm run build` green. UI check green (12/12). Manual browser verification
+  via chrome-devtools-axi with emulated Android/macOS/Windows/iOS user
+  agents confirmed correct reordering/highlighting and working download
+  links; download-section cards visually match the original design.
+
+### Known issues
+- None from this change.
+
 ## 2026-07-21 — Marketing landing page + `/app` route move + GitHub Pages deploy
 
 ### Done

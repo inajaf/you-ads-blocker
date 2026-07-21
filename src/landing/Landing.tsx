@@ -1,6 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import { DOWNLOADS, LAYERS, MARQUEE_ITEMS, STEPS } from './content'
+import { LAYERS, MARQUEE_ITEMS, STEPS } from './content'
+import { detectPlatform, type DetectedPlatform } from './detectPlatform'
 import { FAQS, faqVisual, toggleFaq } from './faq'
+import {
+  DOWNLOAD_PLATFORMS,
+  PLATFORMS,
+  orderByDetectedPlatform,
+  type Platform,
+  type PlatformIcon,
+} from './platforms'
 import { useRevealOnScroll } from './useRevealOnScroll'
 import './landing.css'
 
@@ -19,11 +27,84 @@ function AppleMark({ className }: { className?: string }) {
   )
 }
 
+/** Small icon used inline in a hero button (Apple mark scales via `.nv-apple`'s 1em sizing). */
+function HeroPlatformIcon({ icon }: { icon: PlatformIcon }) {
+  if (icon === 'apple') return <AppleMark className="nv-apple" />
+  return <span style={{ fontSize: '19px' }}>▲</span>
+}
+
+/** Icon used inside a `.nv-dl-card`, which sets its own icon font-size. */
+function CardPlatformIcon({ icon }: { icon: PlatformIcon }) {
+  if (icon === 'apple') return <AppleMark className="nv-apple" />
+  return <>▲</>
+}
+
+const PRIMARY_DOWNLOAD =
+  DOWNLOAD_PLATFORMS.find((p) => p.primary) ?? DOWNLOAD_PLATFORMS[0]
+
+/** One #download card, rendered as a real download or a source-build entry per `platform.kind`. */
+function PlatformCard({ platform }: { platform: Platform }) {
+  return (
+    <div
+      className={`nv-dl-card${platform.kind === 'source' ? ' nv-dl-card-source' : ''}`}
+      data-reveal
+    >
+      <div className="nv-dl-icon">
+        <CardPlatformIcon icon={platform.icon} />
+      </div>
+      <h3 className="nv-dl-title nv-display">{platform.name}</h3>
+      <p className="nv-dl-meta nv-mono">{platform.spec}</p>
+      {platform.kind === 'download' ? (
+        <>
+          <a
+            className={`nv-btn ${platform.primary ? 'nv-btn-primary' : 'nv-btn-ghost'} nv-dl-btn`}
+            href={platform.href}
+          >
+            {platform.downloadLabel}
+          </a>
+          {platform.note && <p className="nv-dl-note nv-mono">{platform.note}</p>}
+        </>
+      ) : (
+        <p className="nv-dl-body">
+          {platform.bodyPrefix}
+          <code>{platform.codePath}</code>
+          {platform.bodySuffix}
+        </p>
+      )}
+    </div>
+  )
+}
+
 export function Landing() {
   const rootRef = useRef<HTMLDivElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
   const [open, setOpen] = useState<ReadonlySet<number>>(() => new Set())
+  const [detected, setDetected] = useState<DetectedPlatform>('unknown')
+  const [dropdownOpen, setDropdownOpen] = useState(false)
 
   useRevealOnScroll(rootRef)
+
+  // Detect the visitor's OS client-side only, after mount, so the
+  // server/build-time render stays deterministic (default order, no flash
+  // of mismatched content before hydration).
+  useEffect(() => {
+    setDetected(detectPlatform())
+  }, [])
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    if (!dropdownOpen) return
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [dropdownOpen])
+
+  const heroPlatforms = orderByDetectedPlatform(DOWNLOAD_PLATFORMS, detected)
+  const [primaryPlatform, ...otherPlatforms] = heroPlatforms
 
   // Load the marketing fonts scoped to this page (not the app's global head).
   // Created here and removed on unmount so the app shell stays unaffected.
@@ -84,7 +165,7 @@ export function Landing() {
         <div className="nv-hero-inner">
           <div className="nv-badge nv-mono" data-reveal>
             <span className="nv-badge-dot" />
-            v1.0.0 · Android &amp; macOS
+            v1.0.0 · {DOWNLOAD_PLATFORMS.map((p) => p.name).join(' & ')}
           </div>
           <h1 className="nv-hero-title nv-display" data-reveal>
             Ad-free YouTube,
@@ -97,12 +178,40 @@ export function Landing() {
             private.
           </p>
           <div className="nv-hero-actions" data-reveal>
-            <a className="nv-btn nv-btn-primary" href={DOWNLOADS.apkUrl}>
-              <span style={{ fontSize: '19px' }}>▲</span> Download for Android
+            <a className="nv-btn nv-btn-primary" href={primaryPlatform.href}>
+              <HeroPlatformIcon icon={primaryPlatform.icon} /> {primaryPlatform.ctaLabel}
             </a>
-            <a className="nv-btn nv-btn-ghost" href={DOWNLOADS.dmgUrl}>
-              <AppleMark className="nv-apple" /> Download for macOS
-            </a>
+            {otherPlatforms.length > 0 && (
+              <div className="nv-dropdown" ref={dropdownRef}>
+                <button
+                  type="button"
+                  className="nv-btn nv-btn-ghost nv-dropdown-trigger"
+                  onClick={() => setDropdownOpen((prev) => !prev)}
+                  aria-expanded={dropdownOpen}
+                  aria-haspopup="true"
+                >
+                  Other platforms
+                  <span className="nv-dropdown-chevron" aria-hidden="true">
+                    ▾
+                  </span>
+                </button>
+                {dropdownOpen && (
+                  <div className="nv-dropdown-menu" role="menu">
+                    {otherPlatforms.map((platform) => (
+                      <a
+                        key={platform.id}
+                        className="nv-dropdown-item"
+                        href={platform.href}
+                        role="menuitem"
+                        onClick={() => setDropdownOpen(false)}
+                      >
+                        <HeroPlatformIcon icon={platform.icon} /> {platform.ctaLabel}
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Hero device mock: before/after ad-free */}
@@ -258,39 +367,9 @@ export function Landing() {
           Available for Android and macOS. iOS available as source.
         </p>
         <div className="nv-download-grid">
-          <div className="nv-dl-card" data-reveal>
-            <div className="nv-dl-icon">▲</div>
-            <h3 className="nv-dl-title nv-display">Android</h3>
-            <p className="nv-dl-meta nv-mono">APK · 10MB · Android 8.0+</p>
-            <a className="nv-btn nv-btn-primary nv-dl-btn" href={DOWNLOADS.apkUrl}>
-              Download APK
-            </a>
-          </div>
-          <div className="nv-dl-card" data-reveal>
-            <div className="nv-dl-icon">
-              <AppleMark className="nv-apple" />
-            </div>
-            <h3 className="nv-dl-title nv-display">macOS</h3>
-            <p className="nv-dl-meta nv-mono">DMG · 119MB · macOS 12+</p>
-            <a className="nv-btn nv-btn-ghost nv-dl-btn" href={DOWNLOADS.dmgUrl}>
-              Download DMG
-            </a>
-            <p className="nv-dl-note nv-mono">
-              Right-click → Open on first launch
-            </p>
-          </div>
-          <div className="nv-dl-card nv-dl-card-source" data-reveal>
-            <div className="nv-dl-icon">
-              <AppleMark className="nv-apple" />
-            </div>
-            <h3 className="nv-dl-title nv-display">iOS</h3>
-            <p className="nv-dl-meta nv-mono">Source · Xcode build</p>
-            <p className="nv-dl-body">
-              Clone the repo, open{' '}
-              <code>ios/Noirva.xcodeproj</code> in Xcode, and build to your
-              device. Apple Developer account required.
-            </p>
-          </div>
+          {PLATFORMS.map((platform) => (
+            <PlatformCard key={platform.id} platform={platform} />
+          ))}
         </div>
       </section>
 
@@ -341,7 +420,7 @@ export function Landing() {
           <div className="nv-cta-glow" />
           <h2 className="nv-cta-title nv-display">Watch without the wait.</h2>
           <p className="nv-cta-sub">Free. Open source. No tracking, ever.</p>
-          <a className="nv-btn nv-cta-btn" href={DOWNLOADS.apkUrl}>
+          <a className="nv-btn nv-cta-btn" href={PRIMARY_DOWNLOAD.href}>
             Download Noirva
           </a>
         </div>
