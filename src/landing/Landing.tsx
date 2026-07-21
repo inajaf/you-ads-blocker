@@ -1,11 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { LAYERS, MARQUEE_ITEMS, STEPS } from './content'
-import { detectPlatform, type DetectedPlatform } from './detectPlatform'
 import { FAQS, faqVisual, toggleFaq } from './faq'
 import {
   DOWNLOAD_PLATFORMS,
   PLATFORMS,
-  orderByDetectedPlatform,
   type Platform,
   type PlatformIcon,
 } from './platforms'
@@ -42,22 +40,28 @@ function AndroidMark({ className }: { className?: string }) {
   )
 }
 
-/** Small icon used inline in a hero button (scales via class sizing). */
-function HeroPlatformIcon({ icon }: { icon: PlatformIcon }) {
-  if (icon === 'apple') return <AppleMark className="nv-apple" />
-  if (icon === 'android') return <AndroidMark className="nv-platform-icon" />
-  return null
+/** Windows logo icon (Font Awesome). */
+function WindowsMark({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 448 512"
+      fill="currentColor"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M0 93.7l183.6-25.3v177.4H0V93.7zm0 324.6l183.6 25.3V268.4H0v149.9zm203.8 28L448 480V268.4H203.8v177.9zm0-380.6v180.1H448V32L203.8 65.7z" />
+    </svg>
+  )
 }
 
 /** Icon used inside a `.nv-dl-card`, which sets its own icon font-size. */
 function CardPlatformIcon({ icon }: { icon: PlatformIcon }) {
   if (icon === 'apple') return <AppleMark className="nv-apple" />
   if (icon === 'android') return <AndroidMark className="nv-platform-icon" />
+  if (icon === 'windows') return <WindowsMark className="nv-platform-icon" />
   return null
 }
-
-const PRIMARY_DOWNLOAD =
-  DOWNLOAD_PLATFORMS.find((p) => p.primary) ?? DOWNLOAD_PLATFORMS[0]
 
 /** One #download card, rendered as a real download or a source-build entry per `platform.kind`. */
 function PlatformCard({ platform }: { platform: Platform }) {
@@ -95,19 +99,8 @@ function PlatformCard({ platform }: { platform: Platform }) {
 export function Landing() {
   const rootRef = useRef<HTMLDivElement>(null)
   const [open, setOpen] = useState<ReadonlySet<number>>(() => new Set())
-  const [detected, setDetected] = useState<DetectedPlatform>('unknown')
 
   useRevealOnScroll(rootRef)
-
-  // Detect the visitor's OS client-side only, after mount, so the
-  // server/build-time render stays deterministic (default order, no flash
-  // of mismatched content before hydration).
-  useEffect(() => {
-    setDetected(detectPlatform())
-  }, [])
-
-  const heroPlatforms = orderByDetectedPlatform(DOWNLOAD_PLATFORMS, detected)
-  const [primaryPlatform, ...otherPlatforms] = heroPlatforms
 
   // Load the marketing fonts scoped to this page (not the app's global head).
   // Created here and removed on unmount so the app shell stays unaffected.
@@ -180,14 +173,6 @@ export function Landing() {
             cleans up the DOM — all while keeping your browsing completely
             private.
           </p>
-          <div className="nv-hero-actions" data-reveal>
-            <a className="nv-btn nv-btn-primary" href={primaryPlatform.href}>
-              <HeroPlatformIcon icon={primaryPlatform.icon} /> {primaryPlatform.ctaLabel}
-            </a>
-            <a className="nv-btn nv-btn-ghost" href={otherPlatforms[0]?.href ?? primaryPlatform.href}>
-              <HeroPlatformIcon icon={otherPlatforms[0]?.icon ?? primaryPlatform.icon} /> {otherPlatforms[0]?.ctaLabel ?? 'Download'}
-            </a>
-          </div>
           <div className="nv-platform-icons" data-reveal>
             {PLATFORMS.map((platform) => (
               <a
@@ -408,7 +393,7 @@ export function Landing() {
           <div className="nv-cta-glow" />
           <h2 className="nv-cta-title nv-display">Watch without the wait.</h2>
           <p className="nv-cta-sub">Free. Open source. No tracking, ever.</p>
-          <a className="nv-btn nv-cta-btn" href={PRIMARY_DOWNLOAD.href}>
+          <a className="nv-btn nv-cta-btn" href="#download">
             Download Noirva
           </a>
         </div>
