@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { LAYERS, MARQUEE_ITEMS, STEPS } from './content'
 import { FAQS, faqVisual, toggleFaq } from './faq'
+import { KofiWidget } from './KofiWidget'
 import {
   DOWNLOAD_PLATFORMS,
   PLATFORMS,
@@ -408,11 +409,7 @@ export function Landing() {
       </section>
 
       {/* SUPPORT */}
-      <div className="nv-kofi" data-reveal>
-        <div className="nv-kofi-inner">
-          <div id="kofi-widget" />
-        </div>
-      </div>
+      <KofiWidget />
 
       {/* FOOTER */}
       <footer className="nv-footer">

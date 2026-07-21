@@ -1163,12 +1163,9 @@
   margin: 0 auto;
   text-align: center;
 }
-#kofi-widget {
-  display: flex;
-  justify-content: center;
-}
-#kofi-widget iframe {
+.nv-kofi-inner iframe {
   border: none;
+  margin: 0 auto;
 }
 .nv-nav-kofi-btn {
   display: inline-flex;
