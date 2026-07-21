@@ -40,6 +40,8 @@ class WebViewController: UIViewController {
     private var shieldToggle: UIView!
     private var shieldKnob: UIView!
     private var shieldEnabled = true
+    private var protectionLabel: UILabel!
+    private var shieldIcon: UIImageView!
 
     private let green = UIColor(red: 0.373, green: 0.788, blue: 0.420, alpha: 1.0) // #5FCA6B
     private let darkBg = UIColor(red: 0.059, green: 0.059, blue: 0.059, alpha: 1.0) // #0F0F0F
@@ -109,7 +111,7 @@ class WebViewController: UIViewController {
         setupHeader()
 
         NSLayoutConstraint.activate([
-            webView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 110),
+            webView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 72),
             webView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             webView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             webView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
@@ -138,51 +140,10 @@ class WebViewController: UIViewController {
             header.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             header.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             header.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            header.heightAnchor.constraint(equalToConstant: 110),
+            header.heightAnchor.constraint(equalToConstant: 72),
         ])
 
-        // Row 1: App name + search button
-        let row1 = UIView()
-        row1.translatesAutoresizingMaskIntoConstraints = false
-        header.addSubview(row1)
-
-        NSLayoutConstraint.activate([
-            row1.topAnchor.constraint(equalTo: header.topAnchor, constant: 10),
-            row1.leadingAnchor.constraint(equalTo: header.leadingAnchor, constant: 16),
-            row1.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -16),
-            row1.heightAnchor.constraint(equalToConstant: 24),
-        ])
-
-        let appName = UILabel()
-        appName.translatesAutoresizingMaskIntoConstraints = false
-        appName.text = "Noirva"
-        appName.textColor = .white
-        appName.font = .systemFont(ofSize: 17, weight: .bold)
-        appName.setContentCompressionResistancePriority(.required, for: .horizontal)
-        row1.addSubview(appName)
-
-        // Search button: 36x36, rgba(255,255,255,.06) bg
-        let searchBtn = UIButton(type: .system)
-        searchBtn.translatesAutoresizingMaskIntoConstraints = false
-        searchBtn.backgroundColor = UIColor(white: 1.0, alpha: 0.06)
-        searchBtn.layer.cornerRadius = 18
-        searchBtn.tintColor = .white
-        let searchConfig = UIImage.SymbolConfiguration(pointSize: 19, weight: .regular)
-        searchBtn.setImage(UIImage(systemName: "magnifyingglass", withConfiguration: searchConfig), for: .normal)
-        searchBtn.contentEdgeInsets = UIEdgeInsets(top: 8, left: 8, bottom: 8, right: 8)
-        searchBtn.addTarget(self, action: #selector(searchTapped), for: .touchUpInside)
-        row1.addSubview(searchBtn)
-
-        NSLayoutConstraint.activate([
-            appName.leadingAnchor.constraint(equalTo: row1.leadingAnchor),
-            appName.centerYAnchor.constraint(equalTo: row1.centerYAnchor),
-            searchBtn.trailingAnchor.constraint(equalTo: row1.trailingAnchor),
-            searchBtn.centerYAnchor.constraint(equalTo: row1.centerYAnchor),
-            searchBtn.widthAnchor.constraint(equalToConstant: 36),
-            searchBtn.heightAnchor.constraint(equalToConstant: 36),
-        ])
-
-        // Row 2: Status card
+        // Status card
         let card = UIView()
         card.translatesAutoresizingMaskIntoConstraints = false
         card.backgroundColor = UIColor(white: 1.0, alpha: 0.05) // #0DFFFFFF
@@ -192,14 +153,14 @@ class WebViewController: UIViewController {
         header.addSubview(card)
 
         NSLayoutConstraint.activate([
-            card.topAnchor.constraint(equalTo: row1.bottomAnchor, constant: 10),
+            card.topAnchor.constraint(equalTo: header.topAnchor, constant: 10),
             card.leadingAnchor.constraint(equalTo: header.leadingAnchor, constant: 16),
             card.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -16),
             card.heightAnchor.constraint(equalToConstant: 48),
         ])
 
         // Shield icon 28x28
-        let shieldIcon = UIImageView()
+        shieldIcon = UIImageView()
         shieldIcon.translatesAutoresizingMaskIntoConstraints = false
         if let img = makeShieldImage(size: 28) {
             shieldIcon.image = img.withRenderingMode(.alwaysOriginal)
@@ -213,7 +174,7 @@ class WebViewController: UIViewController {
         card.addSubview(shieldIcon)
 
         // "Protection active" label
-        let protectionLabel = UILabel()
+        protectionLabel = UILabel()
         protectionLabel.translatesAutoresizingMaskIntoConstraints = false
         protectionLabel.text = "Protection active"
         protectionLabel.textColor = .white
@@ -271,7 +232,7 @@ class WebViewController: UIViewController {
         ])
     }
 
-    private func makeShieldImage(size: CGFloat) -> UIImage? {
+    private func makeShieldImage(size: CGFloat, fillColor: UIColor? = nil) -> UIImage? {
         let sz = CGSize(width: size, height: size)
         UIGraphicsBeginImageContextWithOptions(sz, false, 0)
         guard let _ = UIGraphicsGetCurrentContext() else { return nil }
@@ -289,7 +250,7 @@ class WebViewController: UIViewController {
                         controlPoint2: CGPoint(x: 5*s, y: 15.5*s))
         shield.close()
 
-        green.setFill()
+        (fillColor ?? green).setFill()
         shield.fill()
 
         let check = UIBezierPath()
@@ -307,11 +268,18 @@ class WebViewController: UIViewController {
         return image
     }
 
-    @objc private func searchTapped() {}
-
     @objc private func toggleShield() {
         shieldEnabled.toggle()
         adBlocker.toggle()
+
+        // Update label text and color
+        protectionLabel.text = shieldEnabled ? "Protection active" : "Protection paused"
+        protectionLabel.textColor = shieldEnabled ? .white : UIColor(red: 0.533, green: 0.533, blue: 0.533, alpha: 1.0) // #888888
+
+        // Update shield icon color
+        if let img = makeShieldImage(size: 28, fillColor: shieldEnabled ? green : UIColor(red: 0.533, green: 0.533, blue: 0.533, alpha: 1.0)) {
+            shieldIcon.image = img.withRenderingMode(.alwaysOriginal)
+        }
 
         // Shield pulse animation (matches Android)
         UIView.animate(withDuration: 0.15, delay: 0, options: .curveEaseOut, animations: {

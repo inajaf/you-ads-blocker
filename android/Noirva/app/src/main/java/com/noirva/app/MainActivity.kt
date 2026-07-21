@@ -7,6 +7,7 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.view.animation.OvershootInterpolator
 import android.webkit.*
@@ -21,6 +22,12 @@ class MainActivity : Activity() {
     private lateinit var shieldKnob: View
     private lateinit var shieldIcon: ImageView
     private lateinit var protectionLabel: TextView
+
+    // Fullscreen video support
+    private var customViewContainer: FrameLayout? = null
+    private var customView: View? = null
+    private var customViewCallback: WebChromeClient.CustomViewCallback? = null
+    private var originalSystemUiVisibility = 0
 
     private val green = Color.parseColor("#5FCA6B")
     private val darkBg = Color.parseColor("#0F0F0F")
@@ -143,7 +150,50 @@ class MainActivity : Activity() {
                     }
                 }
             }
-            webChromeClient = WebChromeClient()
+            webChromeClient = object : WebChromeClient() {
+                override fun onShowCustomView(view: View, callback: CustomViewCallback) {
+                    if (customView != null) {
+                        callback.onCustomViewHidden()
+                        return
+                    }
+                    val decor = window.decorView as FrameLayout
+                    originalSystemUiVisibility = decor.systemUiVisibility
+
+                    customViewContainer = FrameLayout(this@MainActivity).apply {
+                        setBackgroundColor(Color.BLACK)
+                        addView(view, ViewGroup.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT
+                        ))
+                    }
+                    decor.addView(customViewContainer, ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    ))
+                    customView = view
+                    customViewCallback = callback
+
+                    webView.visibility = View.GONE
+                    decor.systemUiVisibility = (View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                        or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                        or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                        or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                        or View.SYSTEM_UI_FLAG_FULLSCREEN
+                        or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY)
+                }
+
+                override fun onHideCustomView() {
+                    if (customView == null) return
+                    val decor = window.decorView as FrameLayout
+                    decor.systemUiVisibility = originalSystemUiVisibility
+                    customViewContainer?.let { decor.removeView(it) }
+                    customViewContainer = null
+                    customView = null
+                    customViewCallback?.onCustomViewHidden()
+                    customViewCallback = null
+                    webView.visibility = View.VISIBLE
+                }
+            }
             loadUrl("https://m.youtube.com")
         }
         root.addView(webView, LinearLayout.LayoutParams(
