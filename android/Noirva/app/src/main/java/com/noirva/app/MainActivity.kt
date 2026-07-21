@@ -13,6 +13,7 @@ import android.view.animation.OvershootInterpolator
 import android.webkit.*
 import android.widget.*
 import android.app.Activity
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 
 class MainActivity : Activity() {
     private lateinit var webView: WebView
@@ -196,7 +197,18 @@ class MainActivity : Activity() {
             }
             loadUrl("https://m.youtube.com")
         }
-        root.addView(webView, LinearLayout.LayoutParams(
+
+        // SwipeRefreshLayout wraps the WebView for pull-to-refresh
+        val swipeRefresh = SwipeRefreshLayout(this).apply {
+            setColorSchemeColors(green)
+            setProgressBackgroundColorSchemeColor(darkBg)
+            setOnRefreshListener {
+                webView.reload()
+            }
+        }
+        swipeRefresh.addView(webView, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.MATCH_PARENT))
+        root.addView(swipeRefresh, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
 
         setContentView(root)
