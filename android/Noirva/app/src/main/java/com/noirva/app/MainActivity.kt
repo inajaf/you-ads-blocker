@@ -179,12 +179,18 @@ class MainActivity : Activity() {
                     if (shieldEnabled) {
                         adBlocker.injectScripts(view)
                     }
+                    // On Shorts pages: disable refresh entirely — YouTube handles
+                    // swiping between videos via its own JS touch events.
+                    swipeRefresh.isEnabled = !isShortsUrl(url)
                 }
 
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
                     swipeRefresh.isRefreshing = false
-                    swipeRefresh.isEnabled = true
+                    // Re-check after redirect / SPA navigation
+                    if (!isShortsUrl(url)) {
+                        swipeRefresh.isEnabled = true
+                    }
                     // Inject video play/pause detection for screen wake lock
                     view?.evaluateJavascript(VIDEO_WATCH_SCRIPT, null)
                 }
@@ -249,12 +255,19 @@ class MainActivity : Activity() {
         root.addView(swipeRefresh, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
 
-        // Only allow pull-to-refresh when WebView is scrolled to the very top
+        // On regular pages: disable refresh when scrolled down, enable at top.
+        // On Shorts pages: refresh stays disabled (handled by onPageStarted).
         webView.setOnScrollChangeListener { _, _, scrollY, _, _ ->
-            swipeRefresh.isEnabled = scrollY <= 0
+            if (!isShortsUrl(webView.url)) {
+                swipeRefresh.isEnabled = scrollY <= 0
+            }
         }
 
         setContentView(root)
+    }
+
+    private fun isShortsUrl(url: String?): Boolean {
+        return url != null && url.contains("/shorts/")
     }
 
     private fun toggleShield() {
