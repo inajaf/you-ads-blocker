@@ -44,3 +44,12 @@ CLAUDE.local.md
 *.sln
 *.sw?
 ios/Noirva/build/
+
+# Android release signing (never commit secrets)
+android/AdVoid/keystore.properties
+android/AdVoid/*.keystore
+android/AdVoid/*.jks
+android/local.properties
+android/AdVoid/local.properties
+*.keystore
+*.jks
