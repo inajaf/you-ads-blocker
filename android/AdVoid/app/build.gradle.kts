@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "com.noirva.app"
+    namespace = "com.advoid.app"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.noirva.app"
+        applicationId = "com.advoid.app"
         minSdk = 26
         targetSdk = 36
         versionCode = 1

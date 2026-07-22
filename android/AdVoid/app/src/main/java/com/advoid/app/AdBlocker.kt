@@ -1,4 +1,4 @@
-package com.noirva.app
+package com.advoid.app
 
 import android.content.Context
 import android.webkit.WebView

@@ -1,11 +1,11 @@
 ---
 name: android-webview-patterns
-description: Recurring risk patterns in android/Noirva's WebView-injected JS (pull-to-refresh, CSS/JS injection on SPA nav)
+description: Recurring risk patterns in android/AdVoid's WebView-injected JS (pull-to-refresh, CSS/JS injection on SPA nav)
 metadata:
   type: project
 ---
 
-`android/Noirva/app/src/main/java/com/noirva/app/MainActivity.kt` wraps
+`android/AdVoid/app/src/main/java/com/advoid/app/MainActivity.kt` wraps
 `m.youtube.com` in a plain `android.app.Activity` WebView (no Jetpack/AppCompat),
 with behavior-tweaking JS/CSS injected as Kotlin raw-string constants
 (`VIDEO_WATCH_SCRIPT`, `PULL_REFRESH_SCRIPT`, `STYLE_SCRIPT`) re-run on every
