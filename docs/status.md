@@ -1,5 +1,106 @@
 # Project status
 
+## 2026-07-22 — Android hands-on UX review: refresh, Open App, and back-navigation fixes
+
+Native Android wrapper is `android/Noirva/` (package `com.noirva.app`) — this is
+the actively-developed app; the older `android/` wrapper (`app.tube`) predates
+it and was not touched. Built and tested hands-on in an Android emulator
+(Pixel 9, API 36) via `adb`/CDP (chrome://inspect over `adb forward` +
+`webview_devtools_remote_<pid>`), clicking through every main flow as a real
+user: home feed, search, watch, Shorts, You/sign-in, Settings, shield toggle,
+back button at every level, fullscreen, rotation, app resume.
+
+### Done — reported bugs, reproduced and fixed
+- **Refresh bug** (repro: tap a video from home → back → swipe-down-to-refresh
+  on the feed silently did nothing). Root cause: `PULL_REFRESH_SCRIPT`'s
+  pull-gesture state (`pulling`/`shown`/`lastScrollTs`) lived in JS closure
+  variables that were only initialized once (guarded by
+  `window._advoidRefreshSetup`, since listeners must attach only once but
+  YouTube's SPA navigations don't reload the page/JS context). Any
+  interrupted gesture or navigation-timing edge case could leave `pulling`
+  wedged, silently breaking every future pull on that page's lifetime. Fixed
+  in `MainActivity.kt` by moving that state onto a `window._advoidPull`
+  object that's explicitly reset on every `injectPageScripts()` call (i.e.
+  every SPA navigation via the new `doUpdateVisitedHistory` override), while
+  listener attachment remains a one-time no-op guard. Also added Shorts-aware
+  eligibility: refresh only fires on the *entry* Short of a reel (tracked via
+  `window._advoidShortsEntry`), not mid-reel, so swipe-down mid-Shorts
+  correctly goes to the previous Short instead of refreshing; `/watch` is
+  excluded entirely so scrolling a video's description never triggers a
+  reload. Verified hands-on: marker-variable test (set a `window.__marker`,
+  perform the exact swipe, confirm marker survives/is destroyed as expected)
+  on home-after-back-nav, Shorts entry, mid-reel Shorts, and `/watch`.
+  code-reviewer subagent caught a follow-up edge case: a pushState navigation
+  landing mid-gesture could reset `P.shown`/`P.pulling` without telling
+  native, leaving the refresh `ProgressBar` stuck visible — fixed by calling
+  `AdVoidBridge.onRefreshRelease(false)` before the per-navigation reset when
+  the indicator was showing. Re-verified hands-on after the fix.
+- **"Open App" banner visible during video watch.** It's YouTube's own
+  mobile-web upsell (`<a href="intent://...">Open App</a>`, `ytm-button-renderer`
+  in the topbar), not a PWA/InstallBanner component from `src/` — nothing in
+  `src/` renders it since this is a raw `m.youtube.com` WebView, not the React
+  app. Fixed via injected CSS (`a[href^="intent:"]` and related upsell
+  renderers → `display:none`) plus a `shouldOverrideUrlLoading` override that
+  swallows non-http(s) schemes so a stray tap on one can't bounce to the Play
+  Store or error out. The `:has()` selector for a nested case is split into
+  its own CSS rule (code-reviewer catch: sharing a comma list means one
+  unsupported selector on an older WebView invalidates the whole rule,
+  silently un-hiding even the plain `intent:` links — mitigated regardless by
+  `shouldOverrideUrlLoading`, but kept isolated anyway). Verified hands-on on
+  `/watch` (topbar button gone,
+  `document.querySelectorAll('a[href^="intent:"]')` present in DOM but
+  `display:none`/zero-size) and confirmed it doesn't regress `/` or `/shorts`
+  (checked no other legitimate button matches the selector).
+
+### Done — additional bug found in click-through and fixed
+- **Hardware/gesture back button exited the app instead of navigating back**
+  (repro: home → tap video → press back → app exits to launcher instead of
+  returning to the feed). Root cause: `MainActivity` extends plain
+  `android.app.Activity` (not `AppCompatActivity`/`ComponentActivity`) and
+  targets `compileSdk`/`targetSdk` 36, where Android's predictive-back
+  dispatcher is active by default; with no `OnBackInvokedCallback`
+  registered, the system now finishes the activity directly and never calls
+  `onBackPressed()`. Fixed by adding
+  `android:enableOnBackInvokedCallback="false"` to the manifest's
+  `<application>` tag (restores legacy dispatch) and implementing
+  `onBackPressed()`: exit fullscreen custom view if active, else
+  `webView.goBack()` if there's history, else default finish. Verified
+  hands-on: home → video → back → back on the feed (not exit); fullscreen →
+  back → exits fullscreen only, not the app; two backs from home → app exits
+  cleanly.
+
+### Verified working, no changes needed
+- Search (type query, results render, no ads/Open App visible, back returns
+  to results/previous page correctly).
+- Shield toggle (pause/resume protection reloads the page, label/color/knob
+  animate correctly both directions).
+- Settings page (gear icon on You tab → General/History & privacy, back
+  returns correctly).
+- App resume from background (home button → relaunch) preserves WebView
+  state, no unwanted reload (verified via marker-variable test).
+- Ad-block hooks (`[Noirva Shield] page hooks active`, `[Noirva] DOM layer
+  active`) fire on every navigation per logcat, unaffected by the above
+  changes.
+
+### Known issues (out of scope, documented not fixed)
+- **Landscape device rotation without tapping the in-player fullscreen
+  button** leaves the "Protection active" banner + YouTube header visible,
+  eating a large fraction of the pillarboxed landscape frame instead of
+  giving the video more space. This matches how the underlying mobile-web
+  page behaves in a plain browser tab (rotation alone doesn't trigger
+  YouTube's own fullscreen layout — only tapping the in-player fullscreen
+  icon does, which correctly goes through `onShowCustomView`/`hideCustomView`
+  and hides all native chrome, verified hands-on). Making the native
+  banner/header collapse or auto-hide on landscape orientation regardless of
+  fullscreen state would be a product/design decision (always-hide vs.
+  hide-only-during-playback vs. leave as-is) — `needs-decision` rather than a
+  clear bug fix, not applied here.
+- No Kotlin/JUnit test infrastructure exists in `android/` (no test source
+  set was ever set up); the fixes above were verified by hands-on emulator
+  reproduction (marker-variable tests over chrome-devtools-protocol) rather
+  than an automated test suite. `npm test` (96/96) and `npm run build` are
+  green — untouched, since this task only changed `android/Noirva/`.
+
 ## 2026-07-21 — Renamed Noirva to AdVoid
 
 ### Done

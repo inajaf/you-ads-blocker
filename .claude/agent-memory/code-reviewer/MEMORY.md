@@ -1,0 +1,1 @@
+- [Android WebView patterns](android_webview_patterns.md) — JS/native state desync risk + CSS selector-list fragility in android/Noirva's injected scripts

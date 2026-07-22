@@ -187,6 +187,17 @@ class MainActivity : Activity() {
                     return super.shouldInterceptRequest(view, request)
                 }
 
+                override fun shouldOverrideUrlLoading(
+                    view: WebView?,
+                    request: WebResourceRequest?
+                ): Boolean {
+                    val scheme = request?.url?.scheme ?: return false
+                    // Keep browsing inside the app: drop intent:// and other
+                    // external-app links (YouTube's "Open App" upsell) instead of
+                    // erroring out or launching the YouTube app.
+                    return scheme != "http" && scheme != "https"
+                }
+
                 override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                     super.onPageStarted(view, url, favicon)
                     if (shieldEnabled) {
@@ -196,14 +207,16 @@ class MainActivity : Activity() {
 
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
-                    // Inject video play/pause detection for screen wake lock
-                    view?.evaluateJavascript(VIDEO_WATCH_SCRIPT, null)
-                    // Inject pull-to-refresh via JavaScript (no native touch interception)
-                    view?.evaluateJavascript(PULL_REFRESH_SCRIPT, null)
-                    // Hide search icon and other non-essential UI on Shorts pages
-                    if (isShortsUrl(url)) {
-                        view?.evaluateJavascript(SHORTS_CSS_SCRIPT, null)
-                    }
+                    injectPageScripts(view)
+                }
+
+                override fun doUpdateVisitedHistory(view: WebView?, url: String?, isReload: Boolean) {
+                    super.doUpdateVisitedHistory(view, url, isReload)
+                    // YouTube navigates via pushState, which never fires
+                    // onPageFinished — re-apply the page scripts here so styling
+                    // (Shorts tweaks, Open App removal) tracks SPA navigation.
+                    // All scripts are guarded, so re-running them is cheap.
+                    injectPageScripts(view)
                 }
             }
             webChromeClient = object : WebChromeClient() {
@@ -239,41 +252,69 @@ class MainActivity : Activity() {
                 }
 
                 override fun onHideCustomView() {
-                    if (customView == null) return
-                    val decor = window.decorView as FrameLayout
-                    decor.systemUiVisibility = originalSystemUiVisibility
-                    customViewContainer?.let { decor.removeView(it) }
-                    customViewContainer = null
-                    customView = null
-                    customViewCallback?.onCustomViewHidden()
-                    customViewCallback = null
-                    webView.visibility = View.VISIBLE
+                    hideCustomView()
                 }
             }
             loadUrl("https://m.youtube.com")
         }
 
         // WebView added directly — no SwipeRefreshLayout wrapper
-        // (pull-to-refresh handled via JavaScript to avoid intercepting touches)
-        root.addView(webView, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
-
-        // Add refresh indicator (simple ProgressBar at top, hidden by default)
+        // (pull-to-refresh handled via JavaScript to avoid intercepting touches).
+        // A FrameLayout hosts the refresh indicator as a top overlay so showing
+        // it never shifts the page layout.
+        val webContainer = FrameLayout(this)
+        webContainer.addView(webView, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         refreshIndicator = ProgressBar(this).apply {
             indeterminateTintList = android.content.res.ColorStateList.valueOf(green)
             visibility = View.GONE
         }
-        root.addView(refreshIndicator, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT, dp(36)).apply {
-            gravity = Gravity.CENTER_HORIZONTAL
-            topMargin = dp(4)
+        webContainer.addView(refreshIndicator, FrameLayout.LayoutParams(dp(36), dp(36)).apply {
+            gravity = Gravity.CENTER_HORIZONTAL or Gravity.TOP
+            topMargin = dp(12)
         })
+        root.addView(webContainer, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
 
         setContentView(root)
     }
 
-    private fun isShortsUrl(url: String?): Boolean {
-        return url != null && url.contains("/shorts/")
+    private fun injectPageScripts(view: WebView?) {
+        view?.evaluateJavascript(STYLE_SCRIPT, null)
+        view?.evaluateJavascript(VIDEO_WATCH_SCRIPT, null)
+        view?.evaluateJavascript(PULL_REFRESH_SCRIPT, null)
+        // Keep the Shorts marker class + reel-entry tracking current on SPA navs.
+        view?.evaluateJavascript("window._advoidTrackNav && window._advoidTrackNav();", null)
+    }
+
+    private fun hideCustomView() {
+        if (customView == null) return
+        val decor = window.decorView as FrameLayout
+        decor.systemUiVisibility = originalSystemUiVisibility
+        customViewContainer?.let { decor.removeView(it) }
+        customViewContainer = null
+        customView = null
+        customViewCallback?.onCustomViewHidden()
+        customViewCallback = null
+        webView.visibility = View.VISIBLE
+    }
+
+    @Suppress("DEPRECATION", "MissingSuperCall")
+    override fun onBackPressed() {
+        when {
+            customView != null -> hideCustomView()
+            webView.canGoBack() -> webView.goBack()
+            else -> super.onBackPressed()
+        }
+    }
+
+    override fun onDestroy() {
+        // Persist login cookies and release the WebView so it can't leak and
+        // keep running after the activity is gone.
+        android.webkit.CookieManager.getInstance().flush()
+        (webView.parent as? ViewGroup)?.removeView(webView)
+        webView.destroy()
+        super.onDestroy()
     }
 
     private fun toggleShield() {
@@ -352,6 +393,8 @@ class MainActivity : Activity() {
     companion object {
         private const val VIDEO_WATCH_SCRIPT = """
             (function() {
+                if (window._advoidVideoSetup) return;
+                window._advoidVideoSetup = true;
                 function setupVideoListeners() {
                     var videos = document.querySelectorAll('video');
                     videos.forEach(function(video) {
@@ -372,59 +415,124 @@ class MainActivity : Activity() {
                 var observer = new MutationObserver(function() {
                     setupVideoListeners();
                 });
-                observer.observe(document.body, { childList: true, subtree: true });
+                observer.observe(document.documentElement, { childList: true, subtree: true });
             })();
         """
 
+        /**
+         * Pull-to-refresh. Listens in the CAPTURE phase: YouTube's Shorts
+         * carousel stops touch-event propagation, so bubble-phase listeners
+         * never fire there. Eligible contexts:
+         *   - feed pages at window scroll 0 (after a short rest, so scroll-up
+         *     flings that land on top don't instantly reload), and
+         *   - Shorts while on the reel's entry (first) short — swiping down
+         *     mid-reel still goes to the previous short.
+         * /watch is excluded so playback is never reloaded by a stray swipe.
+         */
         private const val PULL_REFRESH_SCRIPT = """
             (function() {
+                // Mutable state lives on window (not in the listener closures) and is
+                // reset on every injectPageScripts() call — i.e. on every SPA
+                // navigation — so a gesture interrupted mid-swipe by a navigation can
+                // never wedge pulling/shown stuck for the next page.
+                var P = window._advoidPull || (window._advoidPull = {});
+                // A pushState/replaceState navigation mid-gesture can land here
+                // while the indicator is still showing — tell native to hide it
+                // before wiping the state, so it never gets stuck visible.
+                if (P.shown && window.AdVoidBridge) AdVoidBridge.onRefreshRelease(false);
+                P.startY = 0; P.startX = 0; P.pulling = false; P.shown = false;
+                if (!('lastScrollTs' in P)) P.lastScrollTs = 0;
+                function shortsId() {
+                    var m = location.pathname.match(/^\/shorts\/([\w-]+)/);
+                    return m ? m[1] : null;
+                }
+                window._advoidTrackNav = function() {
+                    var id = shortsId();
+                    if (!id) { window._advoidShortsEntry = null; }
+                    else if (!window._advoidShortsEntry) { window._advoidShortsEntry = id; }
+                    document.documentElement.classList.toggle('advoid-shorts', !!id);
+                };
+                window._advoidTrackNav();
                 if (window._advoidRefreshSetup) return;
                 window._advoidRefreshSetup = true;
-                var startY = 0;
-                var pulling = false;
-                var THRESHOLD = 120;
-                document.addEventListener('touchstart', function(e) {
-                    if (window.scrollY <= 0 && e.touches.length === 1) {
-                        startY = e.touches[0].clientY;
-                        pulling = true;
+                var SHOW = 70, TRIGGER = 150;
+                window.addEventListener('scroll', function() {
+                    P.lastScrollTs = Date.now();
+                }, { passive: true, capture: true });
+                function eligible() {
+                    var id = shortsId();
+                    if (id) return id === window._advoidShortsEntry;
+                    if (location.pathname.indexOf('/watch') === 0) return false;
+                    return window.scrollY <= 0 && Date.now() - P.lastScrollTs > 350;
+                }
+                function reset(refresh) {
+                    P.pulling = false;
+                    if (P.shown || refresh) {
+                        P.shown = false;
+                        AdVoidBridge.onRefreshRelease(!!refresh);
                     }
-                }, { passive: true });
+                }
+                document.addEventListener('touchstart', function(e) {
+                    window._advoidTrackNav();
+                    if (e.touches.length === 1 && eligible()) {
+                        P.startY = e.touches[0].clientY;
+                        P.startX = e.touches[0].clientX;
+                        P.pulling = true;
+                        P.shown = false;
+                    }
+                }, { passive: true, capture: true });
                 document.addEventListener('touchmove', function(e) {
-                    if (!pulling) return;
-                    var dy = e.touches[0].clientY - startY;
-                    if (dy > THRESHOLD * 0.5) {
+                    if (!P.pulling) return;
+                    var dy = e.touches[0].clientY - P.startY;
+                    var dx = Math.abs(e.touches[0].clientX - P.startX);
+                    if (dy < 0 || dx > Math.max(40, dy)) { reset(false); return; }
+                    if (!shortsId() && window.scrollY > 0) { reset(false); return; }
+                    if (dy > SHOW && !P.shown) {
+                        P.shown = true;
                         AdVoidBridge.onRefreshPulled();
                     }
-                }, { passive: true });
+                }, { passive: true, capture: true });
                 document.addEventListener('touchend', function(e) {
-                    if (!pulling) return;
-                    pulling = false;
-                    var endY = e.changedTouches[0].clientY;
-                    var dy = endY - startY;
-                    if (dy > THRESHOLD) {
-                        AdVoidBridge.onRefreshRelease(true);
-                    } else {
-                        AdVoidBridge.onRefreshRelease(false);
-                    }
-                }, { passive: true });
+                    if (!P.pulling) return;
+                    var dy = e.changedTouches[0].clientY - P.startY;
+                    reset(dy > TRIGGER && eligible());
+                }, { passive: true, capture: true });
+                document.addEventListener('touchcancel', function() {
+                    reset(false);
+                }, { passive: true, capture: true });
             })();
         """
 
-        private const val SHORTS_CSS_SCRIPT = """
+        /**
+         * Injected CSS. Removes YouTube's "Open App" upsells everywhere
+         * (topbar button, player overlay chips, mealbar banners — anything
+         * that links out via an intent: URL), and hides the search UI only
+         * while on Shorts via the html.advoid-shorts marker class that
+         * PULL_REFRESH_SCRIPT keeps in sync with SPA navigation.
+         */
+        private const val STYLE_SCRIPT = """
             (function() {
-                if (window._advoidShortsCss) return;
-                window._advoidShortsCss = true;
+                if (document.getElementById('advoid-style')) return;
                 var style = document.createElement('style');
+                style.id = 'advoid-style';
                 style.textContent = [
-                    'ytd-search-header-renderer,',
-                    'ytd-searchbox,',
-                    '#search-icon,',
-                    'button[aria-label="Search"],',
-                    'ytd-masthead button[aria-label="Search"] {',
+                    'a[href^="intent:"],',
+                    'ytm-mealbar-promo-renderer,',
+                    '.mealbar-promo-renderer,',
+                    'ytm-app-upsell-template-renderer {',
+                    '  display: none !important;',
+                    '}',
+                    // Separate rule: an unsupported :has() would otherwise
+                    // invalidate the whole comma list above on older WebView.
+                    'ytm-button-renderer:has(> a[href^="intent:"]) {',
+                    '  display: none !important;',
+                    '}',
+                    'html.advoid-shorts ytm-searchbox,',
+                    'html.advoid-shorts button[aria-label="Search"] {',
                     '  display: none !important;',
                     '}'
-                ].join('\\n');
-                document.head.appendChild(style);
+                ].join(' ');
+                (document.head || document.documentElement).appendChild(style);
             })();
         """
     }
