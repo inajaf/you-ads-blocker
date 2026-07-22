@@ -95,13 +95,8 @@ App" banner (`#advoid-style` present), and the back button still navigates
 WebView history instead of exiting (all three fixes from the entry below
 re-confirmed working under the new package).
 
-**Still open, not done here:** release signing. `android/AdVoid` has no
-`signingConfig` — no keystore exists anywhere in the repo. The user has an
-existing keystore (used to sign the current `app-release.apk` on the landing
-page's download link) but it needs to be located/provided before a release
-build can be wired up (locally via `local.properties`, and/or a GitHub
-Actions workflow modeled on `.github/workflows/desktop-windows-build.yml`
-with the keystore as a base64-encoded secret). Blocked on that input.
+**Release signing:** resolved in the entry above — the old keystore was
+confirmed unrecoverable and a fresh one was generated instead.
 
 ## 2026-07-22 — Android hands-on UX review: refresh, Open App, and back-navigation fixes
 
