@@ -11,8 +11,8 @@ Cinema-dark React PWA for browsing videos with best-effort ad filtering and no A
 | Proxy | `vite-plugin-proxy.ts` + `server/` | Media proxy with allowlisted hosts; also `netlify/` functions |
 | Extension | `extension/` | Chrome Manifest V3 ad-block companion (AdVoid Shield) |
 | Desktop | `desktop/` | Chrome App Mode wrapper |
-| Android | `android/Noirva/` | Actively-developed native WebView wrapper (package `com.noirva.app`, single `MainActivity.kt`), self-contained ad-block + UI, not synced from `adblock/`. No README; no Kotlin/JUnit test infra exists — verify changes hands-on in an emulator. |
-| Android (legacy) | `android/` (package `app.tube`) | Older wrapper backed by `adblock/` via `scripts/sync-adblock.mjs`; not the one being developed — check `git log -- android/Noirva android/` before assuming which wrapper a change belongs in. |
+| Android | `android/AdVoid/` | Actively-developed native WebView wrapper (package `com.advoid.app`, single `MainActivity.kt`), self-contained ad-block + UI, not synced from `adblock/`. Directory/package renamed from Noirva 2026-07-22 — the applicationId change means it's a distinct app to Android, so anyone with the old `com.noirva.app` build installed needs to reinstall. No README; no Kotlin/JUnit test infra exists — verify changes hands-on in an emulator. |
+| Android (legacy) | `android/` (package `app.tube`) | Older wrapper backed by `adblock/` via `scripts/sync-adblock.mjs`; not the one being developed — check `git log -- android/AdVoid android/` before assuming which wrapper a change belongs in. |
 
 **Routing:** `/` is the public landing page; the video app lives under `/app`
 via `<BrowserRouter basename="/app">` (see `src/appRoutes.ts` and

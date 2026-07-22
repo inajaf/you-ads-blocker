@@ -1,5 +1,53 @@
 # Project status
 
+## 2026-07-22 — Android app renamed Noirva → AdVoid (directory + package ID)
+
+Follow-up to the Android UX review below, requested when setting up release
+signing for the Android app. The Android wrapper's directory and Gradle/Kotlin
+identity still said "Noirva" even though the app's user-visible label was
+already "AdVoid" — done:
+
+- `android/Noirva/` → `android/AdVoid/` (`git mv`).
+- Kotlin package `com.noirva.app` → `com.advoid.app`, including moving
+  `MainActivity.kt`/`AdBlocker.kt` to the new
+  `app/src/main/java/com/advoid/app/` path.
+- `app/build.gradle.kts`: `namespace`/`applicationId` → `com.advoid.app`.
+- `settings.gradle.kts`: `rootProject.name` → `"AdVoid"`.
+- `AGENTS.md` and code-reviewer agent memory updated to the new path.
+
+**Deliberately left unchanged:** `app/src/main/assets/inject.js` and
+`dom-layer.js` still log `[Noirva Shield]` / `[Noirva] DOM layer active` —
+these files are byte-identical copies of `/adblock/inject.js` (the shared
+source of truth also consumed by `desktop/`, the legacy `android/` wrapper,
+and `extension/`, none of which were touched here). Renaming only this
+Android copy's internal strings would diverge it from that shared source for
+a purely cosmetic debug-log string with no user-visible effect. Fixing the
+Noirva branding leak in the shared `/adblock/` source (and its consumers) is
+a separate, wider-reaching cleanup, not part of this change.
+
+**Consequence users should know:** this is an `applicationId` change, so
+Android treats it as a completely different app from the previously-shipped
+`com.noirva.app` build — anyone with the old package installed needs to
+uninstall it first; there's no in-place upgrade path across this rename. Not
+applied to iOS/desktop/extension, which already use their own IDs
+(unaffected).
+
+Verified hands-on in the emulator after the rename: clean `assembleDebug`
+build, old `com.noirva.app` uninstalled and new `com.advoid.app` installed
+fresh, ad-block hooks still fire (`[Noirva Shield] page hooks active` in
+logcat — expected per above), search works, opening a video hides the "Open
+App" banner (`#advoid-style` present), and the back button still navigates
+WebView history instead of exiting (all three fixes from the entry below
+re-confirmed working under the new package).
+
+**Still open, not done here:** release signing. `android/AdVoid` has no
+`signingConfig` — no keystore exists anywhere in the repo. The user has an
+existing keystore (used to sign the current `app-release.apk` on the landing
+page's download link) but it needs to be located/provided before a release
+build can be wired up (locally via `local.properties`, and/or a GitHub
+Actions workflow modeled on `.github/workflows/desktop-windows-build.yml`
+with the keystore as a base64-encoded secret). Blocked on that input.
+
 ## 2026-07-22 — Android hands-on UX review: refresh, Open App, and back-navigation fixes
 
 Native Android wrapper is `android/Noirva/` (package `com.noirva.app`) — this is

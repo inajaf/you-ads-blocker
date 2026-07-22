@@ -12,5 +12,5 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "Noirva"
+rootProject.name = "AdVoid"
 include(":app")
