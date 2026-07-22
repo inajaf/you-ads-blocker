@@ -14,7 +14,6 @@ import android.view.animation.OvershootInterpolator
 import android.webkit.*
 import android.widget.*
 import android.app.Activity
-import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 
 class MainActivity : Activity() {
     private lateinit var webView: WebView
@@ -24,15 +23,13 @@ class MainActivity : Activity() {
     private lateinit var shieldKnob: View
     private lateinit var shieldIcon: ImageView
     private lateinit var protectionLabel: TextView
+    private lateinit var refreshIndicator: ProgressBar
 
     // Fullscreen video support
     private var customViewContainer: FrameLayout? = null
     private var customView: View? = null
     private var customViewCallback: WebChromeClient.CustomViewCallback? = null
     private var originalSystemUiVisibility = 0
-
-    // Pull-to-refresh
-    private lateinit var swipeRefresh: SwipeRefreshLayout
 
     private val green = Color.parseColor("#5FCA6B")
     private val darkBg = Color.parseColor("#0F0F0F")
@@ -148,6 +145,7 @@ class MainActivity : Activity() {
             settings.userAgentString = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
 
             // JavaScript interface to detect video play/pause for screen wake lock
+            // and handle pull-to-refresh without native touch interception
             addJavascriptInterface(object {
                 @JavascriptInterface
                 fun onVideoPlay() {
@@ -159,6 +157,21 @@ class MainActivity : Activity() {
                 fun onVideoPause() {
                     runOnUiThread {
                         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    }
+                }
+                @JavascriptInterface
+                fun onRefreshPulled() {
+                    runOnUiThread {
+                        refreshIndicator.visibility = View.VISIBLE
+                    }
+                }
+                @JavascriptInterface
+                fun onRefreshRelease(shouldRefresh: Boolean) {
+                    runOnUiThread {
+                        refreshIndicator.visibility = View.GONE
+                        if (shouldRefresh) {
+                            webView.reload()
+                        }
                     }
                 }
             }, "AdVoidBridge")
@@ -179,20 +192,18 @@ class MainActivity : Activity() {
                     if (shieldEnabled) {
                         adBlocker.injectScripts(view)
                     }
-                    // On Shorts pages: disable refresh entirely — YouTube handles
-                    // swiping between videos via its own JS touch events.
-                    swipeRefresh.isEnabled = !isShortsUrl(url)
                 }
 
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
-                    swipeRefresh.isRefreshing = false
-                    // Re-check after redirect / SPA navigation
-                    if (!isShortsUrl(url)) {
-                        swipeRefresh.isEnabled = true
-                    }
                     // Inject video play/pause detection for screen wake lock
                     view?.evaluateJavascript(VIDEO_WATCH_SCRIPT, null)
+                    // Inject pull-to-refresh via JavaScript (no native touch interception)
+                    view?.evaluateJavascript(PULL_REFRESH_SCRIPT, null)
+                    // Hide search icon and other non-essential UI on Shorts pages
+                    if (isShortsUrl(url)) {
+                        view?.evaluateJavascript(SHORTS_CSS_SCRIPT, null)
+                    }
                 }
             }
             webChromeClient = object : WebChromeClient() {
@@ -242,26 +253,21 @@ class MainActivity : Activity() {
             loadUrl("https://m.youtube.com")
         }
 
-        // SwipeRefreshLayout wraps the WebView for pull-to-refresh
-        swipeRefresh = SwipeRefreshLayout(this).apply {
-            setColorSchemeColors(green)
-            setProgressBackgroundColorSchemeColor(darkBg)
-            setOnRefreshListener {
-                webView.reload()
-            }
-        }
-        swipeRefresh.addView(webView, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.MATCH_PARENT))
-        root.addView(swipeRefresh, LinearLayout.LayoutParams(
+        // WebView added directly — no SwipeRefreshLayout wrapper
+        // (pull-to-refresh handled via JavaScript to avoid intercepting touches)
+        root.addView(webView, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
 
-        // On regular pages: disable refresh when scrolled down, enable at top.
-        // On Shorts pages: refresh stays disabled (handled by onPageStarted).
-        webView.setOnScrollChangeListener { _, _, scrollY, _, _ ->
-            if (!isShortsUrl(webView.url)) {
-                swipeRefresh.isEnabled = scrollY <= 0
-            }
+        // Add refresh indicator (simple ProgressBar at top, hidden by default)
+        refreshIndicator = ProgressBar(this).apply {
+            indeterminateTintList = android.content.res.ColorStateList.valueOf(green)
+            visibility = View.GONE
         }
+        root.addView(refreshIndicator, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT, dp(36)).apply {
+            gravity = Gravity.CENTER_HORIZONTAL
+            topMargin = dp(4)
+        })
 
         setContentView(root)
     }
@@ -367,6 +373,58 @@ class MainActivity : Activity() {
                     setupVideoListeners();
                 });
                 observer.observe(document.body, { childList: true, subtree: true });
+            })();
+        """
+
+        private const val PULL_REFRESH_SCRIPT = """
+            (function() {
+                if (window._advoidRefreshSetup) return;
+                window._advoidRefreshSetup = true;
+                var startY = 0;
+                var pulling = false;
+                var THRESHOLD = 120;
+                document.addEventListener('touchstart', function(e) {
+                    if (window.scrollY <= 0 && e.touches.length === 1) {
+                        startY = e.touches[0].clientY;
+                        pulling = true;
+                    }
+                }, { passive: true });
+                document.addEventListener('touchmove', function(e) {
+                    if (!pulling) return;
+                    var dy = e.touches[0].clientY - startY;
+                    if (dy > THRESHOLD * 0.5) {
+                        AdVoidBridge.onRefreshPulled();
+                    }
+                }, { passive: true });
+                document.addEventListener('touchend', function(e) {
+                    if (!pulling) return;
+                    pulling = false;
+                    var endY = e.changedTouches[0].clientY;
+                    var dy = endY - startY;
+                    if (dy > THRESHOLD) {
+                        AdVoidBridge.onRefreshRelease(true);
+                    } else {
+                        AdVoidBridge.onRefreshRelease(false);
+                    }
+                }, { passive: true });
+            })();
+        """
+
+        private const val SHORTS_CSS_SCRIPT = """
+            (function() {
+                if (window._advoidShortsCss) return;
+                window._advoidShortsCss = true;
+                var style = document.createElement('style');
+                style.textContent = [
+                    'ytd-search-header-renderer,',
+                    'ytd-searchbox,',
+                    '#search-icon,',
+                    'button[aria-label="Search"],',
+                    'ytd-masthead button[aria-label="Search"] {',
+                    '  display: none !important;',
+                    '}'
+                ].join('\\n');
+                document.head.appendChild(style);
             })();
         """
     }
