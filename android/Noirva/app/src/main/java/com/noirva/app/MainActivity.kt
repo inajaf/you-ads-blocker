@@ -124,9 +124,6 @@ class MainActivity : Activity() {
 
         shieldToggle.setOnClickListener { toggleShield() }
 
-        header.addView(LinearLayout(this), LinearLayout.LayoutParams(
-            0, dp(14), 0f))
-
         // Privacy info
         val privacyInfo = TextView(this).apply {
             text = "Safe to login — we don't store your data"
@@ -136,6 +133,9 @@ class MainActivity : Activity() {
         }
         header.addView(privacyInfo, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+
+        header.addView(LinearLayout(this), LinearLayout.LayoutParams(
+            0, dp(8), 0f))
 
         root.addView(header, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
@@ -184,8 +184,7 @@ class MainActivity : Activity() {
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
                     swipeRefresh.isRefreshing = false
-                    // Re-evaluate: allow refresh only at top with no back history
-                    swipeRefresh.isEnabled = !webView.canGoBack()
+                    swipeRefresh.isEnabled = true
                     // Inject video play/pause detection for screen wake lock
                     view?.evaluateJavascript(VIDEO_WATCH_SCRIPT, null)
                 }
@@ -251,9 +250,8 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
 
         // Only allow pull-to-refresh when WebView is scrolled to the very top
-        // AND there's no back history (no previous video to swipe back to)
         webView.setOnScrollChangeListener { _, _, scrollY, _, _ ->
-            swipeRefresh.isEnabled = scrollY <= 0 && !webView.canGoBack()
+            swipeRefresh.isEnabled = scrollY <= 0
         }
 
         setContentView(root)
