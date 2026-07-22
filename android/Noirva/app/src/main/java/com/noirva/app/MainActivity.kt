@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.view.animation.OvershootInterpolator
 import android.webkit.*
@@ -146,6 +147,22 @@ class MainActivity : Activity() {
             settings.mediaPlaybackRequiresUserGesture = false
             settings.userAgentString = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
 
+            // JavaScript interface to detect video play/pause for screen wake lock
+            addJavascriptInterface(object {
+                @JavascriptInterface
+                fun onVideoPlay() {
+                    runOnUiThread {
+                        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    }
+                }
+                @JavascriptInterface
+                fun onVideoPause() {
+                    runOnUiThread {
+                        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    }
+                }
+            }, "AdVoidBridge")
+
             webViewClient = object : WebViewClient() {
                 override fun shouldInterceptRequest(
                     view: WebView?,
@@ -167,6 +184,10 @@ class MainActivity : Activity() {
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
                     swipeRefresh.isRefreshing = false
+                    // Re-evaluate: allow refresh only at top with no back history
+                    swipeRefresh.isEnabled = !webView.canGoBack()
+                    // Inject video play/pause detection for screen wake lock
+                    view?.evaluateJavascript(VIDEO_WATCH_SCRIPT, null)
                 }
             }
             webChromeClient = object : WebChromeClient() {
@@ -228,6 +249,12 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.MATCH_PARENT))
         root.addView(swipeRefresh, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
+
+        // Only allow pull-to-refresh when WebView is scrolled to the very top
+        // AND there's no back history (no previous video to swipe back to)
+        webView.setOnScrollChangeListener { _, _, scrollY, _, _ ->
+            swipeRefresh.isEnabled = scrollY <= 0 && !webView.canGoBack()
+        }
 
         setContentView(root)
     }
@@ -303,6 +330,34 @@ class MainActivity : Activity() {
 
     private fun dp(value: Int): Int {
         return (value * resources.displayMetrics.density).toInt()
+    }
+
+    companion object {
+        private const val VIDEO_WATCH_SCRIPT = """
+            (function() {
+                function setupVideoListeners() {
+                    var videos = document.querySelectorAll('video');
+                    videos.forEach(function(video) {
+                        if (video._advoidListeners) return;
+                        video._advoidListeners = true;
+                        video.addEventListener('play', function() {
+                            AdVoidBridge.onVideoPlay();
+                        });
+                        video.addEventListener('pause', function() {
+                            AdVoidBridge.onVideoPause();
+                        });
+                        video.addEventListener('ended', function() {
+                            AdVoidBridge.onVideoPause();
+                        });
+                    });
+                }
+                setupVideoListeners();
+                var observer = new MutationObserver(function() {
+                    setupVideoListeners();
+                });
+                observer.observe(document.body, { childList: true, subtree: true });
+            })();
+        """
     }
 }
 
