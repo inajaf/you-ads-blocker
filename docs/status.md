@@ -1,5 +1,60 @@
 # Project status
 
+## 2026-07-22 — Android release signing set up (new keystore)
+
+Follow-up to the Noirva→AdVoid rename below. The user asked how the current
+published `app-release.apk` was signed/released before, so this could be
+reproduced for `android/AdVoid`. Investigation via git history found a
+`signingConfigs` block was added once (`5be8a51`, "chore: add release
+signing config and gitignore for secrets") but **that commit is on a branch
+that was never merged into `main`** — the actual signing setup (keystore
+file + `local.properties` passwords) only ever existed locally on the user's
+machine, deliberately gitignored, and was never recoverable (no private key
+can be extracted from an already-built APK). A filesystem search turned up
+nothing but the standard Android SDK debug keystore.
+
+Since the Noirva→AdVoid `applicationId` rename (below) already breaks
+in-place upgrades for any existing `com.noirva.app` install regardless of
+signing key, there was no additional cost to generating a fresh keystore
+rather than needing to recover the old one — the user confirmed this
+tradeoff explicitly.
+
+Done:
+- Generated `android/AdVoid/advoid-release.keystore` (PKCS12, alias
+  `advoid`, RSA 2048, 25-year/10000-day validity) with a random 30-char
+  password via `keytool`.
+- `android/AdVoid/keystore.properties` holds `KEYSTORE_FILE` /
+  `KEYSTORE_PASSWORD` / `KEY_ALIAS` / `KEY_PASSWORD`, gitignored.
+- `app/build.gradle.kts`: reads `keystore.properties`, applies a
+  `signingConfigs["release"]` to the `release` build type **only when the
+  keystore file actually exists** — so a fresh checkout or CI without the
+  secret configured still builds (unsigned) instead of hard-failing.
+- Also disabled `lintVitalAnalyzeRelease` (`lint { checkReleaseBuilds =
+  false; abortOnError = false }` — same fix the abandoned branch had
+  independently arrived at): AGP 8.7.3's lint tooling fails outright under
+  this machine's JDK 26 (Homebrew, newer than AGP 8.7.3 supports for that
+  specific check); this is a packaging build, not a lint gate, so skipping
+  it here is appropriate.
+- Added `.gitignore` entries repo-wide for `*.keystore`/`*.jks` plus the
+  specific `keystore.properties`/`local.properties` paths, and untracked
+  `android/AdVoid/local.properties` (was previously tracked by mistake —
+  only ever held the machine-local `sdk.dir`, not a secret itself, but
+  shouldn't have been tracked to begin with).
+- Verified hands-on: `./gradlew assembleRelease` produces a signed APK
+  (`apksigner verify --print-certs` confirms the `CN=AdVoid` cert), old
+  `com.advoid.app` debug install replaced with this **signed release build**
+  in the emulator, installed and launched successfully.
+
+**The keystore/password are local-only, not in this PR's diff** (by
+design — see the `.gitignore` entries above). The user needs to back up
+`android/AdVoid/advoid-release.keystore` and the password from
+`keystore.properties` somewhere durable (password manager, secrets vault)
+outside this git history — losing them again means repeating this whole
+process and breaking upgrades a second time. Also not done: actually
+uploading a new build to the GitHub release (the `app-release.apk` asset
+the landing page links to) — that's a deliberate, separate step for the
+user or a future task, not automated here.
+
 ## 2026-07-22 — Android app renamed Noirva → AdVoid (directory + package ID)
 
 Follow-up to the Android UX review below, requested when setting up release
