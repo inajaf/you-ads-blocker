@@ -20,6 +20,43 @@ Browser-style tabs for the desktop app (`desktop/`, branch `fm/desktop-video-tab
 - The first-run guide overlay (`#tube-desktop-guide`) is full-page and intercepts right-clicks while shown; dismiss it first for the context menu to hit content.
 - Dev/test dock icon uses the padded rounded PNG; the packaged app still ships the full-bleed `.icns` (confirmed rendering correctly).
 
+## 2026-07-26 — Android playback header and screen-wake lifecycle
+
+Done:
+- The native `Protection active` header now automatically leaves the layout
+  while any YouTube video is playing, including non-fullscreen playback, so the
+  WebView receives the full available height. Pause/ended restores the controls;
+  true Web fullscreen also keeps the header hidden.
+- Replaced independent per-video `onVideoPlay`/`onVideoPause` window mutations
+  with aggregate JavaScript playback reporting plus a testable Kotlin
+  `PlaybackUiCoordinator`.
+- `FLAG_KEEP_SCREEN_ON` is now conditional on both active playback and a visible
+  Activity. Backgrounding releases it, resuming re-syncs the actual WebView
+  state, and stale callbacks received in the background cannot reacquire it.
+- Added eight JVM unit tests for playback, pause, fullscreen, background, and
+  resume transitions.
+- Debug builds now install as `com.advoid.app.debug`, beside the signed
+  `com.advoid.app`, so emulator QA does not require removing release cookies or
+  login state.
+
+Verified:
+- `testDebugUnitTest` and `assembleDebug` pass.
+- Installed and exercised the debug APK on the existing API 37 emulator.
+- Real YouTube playback hides the header and sets `KEEP_SCREEN_ON`; real pause
+  restores the header and clears the flag.
+- Aggregate two-video check stays active when one video is paused.
+- Web fullscreen opens successfully; Back exits fullscreen without finishing
+  the Activity.
+- With the system screen timeout temporarily reduced to 10 seconds, the device
+  remained awake after 13 seconds of real playback. The original timeout was
+  restored afterward.
+- No crash, FATAL EXCEPTION, or ANR appeared in the app log.
+
+Known issue:
+- The emulator/WebView logged transient Chromium `SharedImageManager` GPU
+  mailbox errors during video/fullscreen rendering, without a crash or visible
+  playback failure.
+
 ## 2026-07-22 — Android release signing set up (new keystore)
 
 Follow-up to the Noirva→AdVoid rename below. The user asked how the current
@@ -200,24 +237,10 @@ back button at every level, fullscreen, rotation, app resume.
   active`) fire on every navigation per logcat, unaffected by the above
   changes.
 
-### Known issues (out of scope, documented not fixed)
-- **Landscape device rotation without tapping the in-player fullscreen
-  button** leaves the "Protection active" banner + YouTube header visible,
-  eating a large fraction of the pillarboxed landscape frame instead of
-  giving the video more space. This matches how the underlying mobile-web
-  page behaves in a plain browser tab (rotation alone doesn't trigger
-  YouTube's own fullscreen layout — only tapping the in-player fullscreen
-  icon does, which correctly goes through `onShowCustomView`/`hideCustomView`
-  and hides all native chrome, verified hands-on). Making the native
-  banner/header collapse or auto-hide on landscape orientation regardless of
-  fullscreen state would be a product/design decision (always-hide vs.
-  hide-only-during-playback vs. leave as-is) — `needs-decision` rather than a
-  clear bug fix, not applied here.
-- No Kotlin/JUnit test infrastructure exists in `android/` (no test source
-  set was ever set up); the fixes above were verified by hands-on emulator
-  reproduction (marker-variable tests over chrome-devtools-protocol) rather
-  than an automated test suite. `npm test` (96/96) and `npm run build` are
-  green — untouched, since this task only changed `android/Noirva/`.
+### Follow-up
+The landscape playback-header limitation and missing Kotlin unit-test coverage
+were resolved by the 2026-07-26 playback lifecycle work; see
+`docs/decisions.md` for the current contract.
 
 ## 2026-07-21 — Renamed Noirva to AdVoid
 

@@ -11,7 +11,7 @@ Cinema-dark React PWA for browsing videos with best-effort ad filtering and no A
 | Proxy | `vite-plugin-proxy.ts` + `server/` | Media proxy with allowlisted hosts; also `netlify/` functions |
 | Extension | `extension/` | Chrome Manifest V3 ad-block companion (AdVoid Shield) |
 | Desktop | `desktop/` | Chrome App Mode wrapper |
-| Android | `android/AdVoid/` | Actively-developed native WebView wrapper (package `com.advoid.app`, single `MainActivity.kt`), self-contained ad-block + UI, not synced from `adblock/`. Directory/package renamed from Noirva 2026-07-22 — the applicationId change means it's a distinct app to Android, so anyone with the old `com.noirva.app` build installed needs to reinstall. No README; no Kotlin/JUnit test infra exists — verify changes hands-on in an emulator. |
+| Android | `android/AdVoid/` | Actively-developed native WebView wrapper (release package `com.advoid.app`; debug builds use `com.advoid.app.debug` so QA never removes release login data), self-contained ad-block + UI, not synced from `adblock/`. Directory/package renamed from Noirva 2026-07-22 — the applicationId change means it's a distinct app to Android, so anyone with the old `com.noirva.app` build installed needs to reinstall. Playback/UI state has local Kotlin unit tests; still verify WebView behavior hands-on in an emulator. |
 | Android (legacy) | `android/` (package `app.tube`) | Older wrapper backed by `adblock/` via `scripts/sync-adblock.mjs`; not the one being developed — check `git log -- android/AdVoid android/` before assuming which wrapper a change belongs in. |
 
 **Routing:** `/` is the public landing page; the video app lives under `/app`
@@ -43,7 +43,8 @@ npx oxlint .            # lint (config in .oxlintrc.json)
 - Clean up side effects: abort fetches, remove listeners/observers in effect cleanup.
 - Proxy/server code is security-sensitive: validate/allowlist target URLs (see `tests/proxy-security.test.mjs`), never proxy arbitrary hosts.
 - No secrets or API keys in code or logs — the project's premise is "no API keys".
-- New logic gets a unit test in `tests/*.test.mjs` (node:test).
+- New logic gets a unit test in its relevant suite: `tests/*.test.mjs`
+  (node:test) for JS/TS, or `android/AdVoid/app/src/test/` for Android Kotlin.
 - Commits: short imperative messages matching existing history. Work in a branch + PR; do not push to main.
 - Commits must never include AI co-author attribution (no `Co-Authored-By: Claude` or similar trailers).
 - Forbidden: disabling or deleting failing tests to get green, reading/printing `.env` or secrets.
