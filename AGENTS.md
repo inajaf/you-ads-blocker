@@ -43,7 +43,8 @@ npx oxlint .            # lint (config in .oxlintrc.json)
 - Clean up side effects: abort fetches, remove listeners/observers in effect cleanup.
 - Proxy/server code is security-sensitive: validate/allowlist target URLs (see `tests/proxy-security.test.mjs`), never proxy arbitrary hosts.
 - No secrets or API keys in code or logs — the project's premise is "no API keys".
-- New logic gets a unit test in `tests/*.test.mjs` (node:test).
+- New logic gets a unit test in its relevant suite: `tests/*.test.mjs`
+  (node:test) for JS/TS, or `android/AdVoid/app/src/test/` for Android Kotlin.
 - Commits: short imperative messages matching existing history. Work in a branch + PR; do not push to main.
 - Commits must never include AI co-author attribution (no `Co-Authored-By: Claude` or similar trailers).
 - Forbidden: disabling or deleting failing tests to get green, reading/printing `.env` or secrets.

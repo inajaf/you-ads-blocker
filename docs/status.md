@@ -217,24 +217,10 @@ back button at every level, fullscreen, rotation, app resume.
   active`) fire on every navigation per logcat, unaffected by the above
   changes.
 
-### Known issues (out of scope, documented not fixed)
-- **Landscape device rotation without tapping the in-player fullscreen
-  button** leaves the "Protection active" banner + YouTube header visible,
-  eating a large fraction of the pillarboxed landscape frame instead of
-  giving the video more space. This matches how the underlying mobile-web
-  page behaves in a plain browser tab (rotation alone doesn't trigger
-  YouTube's own fullscreen layout — only tapping the in-player fullscreen
-  icon does, which correctly goes through `onShowCustomView`/`hideCustomView`
-  and hides all native chrome, verified hands-on). Making the native
-  banner/header collapse or auto-hide on landscape orientation regardless of
-  fullscreen state would be a product/design decision (always-hide vs.
-  hide-only-during-playback vs. leave as-is) — `needs-decision` rather than a
-  clear bug fix, not applied here.
-- No Kotlin/JUnit test infrastructure exists in `android/` (no test source
-  set was ever set up); the fixes above were verified by hands-on emulator
-  reproduction (marker-variable tests over chrome-devtools-protocol) rather
-  than an automated test suite. `npm test` (96/96) and `npm run build` are
-  green — untouched, since this task only changed `android/Noirva/`.
+### Follow-up
+The landscape playback-header limitation and missing Kotlin unit-test coverage
+were resolved by the 2026-07-26 playback lifecycle work; see
+`docs/decisions.md` for the current contract.
 
 ## 2026-07-21 — Renamed Noirva to AdVoid
 
