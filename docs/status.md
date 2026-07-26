@@ -1,5 +1,42 @@
 # Project status
 
+## 2026-07-26 — Android playback header and screen-wake lifecycle
+
+Done:
+- The native `Protection active` header now automatically leaves the layout
+  while any YouTube video is playing, including non-fullscreen playback, so the
+  WebView receives the full available height. Pause/ended restores the controls;
+  true Web fullscreen also keeps the header hidden.
+- Replaced independent per-video `onVideoPlay`/`onVideoPause` window mutations
+  with aggregate JavaScript playback reporting plus a testable Kotlin
+  `PlaybackUiCoordinator`.
+- `FLAG_KEEP_SCREEN_ON` is now conditional on both active playback and a visible
+  Activity. Backgrounding releases it, resuming re-syncs the actual WebView
+  state, and stale callbacks received in the background cannot reacquire it.
+- Added eight JVM unit tests for playback, pause, fullscreen, background, and
+  resume transitions.
+- Debug builds now install as `com.advoid.app.debug`, beside the signed
+  `com.advoid.app`, so emulator QA does not require removing release cookies or
+  login state.
+
+Verified:
+- `testDebugUnitTest` and `assembleDebug` pass.
+- Installed and exercised the debug APK on the existing API 37 emulator.
+- Real YouTube playback hides the header and sets `KEEP_SCREEN_ON`; real pause
+  restores the header and clears the flag.
+- Aggregate two-video check stays active when one video is paused.
+- Web fullscreen opens successfully; Back exits fullscreen without finishing
+  the Activity.
+- With the system screen timeout temporarily reduced to 10 seconds, the device
+  remained awake after 13 seconds of real playback. The original timeout was
+  restored afterward.
+- No crash, FATAL EXCEPTION, or ANR appeared in the app log.
+
+Known issue:
+- The emulator/WebView logged transient Chromium `SharedImageManager` GPU
+  mailbox errors during video/fullscreen rendering, without a crash or visible
+  playback failure.
+
 ## 2026-07-22 — Android release signing set up (new keystore)
 
 Follow-up to the Noirva→AdVoid rename below. The user asked how the current

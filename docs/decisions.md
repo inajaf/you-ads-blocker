@@ -4,6 +4,24 @@
 Reason: ...
 Alternatives: ... -->
 
+## 2026-07-26 — Android playback state controls header visibility and screen wake
+Reason: The native "Protection active" header consumed video space outside true
+Web fullscreen, while the existing per-video play/pause bridge could clear
+`FLAG_KEEP_SCREEN_ON` when one paused video reported after another video had
+started playing. It also did not combine playback with Activity lifecycle.
+Approach: JavaScript now reports the aggregate state of every `<video>` element.
+A small Kotlin coordinator combines that state with Activity visibility and
+Web fullscreen. The header is removed from layout during active playback or
+fullscreen; the screen-on flag is active only while the Activity is visible
+and at least one video is playing. Pause/ended restores the header, and
+backgrounding always releases the flag. Debug builds use
+`com.advoid.app.debug`, allowing emulator QA beside the signed release app
+without deleting cookies or login data.
+Alternatives: (a) always hide the header — loses visible protection controls on
+feeds; (b) keep independent play/pause window-flag calls — races when YouTube
+retains multiple video elements; (c) uninstall the signed release for every
+debug build — destroys user session data.
+
 ## 2026-07-21 — Hero download CTA: primary button + "Other platforms" dropdown
 Reason: The previous flat row of two equal-weight buttons (Android + macOS)
 didn't visually prioritize the visitor's detected platform. On mobile, two
