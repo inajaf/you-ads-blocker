@@ -337,24 +337,28 @@ class MainActivity : Activity() {
         }
     }
 
-    override fun onResume() {
-        super.onResume()
+    override fun onStart() {
+        super.onStart()
         applyPlaybackUiState(
             playbackUiCoordinator.onActivityVisibilityChanged(true),
             animateHeader = false,
         )
+    }
+
+    override fun onResume() {
+        super.onResume()
         webView.evaluateJavascript(
             "window._advoidSyncVideoState && window._advoidSyncVideoState();",
             null,
         )
     }
 
-    override fun onPause() {
+    override fun onStop() {
         applyPlaybackUiState(
             playbackUiCoordinator.onActivityVisibilityChanged(false),
             animateHeader = false,
         )
-        super.onPause()
+        super.onStop()
     }
 
     override fun onDestroy() {

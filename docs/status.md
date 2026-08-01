@@ -30,9 +30,10 @@ Done:
 - Replaced independent per-video `onVideoPlay`/`onVideoPause` window mutations
   with aggregate JavaScript playback reporting plus a testable Kotlin
   `PlaybackUiCoordinator`.
-- `FLAG_KEEP_SCREEN_ON` is now conditional on both active playback and a visible
-  Activity. Backgrounding releases it, resuming re-syncs the actual WebView
-  state, and stale callbacks received in the background cannot reacquire it.
+- `FLAG_KEEP_SCREEN_ON` is now conditional on both active playback and a started
+  Activity. Stopping releases it, while `onResume` re-syncs the actual WebView
+  state; paused-but-visible multi-window Activities retain the playback UI and
+  wake flag, and callbacks received after stopping cannot reacquire it.
 - Added eight JVM unit tests for playback, pause, fullscreen, background, and
   resume transitions.
 - Debug builds now install as `com.advoid.app.debug`, beside the signed
