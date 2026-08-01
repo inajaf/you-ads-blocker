@@ -18,8 +18,8 @@ function isYouTubeUrl(rawUrl) {
   return host === 'youtube.com' || host.endsWith('.youtube.com')
 }
 
-// A "video open" is a watch or shorts URL on YouTube. Clicking one opens a new
-// tab so several videos stay open in parallel.
+// The preload may request a new tab only for watch or Shorts URLs. Plain clicks
+// never reach this predicate and continue navigating in the current tab.
 function isVideoOpenUrl(rawUrl) {
   let url
   try {

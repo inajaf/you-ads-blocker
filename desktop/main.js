@@ -233,8 +233,8 @@ function handleTabNavigation(tabId, details) {
 
   // Plain navigations (SPA or full-page) always happen in the current tab —
   // Chrome conventions: new tabs are created only by explicit gestures
-  // (Cmd/Ctrl+click, middle-click, context menu), handled via the page-world
-  // interceptor or window.open, not by hijacking navigations here.
+  // (Cmd/Ctrl+click, middle-click, context menu), handled via the isolated
+  // preload interceptor or window.open, not by hijacking navigations here.
   const action = classifyElectronNavigation(details.url)
   if (action === 'allow') return
 
@@ -278,7 +278,7 @@ function installTabShortcuts(contents) {
   })
 }
 
-  // Right-click menu for a tab. YouTube links get a native "Open in New Tab" item
+// Right-click menu for a tab. YouTube links get a native "Open in New Tab" item
 // (matching the modifier/middle-click gestures); the rest is a minimal
 // browser-style menu. Electron shows no context menu by default, so without
 // this a trackpad two-finger tap on macOS does nothing.
@@ -369,7 +369,7 @@ function installIpcHandlers() {
   })
   ipcMain.on(TAB_STRIP_CHANNELS.newTab, () => openNewTab(HOME_URL, { forceNew: true }))
 
-  // Sent by the page-world click interceptor (via desktop/preload.js) when an
+  // Sent by the isolated preload click interceptor when an
   // explicit new-tab gesture (Cmd/Ctrl+click, middle-click) hits a video link.
   // Only trusted tab renderers and video URLs are accepted so a compromised
   // page can only ever open a YouTube tab.

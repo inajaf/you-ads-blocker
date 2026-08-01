@@ -2,7 +2,7 @@
 
 ## 2026-08-01 — Desktop multi-tab feature: WebContentsView tabs, per-tab ad blocking, Chrome click conventions, native context menu
 
-Browser-style tabs for the desktop app (`desktop/`, branch `fm/desktop-video-tabs`), built and shipped through the no-mistakes pipeline.
+Browser-style tabs for the desktop app (`desktop/`, branch `fm/desktop-video-tabs`), implemented and locally validated for the no-mistakes pipeline.
 
 ### Done
 - **Multi-tab architecture**: each tab is its own `WebContentsView` (`contextIsolation: true`, `sandbox: false`, `nodeIntegration: false`, shared `session.defaultSession`), managed by `desktop/tab-model.js`; the in-window strip is a `WebContentsView` below `STRIP_HEIGHT = 42`, rendered by `tab-strip.html`/`tab-strip.js`/`tab-strip-preload.js` (plain DOM, no framework).

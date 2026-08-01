@@ -21,7 +21,7 @@ Alternatives: (a) a custom HTML context menu — needs positioning/hide-on-outsi
 
 ## 2026-08-01 — Pre-roll ads pruned at write time via accessor properties
 Reason: on full-page loads a polling hook (50ms `hookInitial()`) raced the player's first read of the inline `ytInitialPlayerResponse`, so a pre-roll sometimes leaked through on new-tab loads (old SPA flow pruned via wrapped fetch/XHR and was unaffected).
-Approach: `adblock/inject.js` installs accessor properties on `ytInitialPlayerResponse`/`ytInitialData` so any assignment is JSON-pruned synchronously at write time — no poll, no race. Shared source consumed by desktop, android, and extension.
+Approach: `adblock/inject.js` installs accessor properties on `ytInitialPlayerResponse`/`ytInitialData` so any assignment is JSON-pruned synchronously at write time — no poll, no race. Shared source consumed by desktop, the legacy Android wrapper, and the extension.
 Alternatives: keep polling faster — still racy; wrap at a lower level (e.g. preload setter on the global) — not available across all consumers.
 
 ## 2026-08-01 — macOS Dock icon: padded rounded PNG via `app.dock.setIcon` (dev/test); `.icns`/`.ico` for packaging

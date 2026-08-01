@@ -137,7 +137,7 @@
 
   // Fetch: strip ads from player API responses.
   const nativeFetch = window.fetch
-  window.fetch = async function patchedFetch(input, init) {
+  window.fetch = async function patchedFetch(input, _init) {
     const res = await nativeFetch.apply(this, arguments)
     try {
       const url = typeof input === 'string' ? input : input?.url || ''
