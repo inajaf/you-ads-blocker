@@ -12,8 +12,10 @@
 
 const fs = require('fs')
 const path = require('path')
-const { webFrame } = require('electron')
+const { ipcRenderer, webFrame } = require('electron')
 const { resolveProjectPath } = require('./project-path')
+const { TAB_OPEN_CHANNEL } = require('./tab-ipc')
+const NoirvaDesktopTabOpen = require('./desktop-tab-open')
 
 const ELECTRON_GUIDE_STORAGE_KEY = 'tube.electronDesktopGuideVersion'
 const NOIRVA_LOGO_PATH = ['extension', 'icons', 'noirva-logo-v2-128.png']
@@ -37,6 +39,27 @@ async function initializePage() {
   await executeProjectScript(['adblock', 'inject.js'], 'adblock/inject.js')
 
   webFrame.insertCSS(readProjectFile('extension', 'content.css'))
+
+  // Explicit "open in a new tab" gestures on video links in the page world
+  // (Cmd/Ctrl+click, middle-click) are turned into requests that this
+  // isolated-world bridge forwards to the main process. Plain single clicks
+  // are left alone so YouTube's SPA navigates the current tab.
+  // This file ships inside app.asar next to the preload, so it is read from
+  // __dirname (not resolveProjectPath, which targets packaged resources).
+  await webFrame.executeJavaScript(
+    fs.readFileSync(path.join(__dirname, 'desktop-tab-open.js'), 'utf8'),
+  )
+  console.log('[Noirva] preload injected desktop/desktop-tab-open.js into page world')
+  await webFrame.executeJavaScript(
+    'globalThis.NoirvaDesktopTabOpen.register(window)',
+  )
+  window.addEventListener(NoirvaDesktopTabOpen.OPEN_VIDEO_EVENT, (event) => {
+    const url = event.detail && event.detail.url
+    if (typeof url === 'string' && NoirvaDesktopTabOpen.isVideoUrl(url)) {
+      ipcRenderer.send(TAB_OPEN_CHANNEL, url)
+    }
+  })
+
   await executeProjectScript(
     ['extension', 'desktop-guide.js'],
     'extension/desktop-guide.js',

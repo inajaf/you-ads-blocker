@@ -36,3 +36,13 @@ Open AdVoid from Applications (or Spotlight). YouTube loads with ad blocking and
 ## First sign-in
 
 Click **Sign in** — a clean Chrome window opens. Sign into your Google account, then close it. AdVoid remembers your session.
+
+## Features
+
+- **Browser-style tabs** — each tab is its own web view with independent ad blocking. Open a link in a new tab with **Cmd/Ctrl+click** or **middle-click**; right-click a link for a native menu (**Open in New Tab**, **Copy Link Address**, **Back**/**Forward**/**Reload**). New tab: **Cmd/Ctrl+T**; close tab: **Cmd/Ctrl+W** or the × button. A plain click navigates in the current tab.
+- **Ad blocking per tab** — network-level host blocking plus JSON pruning on every page load, so pre-roll ads don't show.
+- **Dock/taskbar icon** — the app shows its icon in the macOS Dock (dev/test uses a padded rounded variant) and the Windows taskbar (via the packaged `.ico`).
+
+## Development
+
+Run from the repo root: `npm run dev` (Electron + Vite). Tab wiring lives in `main.js` + `tab-model.js`; the strip UI is `tab-strip.html`/`.js`; click conventions are in `desktop-tab-open.js`; the context menu is `tab-context-menu.js`.

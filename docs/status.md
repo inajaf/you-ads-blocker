@@ -1,5 +1,24 @@
 # Project status
 
+## 2026-08-01 — Desktop multi-tab feature: WebContentsView tabs, per-tab ad blocking, Chrome click conventions, native context menu
+
+Browser-style tabs for the desktop app (`desktop/`, branch `fm/desktop-video-tabs`), built and shipped through the no-mistakes pipeline.
+
+### Done
+- **Multi-tab architecture**: each tab is its own `WebContentsView` (`contextIsolation: true`, `sandbox: false`, `nodeIntegration: false`, shared `session.defaultSession`), managed by `desktop/tab-model.js`; the in-window strip is a `WebContentsView` below `STRIP_HEIGHT = 42`, rendered by `tab-strip.html`/`tab-strip.js`/`tab-strip-preload.js` (plain DOM, no framework).
+- **Per-tab ad blocking**: network needles from `adblock/hosts.json` (`registerNetworkBlocking`) plus JSON pruning via `adblock/inject.js`, injected into every tab's MAIN world from `desktop/preload.js`.
+- **Pre-roll ad race fixed**: on full-page loads a 50ms `hookInitial()` poll raced the player's first read of the inline `ytInitialPlayerResponse` (old SPA flow pruned via wrapped fetch/XHR, so new-tab full loads were the trigger). Fixed with accessor properties so any assignment is pruned synchronously at write time; reproduced, fixed, and verified clean in Electron.
+- **Chrome click conventions**: plain click = same-tab SPA navigation; Cmd/Ctrl+click = new tab; middle-click (`auxclick`) = new tab (`desktop/desktop-tab-open.js`). The old video-URL → new-tab `will-navigate` hijack was removed — full navigations stay in the current tab.
+- **Native context menu**: `desktop/tab-context-menu.js` (`buildContextMenuItems`) + `contents.on('context-menu')` in `main.js` → native `Menu.popup()` (Open in New Tab, Copy Link Address/Copy selection, Back/Forward/Reload). macOS needs this wired manually — otherwise Electron shows no menu.
+- **Dock icon sizing fix**: `app.dock.setIcon` used a full-bleed PNG (glyph 100% of canvas → rendered larger than neighbouring apps). Regenerated `assets/brand/noirva-logo-v2-rounded-512.png` with the glyph at 80% (410px centered in 512, 51px transparent margin/side), squircle-masked. Packaged `.icns`/`.ico` untouched.
+- **Windows verification**: modifier detection is platform-agnostic (`event.metaKey || event.ctrlKey`); context-menu wiring is cross-platform (not darwin-gated); `runtime-paths.mjs` supports win32 (`LOCALAPPDATA`/`chrome-win64`/`chrome.exe`); strip CSS is cross-platform. `npx electron-builder --win --dir` cross-packed successfully.
+- Tests: 135/135 (`tests/adblock-inject`, `tests/tab-open`, `tests/tab-context-menu`, `tests/tab-model`, `tests/desktop-tabs`). `npm run build` green, oxlint clean.
+
+### Known issues
+- The `--win --dir` cross-pack produced win-arm64 and was **not executed on a real Windows host** — real-Windows runtime verification (icon, modifiers, context menu) is still pending.
+- The first-run guide overlay (`#tube-desktop-guide`) is full-page and intercepts right-clicks while shown; dismiss it first for the context menu to hit content.
+- Dev/test dock icon uses the padded rounded PNG; the packaged app still ships the full-bleed `.icns` (confirmed rendering correctly).
+
 ## 2026-07-22 — Android release signing set up (new keystore)
 
 Follow-up to the Noirva→AdVoid rename below. The user asked how the current
