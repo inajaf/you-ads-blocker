@@ -5,6 +5,8 @@ import android.graphics.*
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
+import android.transition.AutoTransition
+import android.transition.TransitionManager
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -16,8 +18,11 @@ import android.widget.*
 import android.app.Activity
 
 class MainActivity : Activity() {
+    private lateinit var rootLayout: LinearLayout
+    private lateinit var header: LinearLayout
     private lateinit var webView: WebView
     private lateinit var adBlocker: AdBlocker
+    private val playbackUiCoordinator = PlaybackUiCoordinator()
     private var shieldEnabled = true
     private lateinit var shieldToggle: FrameLayout
     private lateinit var shieldKnob: View
@@ -42,14 +47,14 @@ class MainActivity : Activity() {
         adBlocker = AdBlocker(this)
         adBlocker.loadAssets()
 
-        val root = LinearLayout(this).apply {
+        rootLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(darkBg)
             fitsSystemWindows = true
         }
 
         // Header with gradient background
-        val header = LinearLayout(this).apply {
+        header = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(10), dp(16), 0)
             setBackgroundColor(darkBg)
@@ -134,7 +139,7 @@ class MainActivity : Activity() {
         header.addView(LinearLayout(this), LinearLayout.LayoutParams(
             0, dp(8), 0f))
 
-        root.addView(header, LinearLayout.LayoutParams(
+        rootLayout.addView(header, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
 
         // WebView
@@ -144,19 +149,15 @@ class MainActivity : Activity() {
             settings.mediaPlaybackRequiresUserGesture = false
             settings.userAgentString = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
 
-            // JavaScript interface to detect video play/pause for screen wake lock
-            // and handle pull-to-refresh without native touch interception
+            // JavaScript reports aggregate playback state. Native code combines it
+            // with Activity/fullscreen lifecycle before changing UI or window flags.
             addJavascriptInterface(object {
                 @JavascriptInterface
-                fun onVideoPlay() {
+                fun onPlaybackStateChanged(playing: Boolean) {
                     runOnUiThread {
-                        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-                    }
-                }
-                @JavascriptInterface
-                fun onVideoPause() {
-                    runOnUiThread {
-                        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                        applyPlaybackUiState(
+                            playbackUiCoordinator.onVideoPlaybackChanged(playing)
+                        )
                     }
                 }
                 @JavascriptInterface
@@ -200,6 +201,9 @@ class MainActivity : Activity() {
 
                 override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                     super.onPageStarted(view, url, favicon)
+                    applyPlaybackUiState(
+                        playbackUiCoordinator.onVideoPlaybackChanged(false)
+                    )
                     if (shieldEnabled) {
                         adBlocker.injectScripts(view)
                     }
@@ -242,6 +246,9 @@ class MainActivity : Activity() {
                     customView = view
                     customViewCallback = callback
 
+                    applyPlaybackUiState(
+                        playbackUiCoordinator.onFullscreenChanged(true)
+                    )
                     webView.visibility = View.GONE
                     decor.systemUiVisibility = (View.SYSTEM_UI_FLAG_LAYOUT_STABLE
                         or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
@@ -273,10 +280,10 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER_HORIZONTAL or Gravity.TOP
             topMargin = dp(12)
         })
-        root.addView(webContainer, LinearLayout.LayoutParams(
+        rootLayout.addView(webContainer, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
 
-        setContentView(root)
+        setContentView(rootLayout)
     }
 
     private fun injectPageScripts(view: WebView?) {
@@ -297,6 +304,28 @@ class MainActivity : Activity() {
         customViewCallback?.onCustomViewHidden()
         customViewCallback = null
         webView.visibility = View.VISIBLE
+        applyPlaybackUiState(
+            playbackUiCoordinator.onFullscreenChanged(false)
+        )
+    }
+
+    private fun applyPlaybackUiState(state: PlaybackUiState, animateHeader: Boolean = true) {
+        val headerVisibility = if (state.headerHidden) View.GONE else View.VISIBLE
+        if (::header.isInitialized && header.visibility != headerVisibility) {
+            if (animateHeader && ::rootLayout.isInitialized && header.isLaidOut) {
+                TransitionManager.beginDelayedTransition(
+                    rootLayout,
+                    AutoTransition().apply { duration = HEADER_TRANSITION_MS },
+                )
+            }
+            header.visibility = headerVisibility
+        }
+
+        if (state.keepScreenOn) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
     }
 
     @Suppress("DEPRECATION", "MissingSuperCall")
@@ -308,9 +337,34 @@ class MainActivity : Activity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        applyPlaybackUiState(
+            playbackUiCoordinator.onActivityVisibilityChanged(true),
+            animateHeader = false,
+        )
+    }
+
+    override fun onResume() {
+        super.onResume()
+        webView.evaluateJavascript(
+            "window._advoidSyncVideoState && window._advoidSyncVideoState();",
+            null,
+        )
+    }
+
+    override fun onStop() {
+        applyPlaybackUiState(
+            playbackUiCoordinator.onActivityVisibilityChanged(false),
+            animateHeader = false,
+        )
+        super.onStop()
+    }
+
     override fun onDestroy() {
         // Persist login cookies and release the WebView so it can't leak and
         // keep running after the activity is gone.
+        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         android.webkit.CookieManager.getInstance().flush()
         (webView.parent as? ViewGroup)?.removeView(webView)
         webView.destroy()
@@ -391,29 +445,62 @@ class MainActivity : Activity() {
     }
 
     companion object {
+        private const val HEADER_TRANSITION_MS = 220L
+
         private const val VIDEO_WATCH_SCRIPT = """
             (function() {
-                if (window._advoidVideoSetup) return;
+                if (window._advoidVideoSetup) {
+                    if (window._advoidSyncVideoState) window._advoidSyncVideoState();
+                    return;
+                }
                 window._advoidVideoSetup = true;
+
+                var lastReportedPlaying = null;
+
+                function isAnyVideoPlaying() {
+                    return Array.prototype.some.call(
+                        document.querySelectorAll('video'),
+                        function(video) {
+                            return !video.paused && !video.ended;
+                        }
+                    );
+                }
+
+                function reportPlaybackState(force) {
+                    var playing = isAnyVideoPlaying();
+                    if (!force && playing === lastReportedPlaying) return;
+                    lastReportedPlaying = playing;
+                    if (window.AdVoidBridge) {
+                        AdVoidBridge.onPlaybackStateChanged(playing);
+                    }
+                }
+
+                function reportPlaybackEvent() {
+                    reportPlaybackState(false);
+                }
+
                 function setupVideoListeners() {
                     var videos = document.querySelectorAll('video');
                     videos.forEach(function(video) {
                         if (video._advoidListeners) return;
                         video._advoidListeners = true;
-                        video.addEventListener('play', function() {
-                            AdVoidBridge.onVideoPlay();
-                        });
-                        video.addEventListener('pause', function() {
-                            AdVoidBridge.onVideoPause();
-                        });
-                        video.addEventListener('ended', function() {
-                            AdVoidBridge.onVideoPause();
-                        });
+                        video.addEventListener('play', reportPlaybackEvent);
+                        video.addEventListener('playing', reportPlaybackEvent);
+                        video.addEventListener('pause', reportPlaybackEvent);
+                        video.addEventListener('ended', reportPlaybackEvent);
+                        video.addEventListener('emptied', reportPlaybackEvent);
                     });
                 }
-                setupVideoListeners();
+
+                window._advoidSyncVideoState = function() {
+                    setupVideoListeners();
+                    reportPlaybackState(true);
+                };
+
+                window._advoidSyncVideoState();
                 var observer = new MutationObserver(function() {
                     setupVideoListeners();
+                    reportPlaybackState(false);
                 });
                 observer.observe(document.documentElement, { childList: true, subtree: true });
             })();

@@ -41,6 +41,12 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Keep local QA builds installable beside the signed production app
+            // so emulator verification never requires deleting login/session data.
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+        }
         release {
             isMinifyEnabled = false
             if (hasReleaseSigning) {
@@ -75,4 +81,5 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
+    testImplementation("junit:junit:4.13.2")
 }

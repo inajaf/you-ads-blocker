@@ -29,6 +29,24 @@ Reason: `BrowserWindow.icon` doesn't control the macOS Dock (needs an `.icns` vi
 Approach: `app.dock.setIcon(resolveProjectPath('assets/brand/noirva-logo-v2-rounded-512.png'))` (darwin-gated), where the PNG is the squircle-masked glyph scaled to 80% of the canvas (410px centered in 512, 51px transparent margin/side) so macOS scales it to the same apparent size as neighbouring icons. Packaged `.icns`/`.ico` are unchanged and render correctly.
 Alternatives: (a) skip `setIcon` and accept the Electron icon in dev — poor DX; (b) generate a padded `.icns` for dev — overkill; the PNG is enough for a dev/test icon.
 
+## 2026-07-26 — Android playback state controls header visibility and screen wake
+Reason: The native "Protection active" header consumed video space outside true
+Web fullscreen, while the existing per-video play/pause bridge could clear
+`FLAG_KEEP_SCREEN_ON` when one paused video reported after another video had
+started playing. It also did not combine playback with Activity lifecycle.
+Approach: JavaScript now reports the aggregate state of every `<video>` element.
+A small Kotlin coordinator combines that state with Activity visibility and
+Web fullscreen. The header is removed from layout during active playback or
+fullscreen; the screen-on flag is active only while the Activity is visible
+and at least one video is playing. Pause/ended restores the header, and
+backgrounding always releases the flag. Debug builds use
+`com.advoid.app.debug`, allowing emulator QA beside the signed release app
+without deleting cookies or login data.
+Alternatives: (a) always hide the header — loses visible protection controls on
+feeds; (b) keep independent play/pause window-flag calls — races when YouTube
+retains multiple video elements; (c) uninstall the signed release for every
+debug build — destroys user session data.
+
 ## 2026-07-21 — Hero download CTA: primary button + "Other platforms" dropdown
 Reason: The previous flat row of two equal-weight buttons (Android + macOS)
 didn't visually prioritize the visitor's detected platform. On mobile, two
