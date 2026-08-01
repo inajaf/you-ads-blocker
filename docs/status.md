@@ -1,5 +1,21 @@
 # Project status
 
+## 2026-08-01 — Android auto-fullscreen on landscape rotation (branch fm/android-rotate-fullscreen)
+
+Rotating to landscape while a YouTube video plays now expands it to fullscreen via the existing `onShowCustomView` path, matching YouTube's expand button (16:9 letterboxed, no cropping); rotating back to portrait (or pressing Back) exits it. No-op when no video is playing and on Shorts (native YouTube never expands a 9:16 Short on rotation).
+
+### Done
+- `onConfigurationChanged` (manifest already opts into `orientation|screenSize|keyboardHidden`): landscape + no active custom view → `requestAutoFullscreen()`; portrait + active custom view → `hideCustomView()`. No `videoPlaying` gate — the JS-fed coordinator flag lags fresh SPA navigations; `FULLSCREEN_PREP_SCRIPT` re-checks the page for a playing video itself.
+- **User activation**: rotation alone gives no transient activation, so `requestFullscreen()` from plain `evaluateJavascript` fails (`TypeError: Permissions check failed`). `FULLSCREEN_PREP_SCRIPT` covers the viewport with a transparent overlay (`#advoid-fs-target`), waits for the landscape layout to settle (polling + tap retries, since a tap injected mid-relayout is silently dropped), then hands a visible on-overlay point to `AdVoidBridge.onRotationAutoFullscreen(x,y)`, which injects a synthetic `ACTION_DOWN`/`ACTION_UP` (`injectRotationTap`) and runs `AUTO_FULLSCREEN_SCRIPT`. The overlay is always removed (try/finally) and never leaks.
+- **Cropping fix**: fullscreen targets `video.closest('.html5-video-player')` (the element YouTube's expand button fullscreens), not the bare `<video>` — the bare video keeps in-page `object-fit: cover` and renders cropped in the fullscreen view; the player letterboxes to 16:9.
+- Header hiding, keep-screen-on, Back, and portrait-exit all ride the existing `PlaybackUiCoordinator` fullscreen path; added two regression tests (`rotation fullscreen hides header even when playback flag is stale`, `leaving rotation fullscreen restores header when video is paused`).
+- Verified on emulator-5554 (Pixel 9, SDK 36): 5/5 landscape rotations → fullscreen, 16:9 (732×412) video, header hidden, `KEEP_SCREEN_ON` set, portrait/Back exit, paused → no fullscreen, Shorts → no fullscreen, no overlay leak.
+- Memory convention: merged `CLAUDE.md` (Claude-Code-specific agent rules) into `AGENTS.md` and symlinked `CLAUDE.md → AGENTS.md` per `fm-ensure-agents-md.sh`.
+
+### Known issues
+- Emulator rotation delivery is flaky (`settings put system user_rotation` sometimes rotates the display without firing a config change; `wm user-rotation lock` never delivers one) — verified with a retrying helper, not an app defect.
+- Still to verify hands-on on a real device (screen size/aspect differences).
+
 ## 2026-08-01 — Desktop multi-tab feature: WebContentsView tabs, per-tab ad blocking, Chrome click conventions, native context menu
 
 Browser-style tabs for the desktop app (`desktop/`, branch `fm/desktop-video-tabs`), implemented and locally validated for the no-mistakes pipeline.

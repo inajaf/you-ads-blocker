@@ -1,13 +1,17 @@
 package com.advoid.app
 
 import android.annotation.SuppressLint
+import android.content.res.Configuration
 import android.graphics.*
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
+import android.os.SystemClock
+import android.util.Log
 import android.transition.AutoTransition
 import android.transition.TransitionManager
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -174,6 +178,24 @@ class MainActivity : Activity() {
                             webView.reload()
                         }
                     }
+                }
+                @JavascriptInterface
+                fun onRotationAutoFullscreen(x: Int, y: Int) {
+                    runOnUiThread {
+                        // requestFullscreen() needs transient user activation, which
+                        // rotation alone doesn't provide. The prep script first lays a
+                        // transparent overlay across the viewport (see
+                        // FULLSCREEN_PREP_SCRIPT), then hands us a visible point on it;
+                        // injecting a synthetic tap there is a real input event from the
+                        // WebView's perspective, so the subsequent requestFullscreen()
+                        // is accepted.
+                        injectRotationTap(x, y)
+                        webView.evaluateJavascript(AUTO_FULLSCREEN_SCRIPT, null)
+                    }
+                }
+                @JavascriptInterface
+                fun onRotationError(msg: String) {
+                    Log.e(TAG, "auto-fullscreen: $msg")
                 }
             }, "AdVoidBridge")
 
@@ -371,6 +393,48 @@ class MainActivity : Activity() {
         super.onDestroy()
     }
 
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        if (!::webView.isInitialized) return
+        when (newConfig.orientation) {
+            Configuration.ORIENTATION_LANDSCAPE -> {
+                Log.d(TAG, "onConfigurationChanged landscape, customView=${customView != null}")
+                // No videoPlaying gate here: the coordinator flag is fed by JS
+                // events that can lag a fresh SPA navigation, so it is unreliable
+                // at the instant of rotation. FULLSCREEN_PREP_SCRIPT re-checks the
+                // page for a playing video itself and does nothing when there is
+                // none, so letting it run unconditionally is safe and robust.
+                if (customView == null) {
+                    requestAutoFullscreen()
+                }
+            }
+            Configuration.ORIENTATION_PORTRAIT -> {
+                Log.d(TAG, "onConfigurationChanged portrait, customView=${customView != null}")
+                if (customView != null) {
+                    hideCustomView()
+                }
+            }
+        }
+    }
+
+    private fun requestAutoFullscreen() {
+        // FULLSCREEN_PREP_SCRIPT covers the viewport with a transparent overlay,
+        // hands a visible point back through the bridge, and retries until the
+        // landscape layout has settled so the synthetic activation tap always
+        // lands on a live, neutral element.
+        webView.evaluateJavascript(FULLSCREEN_PREP_SCRIPT, null)
+    }
+
+    private fun injectRotationTap(x: Int, y: Int) {
+        val now = SystemClock.uptimeMillis()
+        val down = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, x.toFloat(), y.toFloat(), 0)
+        val up = MotionEvent.obtain(now, now + 40, MotionEvent.ACTION_UP, x.toFloat(), y.toFloat(), 0)
+        webView.dispatchTouchEvent(down)
+        webView.dispatchTouchEvent(up)
+        down.recycle()
+        up.recycle()
+    }
+
     private fun toggleShield() {
         shieldEnabled = !shieldEnabled
         updateShieldUI()
@@ -445,7 +509,112 @@ class MainActivity : Activity() {
     }
 
     companion object {
+        private const val TAG = "AdVoid"
         private const val HEADER_TRANSITION_MS = 220L
+
+        /**
+         * Auto-fullscreen on landscape rotation. The page fullscreens the YouTube
+         * player (not the bare <video>: a bare video keeps YouTube's in-page
+         * `object-fit: cover` and gets cropped in the fullscreen view, whereas the
+         * player letterboxes it to 16:9 exactly like YouTube's expand button).
+         * That triggers the existing WebChromeClient#onShowCustomView path (custom
+         * fullscreen view + immersive system bars). Shorts are excluded: the
+         * native YouTube app never expands a 9:16 Short to fullscreen on rotation,
+         * so neither do we.
+         *
+         * Prep step: requestFullscreen() needs transient user activation, which a
+         * bare rotation never provides, so the page first covers the viewport with
+         * a transparent overlay. The tap coordinate comes from the overlay, not
+         * from the video: after rotation the player is frequently scrolled out of
+         * view, and a tap computed from its off-screen rect would land outside the
+         * window and activate nothing. The overlay guarantees the synthetic tap
+         * always lands on a visible, neutral element; it is removed again by
+         * AUTO_FULLSCREEN_SCRIPT. The tap is deferred until the renderer reports a
+         * landscape viewport — a tap injected while the WebView is mid-relayout is
+         * silently dropped, so fullscreen only engages on a settled layout.
+         */
+        private const val FULLSCREEN_PREP_SCRIPT = """
+            (function() {
+                var stale = document.getElementById('advoid-fs-target');
+                if (location.pathname.indexOf('/shorts') === 0) { if (stale) stale.remove(); return; }
+                if (document.fullscreenElement) { if (stale) stale.remove(); return; }
+                var video = Array.prototype.find.call(
+                    document.querySelectorAll('video'),
+                    function(v) { return !v.paused && !v.ended; }
+                );
+                if (!video) { if (stale) stale.remove(); return; }
+
+                function attemptTap(retries) {
+                    if (document.fullscreenElement) return;
+                    var overlay = document.getElementById('advoid-fs-target');
+                    if (!overlay) {
+                        overlay = document.createElement('div');
+                        overlay.id = 'advoid-fs-target';
+                        overlay.style.cssText =
+                            'position:fixed;left:0;top:0;width:100vw;height:100vh;' +
+                            'z-index:2147483647;background:transparent;';
+                        document.documentElement.appendChild(overlay);
+                    }
+                    // Half the shorter edge fits inside the window in any
+                    // orientation, so the tap point is never off-screen.
+                    var m = Math.round(Math.min(window.innerWidth, window.innerHeight) / 2);
+                    AdVoidBridge.onRotationAutoFullscreen(m, m);
+                    // A tap injected mid-relayout can be dropped by the renderer;
+                    // retry a few times so fullscreen reliably engages once the
+                    // landscape layout has settled.
+                    if (retries > 0) {
+                        setTimeout(function() { attemptTap(retries - 1); }, 300);
+                    }
+                }
+
+                if (window.innerWidth > window.innerHeight) { attemptTap(3); return; }
+                // Relayout is still in flight: poll until the viewport settles in
+                // landscape (or give up after ~2s), then tap.
+                var waited = 0;
+                var timer = setInterval(function() {
+                    waited += 100;
+                    if (window.innerWidth > window.innerHeight || waited >= 2000) {
+                        clearInterval(timer);
+                        attemptTap(3);
+                    }
+                }, 100);
+            })();
+        """
+
+        private const val AUTO_FULLSCREEN_SCRIPT = """
+            (function() {
+                var overlay = document.getElementById('advoid-fs-target');
+                if (location.pathname.indexOf('/shorts') === 0) {
+                    if (overlay) overlay.remove();
+                    return;
+                }
+                if (document.fullscreenElement) {
+                    if (overlay) overlay.remove();
+                    return;
+                }
+                var video = Array.prototype.find.call(
+                    document.querySelectorAll('video'),
+                    function(v) { return !v.paused && !v.ended; }
+                );
+                if (!video) {
+                    if (overlay) overlay.remove();
+                    return;
+                }
+                // Fullscreen the player so YouTube applies its own letterboxing
+                // (the bare <video> renders cropped with object-fit: cover).
+                var target = video.closest('.html5-video-player') || video;
+                try {
+                    var p = target.requestFullscreen();
+                    if (p && p.catch) p.catch(function(e) {
+                        AdVoidBridge.onRotationError('requestFullscreen rejected: ' + (e && e.message));
+                    });
+                } catch (e) {
+                    AdVoidBridge.onRotationError('requestFullscreen failed: ' + e.message);
+                } finally {
+                    if (overlay) overlay.remove();
+                }
+            })();
+        """
 
         private const val VIDEO_WATCH_SCRIPT = """
             (function() {
