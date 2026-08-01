@@ -7,6 +7,7 @@ const preloadSource = fs.readFileSync(new URL('../desktop/preload.js', import.me
 const ipcSource = fs.readFileSync(new URL('../desktop/tab-ipc.js', import.meta.url), 'utf8')
 const tabModelSource = fs.readFileSync(new URL('../desktop/tab-model.js', import.meta.url), 'utf8')
 const tabStripSource = fs.readFileSync(new URL('../desktop/tab-strip.js', import.meta.url), 'utf8')
+const tabStripHtml = fs.readFileSync(new URL('../desktop/tab-strip.html', import.meta.url), 'utf8')
 const tabStripPreloadSource = fs.readFileSync(
   new URL('../desktop/tab-strip-preload.js', import.meta.url),
   'utf8',
@@ -44,12 +45,11 @@ describe('AdVoid desktop multi-tab wiring', () => {
     assert.match(mainSource, /registerNetworkBlocking\(session\.defaultSession\)/)
   })
 
-  it('injects the click interceptor in the preload with an isolated bridge', () => {
-    assert.match(preloadSource, /desktop-tab-open\.js/)
-    assert.match(preloadSource, /NoirvaDesktopTabOpen\.register\(window\)/)
-    assert.match(preloadSource, /NoirvaDesktopTabOpen\.OPEN_VIDEO_EVENT/)
+  it('handles trusted click gestures directly in the isolated preload', () => {
+    assert.match(preloadSource, /require\('\.\/desktop-tab-open'\)/)
+    assert.match(preloadSource, /NoirvaDesktopTabOpen\.register\(window, \(url\)/)
     assert.match(preloadSource, /ipcRenderer\.send\(TAB_OPEN_CHANNEL, url\)/)
-    assert.match(preloadSource, /isVideoUrl/)
+    assert.doesNotMatch(preloadSource, /OPEN_VIDEO_EVENT/)
   })
 
   it('exposes an allowlisted tab-strip API with a state pull to avoid a race', () => {
@@ -58,5 +58,19 @@ describe('AdVoid desktop multi-tab wiring', () => {
     assert.match(tabStripSource, /advoidTabs\.getState\(\)/)
     assert.match(tabStripSource, /advoidTabs\.onState/)
     assert.match(tabModelSource, /module\.exports/)
+  })
+
+  it('keeps explicit tab opens distinct and handles fullscreen and load failures', () => {
+    assert.match(mainSource, /handleWindowOpen[\s\S]*openNewTab\(url, \{ forceNew: true \}\)/)
+    assert.match(mainSource, /open-in-new-tab'[\s\S]*forceNew: true/)
+    assert.match(mainSource, /TAB_OPEN_CHANNEL[\s\S]*forceNew: true/)
+    assert.match(mainSource, /enter-html-full-screen/)
+    assert.match(mainSource, /leave-html-full-screen/)
+    assert.match(mainSource, /loadURL\(tab\.url\)\.catch/)
+  })
+
+  it('scrolls overflowing tabs and keeps the active tab visible', () => {
+    assert.match(tabStripHtml, /overflow-x:\s*auto/)
+    assert.match(tabStripSource, /scrollIntoView/)
   })
 })

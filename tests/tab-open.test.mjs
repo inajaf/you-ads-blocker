@@ -9,22 +9,12 @@ const source = fs.readFileSync(
 )
 
 function createContext() {
-  const dispatched = []
   const context = vm.createContext({
     URL,
-    CustomEvent: class {
-      constructor(type, options) {
-        this.type = type
-        this.detail = options && options.detail
-      }
-    },
-    dispatchEvent(event) {
-      dispatched.push(event)
-    },
     location: { href: 'https://www.youtube.com/' },
   })
   vm.runInContext(source, context)
-  return { api: context.NoirvaDesktopTabOpen, dispatched }
+  return { api: context.NoirvaDesktopTabOpen }
 }
 
 function anchorWithHref(href) {
@@ -43,6 +33,7 @@ function anchorWithHref(href) {
 function clickEvent({ href, button = 0, modifiers = {}, targetTag = 'DIV' }) {
   const anchor = anchorWithHref(href)
   return {
+    isTrusted: true,
     button,
     metaKey: Boolean(modifiers.metaKey),
     ctrlKey: Boolean(modifiers.ctrlKey),
@@ -78,48 +69,46 @@ describe('AdVoid desktop video-click interceptor', () => {
   })
 
   it('lets a plain single click on a video link navigate the current tab', () => {
-    const { api, dispatched } = createContext()
+    const { api } = createContext()
     const event = clickEvent({ href: '/watch?v=video1' })
 
-    api.handleClick(event)
+    const url = api.handleClick(event)
 
     assert.equal(event.prevented, false)
     assert.equal(event.stopped, false)
-    assert.equal(dispatched.length, 0)
+    assert.equal(url, undefined)
   })
 
   it('opens a Cmd/Ctrl+click on a video link in a new tab', () => {
-    const { api, dispatched } = createContext()
+    const { api } = createContext()
     const cmd = clickEvent({ href: '/watch?v=video1', modifiers: { metaKey: true } })
     const ctrl = clickEvent({ href: '/watch?v=video1', modifiers: { ctrlKey: true } })
 
-    api.handleClick(cmd)
-    api.handleClick(ctrl)
+    const cmdUrl = api.handleClick(cmd)
+    const ctrlUrl = api.handleClick(ctrl)
 
     assert.equal(cmd.prevented, true)
     assert.equal(cmd.stopped, true)
     assert.equal(ctrl.prevented, true)
-    assert.equal(dispatched.length, 2)
-    assert.equal(dispatched[0].type, api.OPEN_VIDEO_EVENT)
-    assert.equal(dispatched[0].detail.url, 'https://www.youtube.com/watch?v=video1')
-    assert.equal(dispatched[1].detail.url, 'https://www.youtube.com/watch?v=video1')
+    assert.equal(cmdUrl, 'https://www.youtube.com/watch?v=video1')
+    assert.equal(ctrlUrl, 'https://www.youtube.com/watch?v=video1')
   })
 
   it('opens a Cmd+click on a nested element inside a video link in a new tab', () => {
-    const { api, dispatched } = createContext()
+    const { api } = createContext()
     const event = clickEvent({
       href: 'https://www.youtube.com/watch?v=abc',
       modifiers: { metaKey: true },
     })
 
-    api.handleClick(event)
+    const url = api.handleClick(event)
 
     assert.equal(event.prevented, true)
-    assert.equal(dispatched[0].detail.url, 'https://www.youtube.com/watch?v=abc')
+    assert.equal(url, 'https://www.youtube.com/watch?v=abc')
   })
 
   it('ignores non-video links so normal navigation still works', () => {
-    const { api, dispatched } = createContext()
+    const { api } = createContext()
     const plain = clickEvent({ href: '/@somechannel' })
     const cmd = clickEvent({ href: '/@somechannel', modifiers: { metaKey: true } })
 
@@ -128,11 +117,10 @@ describe('AdVoid desktop video-click interceptor', () => {
 
     assert.equal(plain.prevented, false)
     assert.equal(cmd.prevented, false)
-    assert.equal(dispatched.length, 0)
   })
 
   it('leaves Shift/Alt-modified clicks alone', () => {
-    const { api, dispatched } = createContext()
+    const { api } = createContext()
     const shift = clickEvent({ href: '/watch?v=x', modifiers: { shiftKey: true } })
     const alt = clickEvent({ href: '/watch?v=x', modifiers: { altKey: true } })
 
@@ -141,35 +129,27 @@ describe('AdVoid desktop video-click interceptor', () => {
 
     assert.equal(shift.prevented, false)
     assert.equal(alt.prevented, false)
-    assert.equal(dispatched.length, 0)
   })
 
   it('opens a middle-click on a video link in a new tab, leaves right-click alone', () => {
-    const { api, dispatched } = createContext()
+    const { api } = createContext()
     const middle = clickEvent({ href: '/watch?v=x', button: 1 })
     const right = clickEvent({ href: '/watch?v=x', button: 2 })
 
-    api.handleClick(middle)
-    api.handleClick(right)
+    const middleUrl = api.handleClick(middle)
+    const rightUrl = api.handleClick(right)
 
     assert.equal(middle.prevented, true)
     assert.equal(middle.stopped, true)
     assert.equal(right.prevented, false)
-    assert.equal(dispatched.length, 1)
-    assert.equal(dispatched[0].detail.url, 'https://www.youtube.com/watch?v=x')
+    assert.equal(middleUrl, 'https://www.youtube.com/watch?v=x')
+    assert.equal(rightUrl, undefined)
   })
 
   it('exposes a register function that attaches the capture-phase listeners', () => {
     const registered = []
     const context = vm.createContext({
       URL,
-      CustomEvent: class {
-        constructor(type, options) {
-          this.type = type
-          this.detail = options && options.detail
-        }
-      },
-      dispatchEvent() {},
       location: { href: 'https://www.youtube.com/' },
       document: {
         addEventListener(type, handler, capture) {
@@ -181,7 +161,7 @@ describe('AdVoid desktop video-click interceptor', () => {
     const { register } = context.NoirvaDesktopTabOpen
 
     assert.equal(typeof register, 'function')
-    register(context)
+    register(context, () => {})
 
     assert.deepEqual(registered, [
       { type: 'click', capture: true },
@@ -190,8 +170,9 @@ describe('AdVoid desktop video-click interceptor', () => {
   })
 
   it('ignores clicks with no anchor target', () => {
-    const { api, dispatched } = createContext()
+    const { api } = createContext()
     const event = {
+      isTrusted: true,
       button: 0,
       metaKey: true,
       ctrlKey: false,
@@ -208,6 +189,19 @@ describe('AdVoid desktop video-click interceptor', () => {
     api.handleClick(event)
 
     assert.equal(event.prevented, false)
-    assert.equal(dispatched.length, 0)
+  })
+
+  it('ignores synthetic new-tab gestures from page scripts', () => {
+    const { api } = createContext()
+    const event = clickEvent({
+      href: '/watch?v=forged',
+      modifiers: { ctrlKey: true },
+    })
+    event.isTrusted = false
+
+    const url = api.handleClick(event)
+
+    assert.equal(url, undefined)
+    assert.equal(event.prevented, false)
   })
 })

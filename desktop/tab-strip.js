@@ -60,6 +60,9 @@ function renderStrip(container, state) {
     })
 
     container.appendChild(item)
+    if (tab.id === activeId) {
+      item.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    }
   }
 }
 

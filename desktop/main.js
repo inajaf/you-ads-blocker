@@ -16,7 +16,7 @@ const path = require('path')
 const fs = require('fs')
 const { resolveProjectPath } = require('./project-path')
 const { classifyElectronNavigation, createChromeHandoffArgs } = require('./chrome-auth')
-const { createTabModel, HOME_URL, isVideoOpenUrl } = require('./tab-model')
+const { createTabModel, HOME_URL, isVideoOpenUrl, isYouTubeUrl } = require('./tab-model')
 const { buildContextMenuItems } = require('./tab-context-menu')
 const { TAB_OPEN_CHANNEL, TAB_STRIP_CHANNELS } = require('./tab-ipc')
 
@@ -74,6 +74,7 @@ let stripView = null
 let stripContents = null
 const viewsByTabId = new Map()
 let chromeHandoffStarted = false
+let htmlFullscreenTabId = null
 
 function findExtensionDir() {
   const candidates = [
@@ -150,12 +151,15 @@ function syncTabStrip() {
 function layoutViews() {
   if (!mainWindow || mainWindow.isDestroyed()) return
   const [width, height] = mainWindow.getContentSize()
-  const contentHeight = Math.max(0, height - STRIP_HEIGHT)
+  const stripVisible = htmlFullscreenTabId === null
+  const contentTop = stripVisible ? STRIP_HEIGHT : 0
+  const contentHeight = Math.max(0, height - contentTop)
   if (stripView) {
+    stripView.setVisible(stripVisible)
     stripView.setBounds({ x: 0, y: 0, width, height: STRIP_HEIGHT })
   }
   for (const view of viewsByTabId.values()) {
-    view.setBounds({ x: 0, y: STRIP_HEIGHT, width, height: contentHeight })
+    view.setBounds({ x: 0, y: contentTop, width, height: contentHeight })
   }
 }
 
@@ -181,6 +185,7 @@ function openNewTab(url = HOME_URL, { forceNew = false } = {}) {
 }
 
 function closeTab(tabId) {
+  if (htmlFullscreenTabId === tabId) htmlFullscreenTabId = null
   const view = viewsByTabId.get(tabId)
   if (view) {
     viewsByTabId.delete(tabId)
@@ -215,7 +220,9 @@ function createTabView(tab) {
   view.setVisible(false)
   viewsByTabId.set(tab.id, view)
   layoutViews()
-  contents.loadURL(tab.url)
+  void contents.loadURL(tab.url).catch((error) => {
+    console.error(`[Noirva] tab ${tab.id} failed to load ${tab.url}:`, error)
+  })
   return view
 }
 
@@ -246,7 +253,7 @@ function handleTabNavigation(tabId, details) {
 function handleWindowOpen({ url }) {
   const action = classifyElectronNavigation(url)
   if (action === 'handoff') void openSupportedChromeSignIn()
-  else if (action === 'allow') openNewTab(url)
+  else if (action === 'allow') openNewTab(url, { forceNew: true })
   else if (action === 'external') {
     void shell.openExternal(url).catch((error) => {
       console.error('[Noirva] failed to open external link:', error)
@@ -271,13 +278,13 @@ function installTabShortcuts(contents) {
   })
 }
 
-// Right-click menu for a tab. Video links get a native "Open in New Tab" item
+  // Right-click menu for a tab. YouTube links get a native "Open in New Tab" item
 // (matching the modifier/middle-click gestures); the rest is a minimal
 // browser-style menu. Electron shows no context menu by default, so without
 // this a trackpad two-finger tap on macOS does nothing.
 function showContextMenu(contents, params) {
   const items = buildContextMenuItems(params, {
-    isVideoUrl: isVideoOpenUrl,
+    isAllowedUrl: isYouTubeUrl,
     canGoBack: contents.canGoBack(),
     canGoForward: contents.canGoForward(),
   })
@@ -289,7 +296,8 @@ function showContextMenu(contents, params) {
         label: item.label,
         enabled: item.enabled,
         click: () => {
-          if (item.id === 'open-in-new-tab') openNewTab(params.linkURL)
+          if (item.id === 'open-in-new-tab')
+            openNewTab(params.linkURL, { forceNew: true })
           else if (item.id === 'copy-link') clipboard.writeText(params.linkURL)
           else if (item.id === 'copy-selection')
             clipboard.writeText(params.selectionText)
@@ -331,6 +339,14 @@ function attachTabListeners(contents, tabId) {
   contents.on('did-navigate-in-page', (event, url, isMainFrame) => {
     if (isMainFrame && tabModel.setUrl(tabId, url)) syncTabStrip()
   })
+  contents.on('enter-html-full-screen', () => {
+    htmlFullscreenTabId = tabId
+    layoutViews()
+  })
+  contents.on('leave-html-full-screen', () => {
+    if (htmlFullscreenTabId === tabId) htmlFullscreenTabId = null
+    layoutViews()
+  })
 
   installTabShortcuts(contents)
 }
@@ -360,7 +376,7 @@ function installIpcHandlers() {
   ipcMain.on(TAB_OPEN_CHANNEL, (event, url) => {
     if (typeof url !== 'string' || !isVideoOpenUrl(url)) return
     if (!isTrustedTabSender(event.sender)) return
-    openNewTab(url)
+    openNewTab(url, { forceNew: true })
   })
 }
 
@@ -430,6 +446,7 @@ function createWindow() {
     stripView = null
     stripContents = null
     viewsByTabId.clear()
+    htmlFullscreenTabId = null
     tabModel = null
   })
 

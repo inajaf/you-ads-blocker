@@ -4,13 +4,13 @@
 // so it can be unit-tested; main.js maps the returned items onto Electron Menu
 // items and actions.
 //
-// Chrome-like conventions: a right-click on a video link offers "Open in New
+// Chrome-like conventions: a right-click on an allowed link offers "Open in New
 // Tab", matching the app's other new-tab gestures (Cmd/Ctrl+click, middle-click,
 // window.open). Right-click otherwise behaves like a normal browser menu
 // (copy / back / forward / reload).
 
 function buildContextMenuItems(params, options) {
-  const isVideoUrl = options.isVideoUrl
+  const isAllowedUrl = options.isAllowedUrl
   const canGoBack = options.canGoBack === true
   const canGoForward = options.canGoForward === true
 
@@ -19,7 +19,7 @@ function buildContextMenuItems(params, options) {
     typeof params.selectionText === 'string' ? params.selectionText : ''
 
   const items = []
-  if (linkURL && isVideoUrl(linkURL)) {
+  if (linkURL && isAllowedUrl(linkURL)) {
     items.push({ id: 'open-in-new-tab', label: 'Open in New Tab' })
   }
   if (linkURL) {

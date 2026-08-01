@@ -9,6 +9,11 @@ Reason: Browser-style multi-tab support. `BrowserWindow`-based tabs would each n
 Approach: each tab is a `WebContentsView` (`contextIsolation: true`, `sandbox: false`, `nodeIntegration: false`, `backgroundThrottling: false`) managed by `desktop/tab-model.js`; the strip is a separate `WebContentsView` below `STRIP_HEIGHT = 42`; `desktop/tab-ipc.js` bridges strip clicks to the main process.
 Alternatives: (a) one `BrowserWindow` per tab with hidden windows — heavy, no shared UI; (b) a single `WebContentsView` with SPA-tab state — can't isolate ad blocking or page crashes per tab.
 
+## 2026-08-01 — Explicit desktop tab gestures always create a distinct tab
+Reason: Cmd/Ctrl-click, middle-click, context-menu open, and `window.open` express an explicit browser new-tab intent, even when the same URL is already open.
+Approach: every explicit entry point passes `forceNew`; allowed context-menu links use the shared YouTube URL allowlist; trusted gestures are captured in the isolated preload without a forgeable page-world event bridge.
+Alternatives: deduplicate explicit opens by URL — rejected because it silently changes browser click conventions and prevents deliberate duplicate playback tabs.
+
 ## 2026-08-01 — Chrome click conventions for tabs, plus a native context menu
 Reason: Users expect browser behaviour: plain click navigates in place, Cmd/Ctrl/middle-click opens a new tab, right-click offers Open-in-new-tab. Earlier builds hijacked video-URL full navigations into new tabs, which was surprising.
 Approach: `desktop-tab-open.js` intercepts capture-phase `click`/`auxclick` — `button === 1` (middle) or `button === 0` with `meta||ctrl` (no shift/alt) → open new tab; everything else passes through. A native right-click menu (`desktop/tab-context-menu.js` + `contents.on('context-menu')` → `Menu.popup()`) provides Open in New Tab, Copy Link Address/Copy selection, Back/Forward/Reload. macOS needs this wiring manually — Electron shows no menu otherwise.

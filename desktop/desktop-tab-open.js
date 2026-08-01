@@ -5,15 +5,12 @@
  * affordance, which Chromium routes through window.open). A plain single click
  * is left untouched so YouTube's SPA navigates the current tab.
  *
- * Runs in the page's MAIN world (injected via webFrame.executeJavaScript) and
- * hands the URL to the isolated-world preload bridge through a CustomEvent, so
- * it never needs Node or Electron APIs.
+ * Runs in Electron's isolated preload world, where trusted DOM input can be
+ * forwarded without exposing a page-world event bridge.
  *
  * The pure URL/click logic is exported for node:test via a vm context.
  */
 ;(function installDesktopTabOpen(global) {
-  const OPEN_VIDEO_EVENT = 'advoid-open-video-tab'
-
   function isYouTubeUrl(rawUrl) {
     let url
     try {
@@ -76,7 +73,7 @@
   }
 
   function handleClick(event) {
-    if (!wantsNewTab(event)) return
+    if (!event.isTrusted || !wantsNewTab(event)) return
 
     const anchor = closestAnchor(event.target)
     if (!anchor) return
@@ -88,10 +85,10 @@
 
     event.preventDefault()
     event.stopPropagation()
-    global.dispatchEvent(new CustomEvent(OPEN_VIDEO_EVENT, { detail: { url: url.href } }))
+    return url.href
   }
 
-  function register(globalScope) {
+  function register(globalScope, openUrl) {
     if (
       !globalScope.document ||
       typeof globalScope.document.addEventListener !== 'function'
@@ -100,12 +97,15 @@
     }
     // 'click' covers Cmd/Ctrl+click (primary button); 'auxclick' covers
     // middle-click (button 1).
-    globalScope.document.addEventListener('click', handleClick, true)
-    globalScope.document.addEventListener('auxclick', handleClick, true)
+    const onClick = (event) => {
+      const url = handleClick(event)
+      if (url) openUrl(url)
+    }
+    globalScope.document.addEventListener('click', onClick, true)
+    globalScope.document.addEventListener('auxclick', onClick, true)
   }
 
   global.NoirvaDesktopTabOpen = Object.freeze({
-    OPEN_VIDEO_EVENT,
     handleClick,
     isVideoUrl,
     isYouTubeUrl,
