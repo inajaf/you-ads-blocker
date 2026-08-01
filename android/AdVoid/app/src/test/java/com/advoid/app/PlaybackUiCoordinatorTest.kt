@@ -92,4 +92,28 @@ class PlaybackUiCoordinatorTest {
             coordinator.onActivityVisibilityChanged(false),
         )
     }
+
+    @Test
+    fun `rotation fullscreen hides header even when playback flag is stale`() {
+        // Landscape rotation enters fullscreen; the JS playback flag can lag a
+        // fresh navigation, so fullscreen alone must hide the header regardless
+        // of the cached videoPlaying state.
+        coordinator.onActivityVisibilityChanged(true)
+
+        assertEquals(
+            PlaybackUiState(headerHidden = true, keepScreenOn = false),
+            coordinator.onFullscreenChanged(true),
+        )
+    }
+
+    @Test
+    fun `leaving rotation fullscreen restores header when video is paused`() {
+        coordinator.onActivityVisibilityChanged(true)
+        coordinator.onFullscreenChanged(true)
+
+        assertEquals(
+            PlaybackUiState(headerHidden = false, keepScreenOn = false),
+            coordinator.onFullscreenChanged(false),
+        )
+    }
 }
