@@ -11,9 +11,10 @@
 // world, bypassing the CSP restriction.
 
 const fs = require('fs')
-const path = require('path')
-const { webFrame } = require('electron')
+const { ipcRenderer, webFrame } = require('electron')
 const { resolveProjectPath } = require('./project-path')
+const { TAB_OPEN_CHANNEL } = require('./tab-ipc')
+const NoirvaDesktopTabOpen = require('./desktop-tab-open')
 
 const ELECTRON_GUIDE_STORAGE_KEY = 'tube.electronDesktopGuideVersion'
 const NOIRVA_LOGO_PATH = ['extension', 'icons', 'noirva-logo-v2-128.png']
@@ -37,6 +38,11 @@ async function initializePage() {
   await executeProjectScript(['adblock', 'inject.js'], 'adblock/inject.js')
 
   webFrame.insertCSS(readProjectFile('extension', 'content.css'))
+
+  NoirvaDesktopTabOpen.register(window, (url) => {
+    ipcRenderer.send(TAB_OPEN_CHANNEL, url)
+  })
+
   await executeProjectScript(
     ['extension', 'desktop-guide.js'],
     'extension/desktop-guide.js',

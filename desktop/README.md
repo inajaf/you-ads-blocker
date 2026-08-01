@@ -36,3 +36,12 @@ Open AdVoid from Applications (or Spotlight). YouTube loads with ad blocking and
 ## First sign-in
 
 Click **Sign in** — a clean Chrome window opens. Sign into your Google account, then close it. AdVoid remembers your session.
+
+## Features
+
+- **Browser-style tabs** — each tab is its own web view and shares the signed-in session. Open a link in a new tab with **Cmd/Ctrl+click** or **middle-click**; right-click a link for a native menu (**Open in New Tab**, **Copy Link Address**, **Back**/**Forward**/**Reload**). New tab: **Cmd/Ctrl+T**; close tab: **Cmd/Ctrl+W** or the × button. A plain click navigates in the current tab. On first run, dismiss the guide before using the page's right-click menu.
+- **Ad blocking per tab** — every tab gets the same best-effort network host blocking and response pruning, including synchronous pruning of initial player data on full-page loads.
+
+## Development
+
+Run `npm run start:electron` from this directory. Its prestart hook rebuilds the extension before Electron launches. Tab wiring lives in `main.js` + `tab-model.js`; the strip UI is `tab-strip.html`/`.js`; click conventions are in `desktop-tab-open.js`; the context menu is `tab-context-menu.js`.

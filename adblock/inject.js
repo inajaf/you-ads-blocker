@@ -98,13 +98,46 @@
     }
   }
 
+  // Install accessor properties so ANY assignment — including YouTube's inline
+  // `var ytInitialPlayerResponse = {...}` on a direct watch-URL page load — is
+  // pruned synchronously at write time. Without this, the 50ms poll below races
+  // the player's first read on full-page loads (e.g. a fresh desktop tab) and a
+  // pre-roll can be scheduled before the response is ever cleaned.
+  function hookGlobalsWithAccessors() {
+    try {
+      let player = cleanPlayerResponse(window.ytInitialPlayerResponse)
+      Object.defineProperty(window, 'ytInitialPlayerResponse', {
+        configurable: true,
+        get() {
+          return player
+        },
+        set(value) {
+          player = cleanPlayerResponse(value)
+        },
+      })
+      let data = cleanInitialData(window.ytInitialData)
+      Object.defineProperty(window, 'ytInitialData', {
+        configurable: true,
+        get() {
+          return data
+        },
+        set(value) {
+          data = cleanInitialData(value)
+        },
+      })
+    } catch {
+      /* ignore */
+    }
+  }
+
+  hookGlobalsWithAccessors()
   hookInitial()
   const iv = setInterval(hookInitial, 50)
   setTimeout(() => clearInterval(iv), 5000)
 
   // Fetch: strip ads from player API responses.
   const nativeFetch = window.fetch
-  window.fetch = async function patchedFetch(input, init) {
+  window.fetch = async function patchedFetch(input, _init) {
     const res = await nativeFetch.apply(this, arguments)
     try {
       const url = typeof input === 'string' ? input : input?.url || ''

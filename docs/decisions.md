@@ -4,6 +4,31 @@
 Reason: ...
 Alternatives: ... -->
 
+## 2026-08-01 — Desktop tabs: one `WebContentsView` per tab, shared session
+Reason: Browser-style multi-tab support. `BrowserWindow`-based tabs would each need their own window chrome; a `WebContentsView` per tab keeps all tabs inside one window with an in-window strip, and shares `session.defaultSession` so a single sign-in cookie store applies to every tab.
+Approach: each tab is a `WebContentsView` (`contextIsolation: true`, `sandbox: false`, `nodeIntegration: false`, `backgroundThrottling: false`) managed by `desktop/tab-model.js`; the strip is a separate `WebContentsView` below `STRIP_HEIGHT = 42`; `desktop/tab-ipc.js` bridges strip clicks to the main process.
+Alternatives: (a) one `BrowserWindow` per tab with hidden windows — heavy, no shared UI; (b) a single `WebContentsView` with SPA-tab state — can't isolate ad blocking or page crashes per tab.
+
+## 2026-08-01 — Explicit desktop tab gestures always create a distinct tab
+Reason: Cmd/Ctrl-click, middle-click, context-menu open, and `window.open` express an explicit browser new-tab intent, even when the same URL is already open.
+Approach: every explicit entry point passes `forceNew`; allowed context-menu links use the shared YouTube URL allowlist; trusted gestures are captured in the isolated preload without a forgeable page-world event bridge.
+Alternatives: deduplicate explicit opens by URL — rejected because it silently changes browser click conventions and prevents deliberate duplicate playback tabs.
+
+## 2026-08-01 — Chrome click conventions for tabs, plus a native context menu
+Reason: Users expect browser behaviour: plain click navigates in place, Cmd/Ctrl/middle-click opens a new tab, right-click offers Open-in-new-tab. Earlier builds hijacked video-URL full navigations into new tabs, which was surprising.
+Approach: `desktop-tab-open.js` intercepts capture-phase `click`/`auxclick` — `button === 1` (middle) or `button === 0` with `meta||ctrl` (no shift/alt) → open new tab; everything else passes through. A native right-click menu (`desktop/tab-context-menu.js` + `contents.on('context-menu')` → `Menu.popup()`) provides Open in New Tab, Copy Link Address/Copy selection, Back/Forward/Reload. macOS needs this wiring manually — Electron shows no menu otherwise.
+Alternatives: (a) a custom HTML context menu — needs positioning/hide-on-outside-click logic, less native-feeling; (b) keeping the old will-navigate hijack — surprising navigation, rejected.
+
+## 2026-08-01 — Pre-roll ads pruned at write time via accessor properties
+Reason: on full-page loads a polling hook (50ms `hookInitial()`) raced the player's first read of the inline `ytInitialPlayerResponse`, so a pre-roll sometimes leaked through on new-tab loads (old SPA flow pruned via wrapped fetch/XHR and was unaffected).
+Approach: `adblock/inject.js` installs accessor properties on `ytInitialPlayerResponse`/`ytInitialData` so any assignment is JSON-pruned synchronously at write time — no poll, no race. Shared source consumed by desktop, the legacy Android wrapper, and the extension.
+Alternatives: keep polling faster — still racy; wrap at a lower level (e.g. preload setter on the global) — not available across all consumers.
+
+## 2026-08-01 — macOS Dock icon: padded rounded PNG via `app.dock.setIcon` (dev/test); `.icns`/`.ico` for packaging
+Reason: `BrowserWindow.icon` doesn't control the macOS Dock (needs an `.icns` via `build.mac.icon` when packaged), so dev/test launches showed the default Electron icon. A first rounded variant was full-bleed (glyph 100% of canvas) and the Dock rendered it noticeably larger than neighbouring apps.
+Approach: `app.dock.setIcon(resolveProjectPath('assets/brand/noirva-logo-v2-rounded-512.png'))` (darwin-gated), where the PNG is the squircle-masked glyph scaled to 80% of the canvas (410px centered in 512, 51px transparent margin/side) so macOS scales it to the same apparent size as neighbouring icons. Packaged `.icns`/`.ico` are unchanged and render correctly.
+Alternatives: (a) skip `setIcon` and accept the Electron icon in dev — poor DX; (b) generate a padded `.icns` for dev — overkill; the PNG is enough for a dev/test icon.
+
 ## 2026-07-21 — Hero download CTA: primary button + "Other platforms" dropdown
 Reason: The previous flat row of two equal-weight buttons (Android + macOS)
 didn't visually prioritize the visitor's detected platform. On mobile, two

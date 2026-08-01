@@ -1,11 +1,24 @@
 'use strict'
 
 const { spawn } = require('child_process')
-const { app, BrowserWindow, dialog, Menu, session, shell } = require('electron')
+const {
+  app,
+  BrowserWindow,
+  clipboard,
+  dialog,
+  ipcMain,
+  Menu,
+  session,
+  shell,
+  WebContentsView,
+} = require('electron')
 const path = require('path')
 const fs = require('fs')
 const { resolveProjectPath } = require('./project-path')
 const { classifyElectronNavigation, createChromeHandoffArgs } = require('./chrome-auth')
+const { createTabModel, HOME_URL, isVideoOpenUrl, isYouTubeUrl } = require('./tab-model')
+const { buildContextMenuItems } = require('./tab-context-menu')
+const { TAB_OPEN_CHANNEL, TAB_STRIP_CHANNELS } = require('./tab-ipc')
 
 // Keep YouTube rendering consistent with the Chromium engine bundled in this
 // Electron build. Google account authentication is handled separately in a
@@ -20,6 +33,9 @@ const chromeUserAgent = [
 ].join(' ')
 app.userAgentFallback = chromeUserAgent
 app.setName('Noirva')
+
+// Height of the in-window tab strip; video pages render below it.
+const STRIP_HEIGHT = 42
 
 // --- Load the shared ad-host blocklist (single source of truth in ../adblock) ---
 const hostsPath = resolveProjectPath('adblock', 'hosts.json')
@@ -53,7 +69,12 @@ function registerNetworkBlocking(sess) {
 }
 
 let mainWindow = null
+let tabModel = null
+let stripView = null
+let stripContents = null
+const viewsByTabId = new Map()
 let chromeHandoffStarted = false
+let htmlFullscreenTabId = null
 
 function findExtensionDir() {
   const candidates = [
@@ -107,9 +128,113 @@ async function openSupportedChromeSignIn() {
   }
 }
 
-function handleMainFrameNavigation(details) {
+// --- Tab state + chrome ----------------------------------------------------
+
+function buildTabStripState() {
+  return {
+    activeId: tabModel.activeId,
+    tabs: tabModel.getTabs().map((tab) => ({
+      id: tab.id,
+      title: tab.title,
+      url: tab.url,
+      active: tab.id === tabModel.activeId,
+      loading: tab.loading,
+    })),
+  }
+}
+
+function syncTabStrip() {
+  if (!stripContents || stripContents.isDestroyed()) return
+  stripContents.send(TAB_STRIP_CHANNELS.setState, buildTabStripState())
+}
+
+function layoutViews() {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  const [width, height] = mainWindow.getContentSize()
+  const stripVisible = htmlFullscreenTabId === null
+  const contentTop = stripVisible ? STRIP_HEIGHT : 0
+  const contentHeight = Math.max(0, height - contentTop)
+  if (stripView) {
+    stripView.setVisible(stripVisible)
+    stripView.setBounds({ x: 0, y: 0, width, height: STRIP_HEIGHT })
+  }
+  for (const view of viewsByTabId.values()) {
+    view.setBounds({ x: 0, y: contentTop, width, height: contentHeight })
+  }
+}
+
+function activateTab(tabId) {
+  if (!tabModel.selectTab(tabId)) return
+  for (const [id, view] of viewsByTabId) {
+    const isActive = id === tabId
+    view.setVisible(isActive)
+    if (isActive) view.webContents.focus()
+  }
+  syncTabStrip()
+}
+
+function selectTab(tabId) {
+  if (tabModel.selectTab(tabId)) activateTab(tabId)
+}
+
+function openNewTab(url = HOME_URL, { forceNew = false } = {}) {
+  const { tab, created } = tabModel.openTab(url, { forceNew })
+  if (created) createTabView(tab)
+  activateTab(tab.id)
+  return tab
+}
+
+function closeTab(tabId) {
+  if (htmlFullscreenTabId === tabId) htmlFullscreenTabId = null
+  const view = viewsByTabId.get(tabId)
+  if (view) {
+    viewsByTabId.delete(tabId)
+    mainWindow?.contentView.removeChildView(view)
+    if (!view.webContents.isDestroyed()) view.webContents.close()
+  }
+  tabModel.closeTab(tabId)
+  if (tabModel.isEmpty()) {
+    openNewTab(HOME_URL)
+  } else {
+    layoutViews()
+    activateTab(tabModel.activeId)
+  }
+}
+
+function createTabView(tab) {
+  const view = new WebContentsView({
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      sandbox: false,
+      nodeIntegration: false,
+      // Keep background tabs' timers/players running so videos keep playing
+      // while another tab is focused (browser-like parallel playback).
+      backgroundThrottling: false,
+    },
+  })
+  const contents = view.webContents
+  contents.setUserAgent(chromeUserAgent)
+  attachTabListeners(contents, tab.id)
+  mainWindow.contentView.addChildView(view)
+  view.setVisible(false)
+  viewsByTabId.set(tab.id, view)
+  layoutViews()
+  void contents.loadURL(tab.url).catch((error) => {
+    console.error(`[Noirva] tab ${tab.id} failed to load ${tab.url}:`, error)
+  })
+  return view
+}
+
+// --- Navigation policy (per tab) ------------------------------------------
+
+function handleTabNavigation(tabId, details) {
   if (!details.isMainFrame) return
 
+  // Plain navigations (SPA or full-page) always happen in the current tab —
+  // Chrome conventions: new tabs are created only by explicit gestures
+  // (Cmd/Ctrl+click, middle-click, context menu), handled via the isolated
+  // preload interceptor or window.open, not by hijacking navigations here.
   const action = classifyElectronNavigation(details.url)
   if (action === 'allow') return
 
@@ -128,7 +253,7 @@ function handleMainFrameNavigation(details) {
 function handleWindowOpen({ url }) {
   const action = classifyElectronNavigation(url)
   if (action === 'handoff') void openSupportedChromeSignIn()
-  else if (action === 'allow') void mainWindow?.loadURL(url)
+  else if (action === 'allow') openNewTab(url, { forceNew: true })
   else if (action === 'external') {
     void shell.openExternal(url).catch((error) => {
       console.error('[Noirva] failed to open external link:', error)
@@ -137,14 +262,170 @@ function handleWindowOpen({ url }) {
   return { action: 'deny' }
 }
 
+function installTabShortcuts(contents) {
+  contents.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown') return
+    const primary = process.platform === 'darwin' ? input.meta : input.control
+    if (!primary || input.alt || input.shift) return
+    const key = input.key.toLowerCase()
+    if (key === 't') {
+      event.preventDefault()
+      openNewTab(HOME_URL, { forceNew: true })
+    } else if (key === 'w') {
+      event.preventDefault()
+      if (tabModel.activeId !== null) closeTab(tabModel.activeId)
+    }
+  })
+}
+
+// Right-click menu for a tab. YouTube links get a native "Open in New Tab" item
+// (matching the modifier/middle-click gestures); the rest is a minimal
+// browser-style menu. Electron shows no context menu by default, so without
+// this a trackpad two-finger tap on macOS does nothing.
+function showContextMenu(contents, params) {
+  const items = buildContextMenuItems(params, {
+    isAllowedUrl: isYouTubeUrl,
+    canGoBack: contents.canGoBack(),
+    canGoForward: contents.canGoForward(),
+  })
+  if (items.length === 0) return
+  const menu = Menu.buildFromTemplate(
+    items.map((item) => {
+      if (item.type === 'separator') return { type: 'separator' }
+      return {
+        label: item.label,
+        enabled: item.enabled,
+        click: () => {
+          if (item.id === 'open-in-new-tab')
+            openNewTab(params.linkURL, { forceNew: true })
+          else if (item.id === 'copy-link') clipboard.writeText(params.linkURL)
+          else if (item.id === 'copy-selection')
+            clipboard.writeText(params.selectionText)
+          else if (item.id === 'back') contents.goBack()
+          else if (item.id === 'forward') contents.goForward()
+          else if (item.id === 'reload') contents.reload()
+        },
+      }
+    }),
+  )
+  menu.popup({ window: BrowserWindow.fromWebContents(contents) })
+}
+
+function attachTabListeners(contents, tabId) {
+  // Surface the renderer console (incl. the inject success line) in main stdout.
+  contents.on('console-message', (event, level, message) => {
+    console.log('[renderer]', message)
+  })
+
+  contents.on('will-navigate', (details) => handleTabNavigation(tabId, details))
+  contents.on('will-redirect', (details) =>
+    handleTabNavigation(tabId, details),
+  )
+  contents.setWindowOpenHandler(handleWindowOpen)
+  contents.on('context-menu', (event, params) => showContextMenu(contents, params))
+
+  contents.on('page-title-updated', (event, title) => {
+    if (tabModel.setTitle(tabId, title)) syncTabStrip()
+  })
+  contents.on('did-start-loading', () => {
+    if (tabModel.setLoading(tabId, true)) syncTabStrip()
+  })
+  contents.on('did-stop-loading', () => {
+    if (tabModel.setLoading(tabId, false)) syncTabStrip()
+  })
+  contents.on('did-navigate', (event, url) => {
+    if (tabModel.setUrl(tabId, url)) syncTabStrip()
+  })
+  contents.on('did-navigate-in-page', (event, url, isMainFrame) => {
+    if (isMainFrame && tabModel.setUrl(tabId, url)) syncTabStrip()
+  })
+  contents.on('enter-html-full-screen', () => {
+    htmlFullscreenTabId = tabId
+    layoutViews()
+  })
+  contents.on('leave-html-full-screen', () => {
+    if (htmlFullscreenTabId === tabId) htmlFullscreenTabId = null
+    layoutViews()
+  })
+
+  installTabShortcuts(contents)
+}
+
+function isTrustedTabSender(sender) {
+  for (const view of viewsByTabId.values()) {
+    if (view.webContents === sender) return true
+  }
+  return false
+}
+
+function installIpcHandlers() {
+  ipcMain.handle(TAB_STRIP_CHANNELS.getState, () => buildTabStripState())
+
+  ipcMain.on(TAB_STRIP_CHANNELS.selectTab, (event, id) => {
+    if (Number.isInteger(id)) selectTab(id)
+  })
+  ipcMain.on(TAB_STRIP_CHANNELS.closeTab, (event, id) => {
+    if (Number.isInteger(id)) closeTab(id)
+  })
+  ipcMain.on(TAB_STRIP_CHANNELS.newTab, () => openNewTab(HOME_URL, { forceNew: true }))
+
+  // Sent by the isolated preload click interceptor when an
+  // explicit new-tab gesture (Cmd/Ctrl+click, middle-click) hits a video link.
+  // Only trusted tab renderers and video URLs are accepted so a compromised
+  // page can only ever open a YouTube tab.
+  ipcMain.on(TAB_OPEN_CHANNEL, (event, url) => {
+    if (typeof url !== 'string' || !isVideoOpenUrl(url)) return
+    if (!isTrustedTabSender(event.sender)) return
+    openNewTab(url, { forceNew: true })
+  })
+}
+
+// --- Window + strip --------------------------------------------------------
+
+function createTabStrip() {
+  stripView = new WebContentsView({
+    webPreferences: {
+      preload: path.join(__dirname, 'tab-strip-preload.js'),
+      contextIsolation: true,
+      sandbox: false,
+      nodeIntegration: false,
+    },
+  })
+  mainWindow.contentView.addChildView(stripView)
+  stripContents = stripView.webContents
+  stripContents.on('console-message', (event, level, message) => {
+    console.log('[strip]', message)
+  })
+  installTabShortcuts(stripContents)
+  stripContents.loadFile(path.join(__dirname, 'tab-strip.html'))
+}
+
+function scheduleScreenshotIfRequested() {
+  if (!(process.env.NOIRVA_SCREENSHOT || process.env.TUBE_SCREENSHOT)) return
+  const view = viewsByTabId.get(tabModel.activeId)
+  if (!view) return
+  view.webContents.once('did-finish-load', () => {
+    setTimeout(async () => {
+      try {
+        const img = await view.webContents.capturePage()
+        fs.writeFileSync(path.join(__dirname, 'screenshot.png'), img.toPNG())
+        console.log('[Noirva] screenshot saved')
+      } catch (error) {
+        console.error('[Noirva] screenshot failed:', error)
+      }
+      setTimeout(() => app.quit(), 1500)
+    }, 6000)
+  })
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     title: 'Noirva',
+    backgroundColor: '#0b0b0d',
     icon: resolveProjectPath('assets', 'brand', 'noirva-logo-v2-512.png'),
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       sandbox: false,
       nodeIntegration: false,
@@ -155,44 +436,42 @@ function createWindow() {
   Menu.setApplicationMenu(null)
   mainWindow.setTitle('Noirva')
 
-  // Surface the renderer console (incl. the inject success line) in main stdout.
-  mainWindow.webContents.on('console-message', (event, level, message) => {
-    console.log('[renderer]', message)
+  tabModel = createTabModel()
+  createTabStrip()
+  openNewTab(HOME_URL)
+
+  mainWindow.on('resize', layoutViews)
+  mainWindow.on('closed', () => {
+    mainWindow = null
+    stripView = null
+    stripContents = null
+    viewsByTabId.clear()
+    htmlFullscreenTabId = null
+    tabModel = null
   })
 
-  // Also pin the top-level webContents UA for normal YouTube browsing.
-  mainWindow.webContents.setUserAgent(chromeUserAgent)
-
-  mainWindow.webContents.on('will-navigate', handleMainFrameNavigation)
-  mainWindow.webContents.on('will-redirect', handleMainFrameNavigation)
-  mainWindow.webContents.setWindowOpenHandler(handleWindowOpen)
-
-  mainWindow.loadURL('https://www.youtube.com')
-
-  // TEMP-VERIFY: screenshot a few seconds after load to prove real youtube loads.
-  if (process.env.NOIRVA_SCREENSHOT || process.env.TUBE_SCREENSHOT) {
-    mainWindow.webContents.once('did-finish-load', () => {
-      setTimeout(async () => {
-        try {
-          const img = await mainWindow.webContents.capturePage()
-          fs.writeFileSync(
-            path.join(__dirname, 'screenshot.png'),
-            img.toPNG(),
-          )
-          console.log('[Noirva] screenshot saved')
-        } catch (e) {
-          console.error('[Noirva] screenshot failed:', e)
-        }
-        setTimeout(() => app.quit(), 1500)
-      }, 6000)
-    })
-  }
+  scheduleScreenshotIfRequested()
 }
 
 app.whenReady().then(() => {
   // Keep normal renderer state persistent. Google authentication itself is
-  // redirected to the dedicated Chrome profile above.
+  // redirected to the dedicated Chrome profile above. All tabs share this
+  // default session (cookies/storage), which also means the blocklist applies
+  // to every tab.
   registerNetworkBlocking(session.defaultSession)
+
+  installIpcHandlers()
+
+  // BrowserWindow.icon does not control the macOS Dock (that needs an .icns via
+  // build.mac.icon when packaged); set it explicitly so dev/test launches show
+  // the AdVoid icon instead of the default Electron one. macOS normally applies
+  // the squircle mask to packaged .app icons, so dev needs the pre-rounded
+  // variant (source PNGs are opaque rectangles).
+  if (process.platform === 'darwin' && app.dock) {
+    app.dock.setIcon(
+      resolveProjectPath('assets', 'brand', 'noirva-logo-v2-rounded-512.png'),
+    )
+  }
 
   createWindow()
 
