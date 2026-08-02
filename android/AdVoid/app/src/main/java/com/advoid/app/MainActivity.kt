@@ -706,6 +706,10 @@ class MainActivity : Activity() {
                     // play button visible during loading.
                     var el = document.createElement('div');
                     el.id = 'advoid-loading-overlay';
+                    // The logo and its spinner are one element: a frame holding
+                    // the logo, wrapped by a ring that spins around it.
+                    var frame = document.createElement('div');
+                    frame.className = 'advoid-logo-ring';
                     var img = document.createElement('img');
                     img.src = '__ADVOID_LOGO_DATA_URI__';
                     img.alt = 'AdVoid';
@@ -713,8 +717,9 @@ class MainActivity : Activity() {
                     var spinner = document.createElement('div');
                     spinner.className = 'advoid-spinner';
                     spinner.setAttribute('aria-hidden', 'true');
-                    el.appendChild(img);
-                    el.appendChild(spinner);
+                    frame.appendChild(img);
+                    frame.appendChild(spinner);
+                    el.appendChild(frame);
                     player.appendChild(el);
                     return el;
                 }
@@ -907,8 +912,9 @@ class MainActivity : Activity() {
          * PULL_REFRESH_SCRIPT keeps in sync with SPA navigation. Also styles
          * the loading overlay: while a watch video is actually loading (the
          * .html5-video-player carries the .advoid-loading class that
-         * VIDEO_WATCH_SCRIPT toggles), the grey centre play button is hidden
-         * and the AdVoid logo + spinner shows instead.
+         * VIDEO_WATCH_SCRIPT toggles), a dark plate fades in over the whole
+         * player — hiding the grey background and centre play button — with
+         * the AdVoid logo in the middle and a thin spinner ring around it.
          */
         private const val STYLE_SCRIPT = """
             (function() {
@@ -934,31 +940,52 @@ class MainActivity : Activity() {
                     '.html5-video-player.advoid-loading .ytp-large-play-button {',
                     '  display: none !important;',
                     '}',
+                    // The overlay is a full-player dark plate: it stretches over
+                    // the whole player area so nothing of the grey background or
+                    // centre play button shows through while a video loads.
+                    // pointer-events: none keeps taps flowing through to the
+                    // player, and the fade-in eases the plate in on show.
                     '#advoid-loading-overlay {',
                     '  position: absolute;',
-                    '  left: 50%; top: 50%;',
-                    '  transform: translate(-50%, -50%);',
+                    '  left: 0; top: 0;',
+                    '  width: 100%; height: 100%;',
                     '  display: none;',
-                    '  flex-direction: column;',
                     '  align-items: center;',
                     '  justify-content: center;',
+                    '  background: rgba(0,0,0,0.6);',
                     '  z-index: 1000;',
                     '  pointer-events: none;',
-                    '  text-align: center;',
                     '}',
                     '.html5-video-player.advoid-loading #advoid-loading-overlay {',
                     '  display: flex;',
+                    '  animation: advoid-fade-in 0.25s ease;',
                     '}',
-                    '#advoid-loading-overlay img {',
+                    '@keyframes advoid-fade-in {',
+                    '  from { opacity: 0; }',
+                    '  to { opacity: 1; }',
+                    '}',
+                    // The logo sits centered inside the ring, which spins around
+                    // it as a thin circular border; together they read as a
+                    // single element rather than a logo with a spinner below.
+                    '#advoid-loading-overlay .advoid-logo-ring {',
+                    '  position: relative;',
+                    '  width: 112px; height: 112px;',
+                    '  display: flex;',
+                    '  align-items: center;',
+                    '  justify-content: center;',
+                    '}',
+                    '#advoid-loading-overlay .advoid-logo-ring img {',
                     '  width: 88px; height: 88px;',
                     '  display: block;',
+                    '  border-radius: 50%;',
                     '  box-shadow: 0 2px 16px rgba(0,0,0,0.45);',
                     '}',
                     '#advoid-loading-overlay .advoid-spinner {',
-                    '  width: 36px; height: 36px;',
-                    '  margin-top: 16px;',
+                    '  position: absolute;',
+                    '  left: 0; top: 0;',
+                    '  width: 112px; height: 112px;',
                     '  border-radius: 50%;',
-                    '  border: 3px solid rgba(255,255,255,0.22);',
+                    '  border: 3px solid rgba(255,255,255,0.25);',
                     '  border-top-color: #5FCA6B;',
                     '  animation: advoid-spin 0.9s linear infinite;',
                     '}',

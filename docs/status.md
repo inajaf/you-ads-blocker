@@ -1,5 +1,26 @@
 # Project status
 
+## 2026-08-02 — Loading overlay redesigned: dark plate + logo ring (branch fm/android-loading-redesign)
+
+The captain rejected the v1.3.x loading overlay (88px logo + small spinner floating over
+YouTube's grey player as an obvious overlay). New design in `MainActivity.kt`:
+- The overlay (`#advoid-loading-overlay`) is now a full-player dark plate
+  (`width/height: 100%`, `background: rgba(0,0,0,0.6)`), so the grey background and
+  centre play button are fully covered — nothing shows through.
+- The logo sits centered inside a thin ring that spins around it (`.advoid-logo-ring`
+  frame wrapping the `<img>` + an absolutely-positioned `.advoid-spinner` circular
+  border) — one visual element, no longer logo + spinner stacked.
+- Fades in on show (`advoid-fade-in`, 0.25s). `pointer-events: none` unchanged, so taps
+  still reach the player.
+- `readyState`-based loading-vs-pause logic, Shorts exclusion, and rotation fullscreen
+  untouched. `createOverlay` still builds with DOM APIs (Trusted-Types-safe).
+- Tests: `tests/advoid-video-loading.test.mjs` updated for the frame/ring markup (was
+  asserting `overlay.children = [img, spinner]`) and gained a new suite asserting the
+  STYLE_SCRIPT contains the dark plate + fade-in + ring rules.
+- Gates: `npm test` 149/149, `npm run build`, oxlint clean, Android `testDebugUnitTest`
+  + `assembleDebug` green. Still to verify hands-on in an emulator: the plate visually
+  hides the grey player during real cold-start/SPA loads.
+
 ## 2026-08-02 — Android v1.3.1 release cut: loading overlay now actually shows
 
 PR #33 (`fix(android): build loading overlay with DOM APIs, not innerHTML`) fixes the

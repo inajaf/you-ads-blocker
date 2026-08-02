@@ -4,6 +4,20 @@
 Reason: ...
 Alternatives: ... -->
 
+## 2026-08-02 — Loading overlay is a full-player dark plate with a logo wrapped by a spinning ring
+Reason: the captain rejected the v1.3.x overlay look (an 88px logo + small spinner
+floating over YouTube's grey player) as a "floating overlay". The overlay now stretches
+over the whole `.html5-video-player` (`width/height: 100%`, `background:
+rgba(0,0,0,0.6)`) so the grey background and centre play button are fully covered, and
+the logo sits centered inside a thin ring (`#advoid-loading-overlay .advoid-logo-ring`
+frame; `.advoid-spinner` is an absolute circular border that spins around the logo —
+one visual element, not logo + spinner below). It fades in (`advoid-fade-in`, 0.25s).
+The readyState-based loading-vs-pause logic in `VIDEO_WATCH_SCRIPT` is unchanged.
+Alternatives: keep the transparent floating overlay (rejected: it looked like content
+"floating on top" of the player); make the ring a CSS `::before` on the logo (kept an
+explicit `.advoid-spinner` element instead — matches existing markup, testable in the
+node suite, Trusted-Types-safe DOM construction preserved).
+
 ## 2026-08-02 — Loading overlay must be built with DOM APIs, never `innerHTML` (Trusted Types)
 Reason: v1.3.0's loading overlay (`createOverlay` in `VIDEO_WATCH_SCRIPT_TEMPLATE`) was built
 via `el.innerHTML = '<img …/>' + '<div class="advoid-spinner" …/>'`. On real m.youtube.com
