@@ -4,6 +4,25 @@
 Reason: ...
 Alternatives: ... -->
 
+## 2026-08-02 — Android: protection is always on; native header removed
+Reason: The Android app is entirely a YouTube ad blocker, so blocking is always
+active by design — a user-facing "Protection active" toggle/badge only invites
+confusion and wastes screen space. The header consumed vertical space above the
+WebView and its controls had nothing to disable, so it was removed outright; the
+WebView now fills from the top of the screen.
+Approach: `MainActivity` no longer builds the header (status card, shield icon,
+label, toggle, privacy line). `shouldInterceptRequest` and `onPageStarted`
+blocking/script injection run unconditionally; the `shieldEnabled` field and its
+`toggleShield`/`updateShieldUI`/`animateShield` helpers, the `ShieldDrawable`,
+and the click listeners are gone. `PlaybackUiCoordinator` drops the now-dead
+`headerHidden`/fullscreen tracking and only drives
+`FLAG_KEEP_SCREEN_ON` (`activityVisible && videoPlaying`); its unit tests were
+rewritten around keep-screen-on only. Rotation auto-fullscreen, letterboxing,
+Shorts exclusion, back-button, and pull-to-refresh behavior are untouched.
+Alternatives: (a) keep the toggle but default it on — contradicts always-on and
+leaves dead UI; (b) move the status into a transient overlay — reintroduces
+surface area with no user benefit.
+
 ## 2026-08-01 — Desktop tabs: one `WebContentsView` per tab, shared session
 Reason: Browser-style multi-tab support. `BrowserWindow`-based tabs would each need their own window chrome; a `WebContentsView` per tab keeps all tabs inside one window with an in-window strip, and shares `session.defaultSession` so a single sign-in cookie store applies to every tab.
 Approach: each tab is a `WebContentsView` (`contextIsolation: true`, `sandbox: false`, `nodeIntegration: false`, `backgroundThrottling: false`) managed by `desktop/tab-model.js`; the strip is a separate `WebContentsView` below `STRIP_HEIGHT = 42`; `desktop/tab-ipc.js` bridges strip clicks to the main process.
@@ -29,19 +48,21 @@ Reason: `BrowserWindow.icon` doesn't control the macOS Dock (needs an `.icns` vi
 Approach: `app.dock.setIcon(resolveProjectPath('assets/brand/noirva-logo-v2-rounded-512.png'))` (darwin-gated), where the PNG is the squircle-masked glyph scaled to 80% of the canvas (410px centered in 512, 51px transparent margin/side) so macOS scales it to the same apparent size as neighbouring icons. Packaged `.icns`/`.ico` are unchanged and render correctly.
 Alternatives: (a) skip `setIcon` and accept the Electron icon in dev — poor DX; (b) generate a padded `.icns` for dev — overkill; the PNG is enough for a dev/test icon.
 
-## 2026-07-26 — Android playback state controls header visibility and screen wake
-Reason: The native "Protection active" header consumed video space outside true
-Web fullscreen, while the existing per-video play/pause bridge could clear
+## 2026-07-26 — Android playback state controls screen wake (header since removed)
+Reason: The existing per-video play/pause bridge could clear
 `FLAG_KEEP_SCREEN_ON` when one paused video reported after another video had
-started playing. It also did not combine playback with Activity lifecycle.
-Approach: JavaScript now reports the aggregate state of every `<video>` element.
-A small Kotlin coordinator combines that state with Activity visibility and
-Web fullscreen. The header is removed from layout during active playback or
-fullscreen; the screen-on flag is active only while the Activity is visible
-and at least one video is playing. Pause/ended restores the header, and
-backgrounding always releases the flag. Debug builds use
-`com.advoid.app.debug`, allowing emulator QA beside the signed release app
-without deleting cookies or login data.
+started playing, and did not combine playback with Activity lifecycle. The
+native "Protection active" header also consumed video space outside true Web
+fullscreen, which was the original motivation for hiding it during playback.
+Approach: JavaScript reports the aggregate state of every `<video>` element. A
+small Kotlin coordinator combines that state with Activity visibility: the
+screen-on flag is active only while the Activity is visible and at least one
+video is playing, and backgrounding always releases the flag. Header
+visibility was driven from the same coordinator until the header itself was
+removed on 2026-08-02 (protection is always on — see the entry above), leaving
+only the keep-screen-on behavior. Debug builds use `com.advoid.app.debug`,
+allowing emulator QA beside the signed release app without deleting cookies or
+login data.
 Alternatives: (a) always hide the header — loses visible protection controls on
 feeds; (b) keep independent play/pause window-flag calls — races when YouTube
 retains multiple video elements; (c) uninstall the signed release for every

@@ -1,5 +1,31 @@
 # Project status
 
+## 2026-08-02 — Android protection is always on; native header removed
+
+The AdVoid Android app is entirely a YouTube ad blocker, so blocking is always
+active by design — the native "Protection active" header (status card, shield
+icon, toggle, privacy line) was removed and the WebView now fills from the top
+of the screen with nothing above it.
+
+### Done
+- Removed the header UI from `MainActivity.onCreate` entirely: no status card,
+  no shield icon/label, no toggle/knob, no privacy line, no header layout above
+  the WebView.
+- Protection is now permanently on: `shouldInterceptRequest` and `onPageStarted`
+  block and inject scripts unconditionally (no `shieldEnabled` guard). Removed
+  `shieldEnabled`, `toggleShield`, `updateShieldUI`, `animateShield`, the
+  `ShieldDrawable` class, and their click listeners.
+- `PlaybackUiCoordinator` no longer tracks `headerHidden`/fullscreen; it only
+  drives `FLAG_KEEP_SCREEN_ON` (`activityVisible && videoPlaying`). The
+  `onFullscreenChanged` call sites in the WebChromeClient custom-view path were
+  removed as dead. Unit tests rewritten around keep-screen-on only
+  (`PlaybackUiCoordinatorTest`, 5 tests).
+- Everything else untouched: WebView setup, keep-screen-on lifecycle,
+  rotation auto-fullscreen (letterboxing, Shorts exclusion), back button,
+  pull-to-refresh, and all desktop/web code.
+- Verified: `./gradlew testDebugUnitTest` and `assembleDebug` pass, plus
+  `npm test` / `npm run build` from the repo root (no web changes).
+
 ## 2026-08-01 — Android auto-fullscreen on landscape rotation (branch fm/android-rotate-fullscreen)
 
 Rotating to landscape while a YouTube video plays now expands it to fullscreen via the existing `onShowCustomView` path, matching YouTube's expand button (16:9 letterboxed, no cropping); rotating back to portrait (or pressing Back) exits it. No-op when no video is playing and on Shorts (native YouTube never expands a 9:16 Short on rotation).
@@ -39,13 +65,12 @@ Browser-style tabs for the desktop app (`desktop/`, branch `fm/desktop-video-tab
 ## 2026-07-26 — Android playback header and screen-wake lifecycle
 
 Done:
-- The native `Protection active` header now automatically leaves the layout
-  while any YouTube video is playing, including non-fullscreen playback, so the
-  WebView receives the full available height. Pause/ended restores the controls;
-  true Web fullscreen also keeps the header hidden.
 - Replaced independent per-video `onVideoPlay`/`onVideoPause` window mutations
   with aggregate JavaScript playback reporting plus a testable Kotlin
-  `PlaybackUiCoordinator`.
+  `PlaybackUiCoordinator`. (The `Protection active` header this entry was
+  originally about was removed entirely on 2026-08-02 — protection is always
+  on; only the coordinator's keep-screen-on behavior remains, see the entry at
+  the top of this file.)
 - `FLAG_KEEP_SCREEN_ON` is now conditional on both active playback and a started
   Activity. Stopping releases it, while `onResume` re-syncs the actual WebView
   state; paused-but-visible multi-window Activities retain the playback UI and
@@ -179,8 +204,9 @@ the actively-developed app; the older `android/` wrapper (`app.tube`) predates
 it and was not touched. Built and tested hands-on in an Android emulator
 (Pixel 9, API 36) via `adb`/CDP (chrome://inspect over `adb forward` +
 `webview_devtools_remote_<pid>`), clicking through every main flow as a real
-user: home feed, search, watch, Shorts, You/sign-in, Settings, shield toggle,
-back button at every level, fullscreen, rotation, app resume.
+user: home feed, search, watch, Shorts, You/sign-in, Settings, back button at
+every level, fullscreen, rotation, app resume. (The shield toggle exercised
+here was removed on 2026-08-02 — protection is always on, see the top entry.)
 
 ### Done — reported bugs, reproduced and fixed
 - **Refresh bug** (repro: tap a video from home → back → swipe-down-to-refresh
@@ -244,8 +270,8 @@ back button at every level, fullscreen, rotation, app resume.
 ### Verified working, no changes needed
 - Search (type query, results render, no ads/Open App visible, back returns
   to results/previous page correctly).
-- Shield toggle (pause/resume protection reloads the page, label/color/knob
-  animate correctly both directions).
+- Ad blocking always on (protection is permanent by design — the toggle this
+  entry verified was removed on 2026-08-02, see the top entry).
 - Settings page (gear icon on You tab → General/History & privacy, back
   returns correctly).
 - App resume from background (home button → relaunch) preserves WebView
