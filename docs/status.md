@@ -1,5 +1,14 @@
 # Project status
 
+## 2026-08-02 — Android v1.3.0 release cut
+
+New Android release cut for phone testing after the loading-logo feature merged:
+- PR #31 (`feat(android): show AdVoid logo while a video loads`) — replaces the grey YouTube play button with the AdVoid logo + spinner during real loading (cold start, SPA transition, buffering); explicit pause keeps the grey play button.
+- Release `v1.3.0-android` created at `a169010` with the signed release APK asset `app-release.apk` (CN=AdVoid verified, 10,746,761 bytes), so the landing page's `releases/latest/download/app-release.apk` link now resolves to it.
+- Includes the v1.2.0 changes too: seek bar reachable in rotation fullscreen (PR #29) and protection always on / header removed (PR #28).
+- Gates on merged main: Android `testDebugUnitTest` 6/6 (`PlaybackUiCoordinatorTest` 5 + `AutoFullscreenScriptTest` 1) and signed `assembleRelease`; web `npm test` 139/139, `npm run build` green.
+- no-mistakes could not run (Codex out of credits until 2026-08-08); gates verified directly.
+
 ## 2026-08-02 — Android v1.2.0 release cut (both Android fixes merged to main)
 
 Both open Android PRs merged to `main` and a new Android release cut for phone testing:
