@@ -59,6 +59,9 @@ class FakeElement {
     this.children.push(child)
     return child
   }
+  setAttribute(name, value) {
+    this[name] = value
+  }
   removeChild(child) {
     this.children = this.children.filter((c) => c !== child)
     if (child.parentNode === this) child.parentNode = null
@@ -171,8 +174,17 @@ describe('AdVoid loading overlay (VIDEO_WATCH_SCRIPT)', () => {
     assert.equal(env.player.classList.contains('advoid-loading'), true)
     const overlay = env.player.querySelector('#advoid-loading-overlay')
     assert.ok(overlay, 'overlay element was created')
-    assert.ok(!overlay.innerHTML.includes(LOGO_PLACEHOLDER), 'logo placeholder was substituted')
-    assert.ok(overlay.innerHTML.includes('data:image/png;base64,STUB'))
+    // Built with DOM APIs, never innerHTML: m.youtube.com enforces a Trusted
+    // Types policy that throws on innerHTML assignment, which used to kill the
+    // overlay before the .advoid-loading class was added (grey button stayed).
+    assert.equal(overlay.innerHTML, '')
+    const [img, spinner] = overlay.children
+    assert.ok(img, 'logo <img> present')
+    assert.equal(img.tagName, 'IMG')
+    assert.ok(String(img.src).includes('data:image/png;base64,STUB'))
+    assert.ok(!String(img.src).includes(LOGO_PLACEHOLDER), 'logo placeholder was substituted')
+    assert.equal(spinner.className, 'advoid-spinner')
+    assert.equal(spinner['aria-hidden'], 'true')
   })
 
   it('hides the overlay once the video can play', () => {

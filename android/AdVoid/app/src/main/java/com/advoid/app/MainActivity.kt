@@ -699,11 +699,22 @@ class MainActivity : Activity() {
                 }
 
                 function createOverlay(player) {
+                    // Build with DOM APIs, not innerHTML: m.youtube.com enforces a
+                    // Trusted Types policy, so an innerHTML assignment throws
+                    // ("This document requires 'TrustedHTML' assignment") before
+                    // the .advoid-loading class is ever added, leaving the grey
+                    // play button visible during loading.
                     var el = document.createElement('div');
                     el.id = 'advoid-loading-overlay';
-                    el.innerHTML =
-                        '<img src="__ADVOID_LOGO_DATA_URI__" alt="AdVoid" draggable="false"/>' +
-                        '<div class="advoid-spinner" aria-hidden="true"></div>';
+                    var img = document.createElement('img');
+                    img.src = '__ADVOID_LOGO_DATA_URI__';
+                    img.alt = 'AdVoid';
+                    img.draggable = false;
+                    var spinner = document.createElement('div');
+                    spinner.className = 'advoid-spinner';
+                    spinner.setAttribute('aria-hidden', 'true');
+                    el.appendChild(img);
+                    el.appendChild(spinner);
                     player.appendChild(el);
                     return el;
                 }

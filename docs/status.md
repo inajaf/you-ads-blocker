@@ -1,5 +1,31 @@
 # Project status
 
+## 2026-08-02 — Android v1.3.1 release cut: loading overlay now actually shows
+
+PR #33 (`fix(android): build loading overlay with DOM APIs, not innerHTML`) fixes the
+v1.3.0 loading-logo bug the captain reproduced on a real phone — the AdVoid logo + spinner
+never appeared and the grey YouTube play button stayed on screen instead.
+
+- Root cause: m.youtube.com enforces a Trusted Types policy, so `createOverlay`'s
+  `el.innerHTML = …` assignment threw
+  (`This document requires 'TrustedHTML' assignment`) and the overlay was never created.
+  Reproduced live via CDP on emulator-5554; the injected script's node-test DOM shim
+  doesn't enforce Trusted Types, which is why tests passed but the real page failed.
+- Fix: `createOverlay` builds the overlay with DOM APIs (`document.createElement`,
+  `img.src`, `spinner.className`, `setAttribute`) — Trusted-Types-safe. `advoid-spinner`
+  tests updated to assert the DOM-API construction.
+- Verified hands-on: debug build installed on emulator-5554 → cold start and SPA
+  transition show `#advoid-loading-overlay` (`display:flex`) with the grey button hidden
+  while `readyState < 2`, then the overlay clears once data arrives (`readyState` 4) —
+  full appear→clear cycle captured via CDP sampling on `m.youtube.com/watch` (both the
+  logo-and-spinner and a working-playback video). dex inspection confirms the release APK
+  contains the new `setAttribute` code and no `innerHTML` HTML string.
+- Release `v1.3.1-android` created with the signed release APK asset `app-release.apk`
+  (CN=AdVoid verified), so the landing page's `releases/latest/download/app-release.apk`
+  link resolves to the fixed build.
+- Gates on merged main: Android `testDebugUnitTest` 6/6 and signed `assembleRelease`; web
+  `npm test` 147/147, `npm run build` green.
+
 ## 2026-08-02 — Android v1.3.0 release cut
 
 New Android release cut for phone testing after the loading-logo feature merged:
