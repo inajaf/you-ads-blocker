@@ -164,6 +164,16 @@ class MainActivity : Activity() {
                     customView = view
                     customViewCallback = callback
 
+                    // Defensive: never let a stale prep overlay outlive the
+                    // fullscreen transition. AUTO_FULLSCREEN_SCRIPT already
+                    // removes #advoid-fs-target on every path, but if one ever
+                    // lingers (a failed/aborted prep retry), it would sit at
+                    // z-index:2147483647 and swallow every real touch on the
+                    // fullscreen view — making the seek bar dead on arrival.
+                    webView.evaluateJavascript(
+                        "var _o=document.getElementById('advoid-fs-target'); if(_o)_o.remove();",
+                        null,
+                    )
                     webView.visibility = View.GONE
                     decor.systemUiVisibility = (View.SYSTEM_UI_FLAG_LAYOUT_STABLE
                         or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
@@ -320,6 +330,18 @@ class MainActivity : Activity() {
         private const val TAG = "AdVoid"
 
         /**
+         * Element to fullscreen for rotation auto-fullscreen. Must be the
+         * `.player-container` wrapper — the same element YouTube's own expand
+         * button fullscreens — because the mobile controls (seek bar) are mounted
+         * there. Fullscreening the bare `.html5-video-player` pushes those
+         * controls outside the fullscreen view (the wrapper collapses to zero
+         * height in the top layer) and the seek bar becomes unreachable. The bare
+         * player/video remain fallbacks for pages without the wrapper.
+         */
+        internal const val FULLSCREEN_TARGET_EXPRESSION =
+            "video.closest('.player-container') || video.closest('.html5-video-player') || video"
+
+        /**
          * Auto-fullscreen on landscape rotation. The page fullscreens the YouTube
          * player (not the bare <video>: a bare video keeps YouTube's in-page
          * `object-fit: cover` and gets cropped in the fullscreen view, whereas the
@@ -339,6 +361,14 @@ class MainActivity : Activity() {
          * AUTO_FULLSCREEN_SCRIPT. The tap is deferred until the renderer reports a
          * landscape viewport — a tap injected while the WebView is mid-relayout is
          * silently dropped, so fullscreen only engages on a settled layout.
+         *
+         * Target element: the mobile controls (seek bar) are mounted in
+         * `.player-container`, a wrapper around `.html5-video-player`. YouTube's
+         * own expand button fullscreens that wrapper, and so do we — fullscreening
+         * the bare player would push the controls out of the fullscreen view (the
+         * wrapper collapses to zero height in the top layer), leaving the user
+         * unable to scrub the seek bar. Fullscreening the wrapper keeps both the
+         * 16:9 letterboxing and the controls.
          */
         private const val FULLSCREEN_PREP_SCRIPT = """
             (function() {
@@ -407,9 +437,11 @@ class MainActivity : Activity() {
                     if (overlay) overlay.remove();
                     return;
                 }
-                // Fullscreen the player so YouTube applies its own letterboxing
-                // (the bare <video> renders cropped with object-fit: cover).
-                var target = video.closest('.html5-video-player') || video;
+                // Fullscreen the wrapper YouTube's expand button uses so the
+                // letterboxed player AND the mobile controls (seek bar) are both
+                // inside the fullscreen view; fall back to the bare player/video
+                // if the wrapper is absent.
+                var target = $FULLSCREEN_TARGET_EXPRESSION;
                 try {
                     var p = target.requestFullscreen();
                     if (p && p.catch) p.catch(function(e) {

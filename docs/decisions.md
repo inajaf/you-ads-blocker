@@ -4,6 +4,11 @@
 Reason: ...
 Alternatives: ... -->
 
+## 2026-08-02 — Rotation auto-fullscreen targets `.player-container`, not the bare player
+Reason: Rotation fullscreen previously targeted `video.closest('.html5-video-player')`. On m.youtube.com the mobile controls (seek bar, `YTM-WATCH-PLAYER-CONTROLS`) are mounted in `.player-container`, a wrapper *around* the player element. When the player element enters the top layer, the wrapper collapses to zero height, so the fullscreen view rendered only the letterboxed video with no reachable seek bar — play/pause and scrubbing were dead in fullscreen, while the same video in the in-page portrait player scrubbed fine. YouTube's own expand button fullscreens `.player-container`, which contains both the letterboxed player and the controls.
+Approach: `AUTO_FULLSCREEN_SCRIPT` now requests fullscreen on `video.closest('.player-container')` first, falling back to `.html5-video-player`, then the bare video. This matches the expand-button element exactly: letterboxing is preserved (the player still letterboxes inside the wrapper, verified 16:9) and the seek bar is inside the fullscreen view. Also defensively removes any lingering `#advoid-fs-target` prep overlay in `onShowCustomView`, so a stale overlay can never sit at `z-index:2147483647` swallowing touches.
+Alternatives: (a) keep fullscreening the bare player and inject custom controls — no, fighting YouTube's player; (b) fullscreen the bare `<video>` — reintroduces the `object-fit: cover` cropping the earlier decision deliberately avoided; (c) force `onShowCustomView` to re-parent the controls — invasive and brittle against YouTube DOM changes.
+
 ## 2026-08-02 — Android: protection is always on; native header removed
 Reason: The Android app is entirely a YouTube ad blocker, so blocking is always
 active by design — a user-facing "Protection active" toggle/badge only invites
