@@ -1,5 +1,20 @@
 # Project status
 
+## 2026-08-02 — Rotation fullscreen: seek bar unreachable in fullscreen (fixed)
+
+Reproduced: rotate to landscape with a video playing → auto-fullscreen engaged, letterboxed correctly, header hidden — but the seek bar was dead. In the rotation-fullscreen the fullscreened element was the bare `.html5-video-player`; YouTube's mobile controls (seek bar) live in `.player-container`, a wrapper that collapses to zero height in the top layer, so the fullscreen view contained no controls at all (verified via CDP: controls `visibility:hidden`, `YT-PROGRESS-BAR` 0×0, drags never fired a `seeking` event). The same video in the in-page portrait player scrubbed fine.
+
+### Done
+- `AUTO_FULLSCREEN_SCRIPT` now fullscreens `video.closest('.player-container')` (the element YouTube's own expand button fullscreens), falling back to `.html5-video-player`, then the bare video. The wrapper contains both the letterboxed player AND the mobile controls, so the seek bar is reachable in fullscreen. Letterboxing unchanged (still 16:9 via the player, verified ratio 1.777).
+- Defensive: `onShowCustomView` now evaluates a one-liner removing any lingering `#advoid-fs-target` prep overlay, so a stale overlay can never sit at `z-index:2147483647` swallowing touches in fullscreen.
+- New Kotlin regression test `AutoFullscreenScriptTest` guarding the target-selection priority (`.player-container` before `.html5-video-player`, bare `video` last-resort).
+- Verified hands-on in emulator-5554 (Pixel 9, API 37): rotation → fullscreen engages on `.player-container`, controls visible, seek drag seeks the playhead; play/pause toggle works in fullscreen; portrait exits; a second rotation cycle re-enters and seek still works; Shorts never fullscreen on rotation; no `#advoid-fs-target` left behind on any path. Real-touch gestures via adb + CDP touch injection; seek verified via the video `seeking` event and currentTime jumps.
+- Gate green: `./gradlew testDebugUnitTest assembleDebug assembleRelease` (android/AdVoid), `npm test` 139/139, `npm run build`.
+
+### Known issues
+- Emulator rotation delivery remains flaky (`settings put system user_rotation` sometimes rotates the display without firing a config change) — verified with a retrying helper, not an app defect. Some Shorts URLs redirect to `/watch` on m.youtube.com and therefore legitimately auto-fullscreen.
+- Release-APK behavior on a real phone still to be confirmed by the captain (the fix is in shared `MainActivity.kt`, so debug and release build identically).
+
 ## 2026-08-02 — Android protection is always on; native header removed
 
 The AdVoid Android app is entirely a YouTube ad blocker, so blocking is always
