@@ -24,6 +24,35 @@ Reproduced: rotate to landscape with a video playing → auto-fullscreen engaged
 - Emulator rotation delivery remains flaky (`settings put system user_rotation` sometimes rotates the display without firing a config change) — verified with a retrying helper, not an app defect. Some Shorts URLs redirect to `/watch` on m.youtube.com and therefore legitimately auto-fullscreen.
 - Release-APK behavior on a real phone still to be confirmed by the captain (the fix is in shared `MainActivity.kt`, so debug and release build identically).
 
+## 2026-08-02 — Android: AdVoid logo + spinner replace the grey play button while a video loads
+
+While a watch video is actually loading (cold start, SPA transition to the next
+video, buffering) YouTube shows its grey centre play button (`.ytp-large-play-button`)
+even though the video isn't playable yet. The WebView injection now distinguishes
+real loading from an explicit pause and swaps the grey button for the AdVoid logo
+plus a spinner.
+
+### Done
+- `VIDEO_WATCH_SCRIPT` (in `MainActivity.kt`) tracks loading via media events
+  (`emptied`/`loadstart`/`waiting` → show; `loadeddata`/`canplay`/`playing`/`seeking`
+  → hide) and gates on `readyState < HAVE_CURRENT_DATA`, so a paused video with a
+  frame on screen keeps its normal grey button. `waiting` is suppressed while
+  `video.seeking` so landscape seeking never flashes the overlay.
+- Overlay = `#advoid-loading-overlay` appended inside `.html5-video-player`
+  (logo `img` + CSS spinner), toggled by an `.advoid-loading` class on the player;
+  the class also hides `.ytp-large-play-button`. `pointer-events: none`, so taps
+  still reach the player.
+- Logo embedded as a base64 data URI (`ADVOID_LOGO_DATA_URI`, from
+  `extension/icons/noirva-logo-v2-128.png`) so the overlay needs no local files;
+  the JS template substitutes the placeholder via a computed `VIDEO_WATCH_SCRIPT`.
+- Watch-page only (`/watch`), and only the main `.html5-video-player` video — feed
+  preview thumbnails and Shorts are untouched.
+- New node:test suite `tests/advoid-video-loading.test.mjs` (8 tests) extracts the
+  injected script verbatim from the Kotlin source and drives it through a DOM shim.
+- Verified: `npm test` (147/147), `npm run build`, oxlint clean, and
+  `./gradlew :app:compileDebugKotlin` + `:app:testDebugUnitTest` pass. Still to
+  verify hands-on in an emulator: the actual grey-button swap timing on real YouTube.
+
 ## 2026-08-02 — Android protection is always on; native header removed
 
 The AdVoid Android app is entirely a YouTube ad blocker, so blocking is always
