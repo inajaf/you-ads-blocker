@@ -4,6 +4,28 @@
 Reason: ...
 Alternatives: ... -->
 
+## 2026-08-02 — Loading overlay must be built with DOM APIs, never `innerHTML` (Trusted Types)
+Reason: v1.3.0's loading overlay (`createOverlay` in `VIDEO_WATCH_SCRIPT_TEMPLATE`) was built
+via `el.innerHTML = '<img …/>' + '<div class="advoid-spinner" …/>'`. On real m.youtube.com
+this threw `Failed to set the 'innerHTML' property on 'Element': This document requires
+'TrustedHTML' assignment` — YouTube enforces a Trusted Types policy that rejects all
+`innerHTML`/`outerHTML`/`insertAdjacentHTML`/`document.write` sinks (verified live via CDP:
+`window.trustedTypes` present, `el.innerHTML = …` throws). The throw happened before
+`p.classList.add('advoid-loading')`, so the overlay never appeared and the grey
+`.ytp-large-play-button` stayed visible — the exact bug the user saw. The DOM shim used by
+`tests/advoid-video-loading.test.mjs` doesn't enforce Trusted Types, so the node tests
+passed while the real page failed.
+Approach: `createOverlay` now builds the overlay with `document.createElement`,
+`img.src = …`, `spinner.className = 'advoid-spinner'`, and
+`spinner.setAttribute('aria-hidden', 'true')` — all Trusted-Types-safe. Verified on the
+live emulator: cold start and SPA navigation show the overlay (`#advoid-loading-overlay`
+`display:flex`, grey button `display:none`) at `readyState < 2`, and it clears once data
+arrives (`readyState` 4, overlay removed, grey button restored).
+Alternatives: (a) add a Trusted-Types policy to the page that allows `innerHTML` — fights
+YouTube's security policy and can be overwritten; (b) use `insertAdjacentHTML` — same sink
+class, still blocked; (c) keep `innerHTML` and swallow the error — leaves the overlay
+permanently broken.
+
 ## 2026-08-02 — Rotation auto-fullscreen targets `.player-container`, not the bare player
 Reason: Rotation fullscreen previously targeted `video.closest('.html5-video-player')`. On m.youtube.com the mobile controls (seek bar, `YTM-WATCH-PLAYER-CONTROLS`) are mounted in `.player-container`, a wrapper *around* the player element. When the player element enters the top layer, the wrapper collapses to zero height, so the fullscreen view rendered only the letterboxed video with no reachable seek bar — play/pause and scrubbing were dead in fullscreen, while the same video in the in-page portrait player scrubbed fine. YouTube's own expand button fullscreens `.player-container`, which contains both the letterboxed player and the controls.
 Approach: `AUTO_FULLSCREEN_SCRIPT` now requests fullscreen on `video.closest('.player-container')` first, falling back to `.html5-video-player`, then the bare video. This matches the expand-button element exactly: letterboxing is preserved (the player still letterboxes inside the wrapper, verified 16:9) and the seek bar is inside the fullscreen view. Also defensively removes any lingering `#advoid-fs-target` prep overlay in `onShowCustomView`, so a stale overlay can never sit at `z-index:2147483647` swallowing touches.
