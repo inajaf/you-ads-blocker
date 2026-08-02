@@ -29,6 +29,20 @@ function extractWatchScript() {
 
 const WATCH_SCRIPT = extractWatchScript()
 
+// The overlay's look (dark plate, fade-in, logo ring) lives in STYLE_SCRIPT.
+// It is injected as one <style> element, so the node tests assert the raw CSS
+// contains the rules the acceptance criteria depend on.
+function extractStyleScript() {
+  const source = readFileSync(KT_PATH, 'utf8')
+  const match = source.match(
+    /private const val STYLE_SCRIPT = """([\s\S]*?)"""/,
+  )
+  assert.ok(match, 'STYLE_SCRIPT not found in MainActivity.kt')
+  return match[1].replace(/\r\n/g, '\n')
+}
+
+const STYLE_CSS = extractStyleScript()
+
 class FakeClassList {
   constructor() {
     this.tokens = new Set()
@@ -178,7 +192,12 @@ describe('AdVoid loading overlay (VIDEO_WATCH_SCRIPT)', () => {
     // Types policy that throws on innerHTML assignment, which used to kill the
     // overlay before the .advoid-loading class was added (grey button stayed).
     assert.equal(overlay.innerHTML, '')
-    const [img, spinner] = overlay.children
+    // The logo and its spinner are one element: a frame whose <img> is wrapped
+    // by the ring that spins around it (not a logo with a spinner below).
+    const [frame] = overlay.children
+    assert.ok(frame, 'logo frame present')
+    assert.equal(frame.className, 'advoid-logo-ring')
+    const [img, spinner] = frame.children
     assert.ok(img, 'logo <img> present')
     assert.equal(img.tagName, 'IMG')
     assert.ok(String(img.src).includes('data:image/png;base64,STUB'))
@@ -269,5 +288,31 @@ describe('AdVoid loading overlay (VIDEO_WATCH_SCRIPT)', () => {
     video.readyState = 3
     env.sync()
     assert.equal(env.player.classList.contains('advoid-loading'), false)
+  })
+})
+
+describe('AdVoid loading overlay styles (STYLE_SCRIPT)', () => {
+  it('covers the whole player with a dark plate and fades in', () => {
+    // The overlay stretches over the full player area so neither the grey
+    // background nor the centre play button shows through while loading.
+    assert.match(STYLE_CSS, /#advoid-loading-overlay/)
+    assert.match(STYLE_CSS, /width: 100%; height: 100%/)
+    // Dense semi-transparent dark, in the spirit of YouTube's dark theme.
+    assert.match(STYLE_CSS, /background: rgba\(0,0,0,0\.[56]/)
+    assert.match(STYLE_CSS, /pointer-events: none/)
+    // Smooth fade-in on show (~0.2-0.3s).
+    assert.match(STYLE_CSS, /animation: advoid-fade-in 0\.[23]\d*s/)
+    assert.match(STYLE_CSS, /@keyframes advoid-fade-in/)
+  })
+
+  it('renders the logo wrapped by a thin spinning ring', () => {
+    // The spinner is a thin circular border that rotates around the centered
+    // logo — one element, not a logo with a spinner underneath.
+    assert.match(STYLE_CSS, /\.advoid-logo-ring/)
+    assert.match(STYLE_CSS, /\.advoid-logo-ring img/)
+    assert.match(STYLE_CSS, /\.advoid-spinner/)
+    assert.match(STYLE_CSS, /border-radius: 50%/)
+    assert.match(STYLE_CSS, /border-top-color: #5FCA6B/)
+    assert.match(STYLE_CSS, /@keyframes advoid-spin/)
   })
 })
