@@ -29,7 +29,7 @@ function extractWatchScript() {
 
 const WATCH_SCRIPT = extractWatchScript()
 
-// The overlay's look (dark plate, fade-in, square logo + spinner) lives in STYLE_SCRIPT.
+// The overlay's look (dark plate, round emblem + orbit spinner) lives in STYLE_SCRIPT.
 // It is injected as one <style> element, so the node tests assert the raw CSS
 // contains the rules the acceptance criteria depend on.
 function extractStyleScript() {
@@ -204,8 +204,10 @@ describe('AdVoid loading overlay (VIDEO_WATCH_SCRIPT)', () => {
     // Types policy that throws on innerHTML assignment, which used to kill the
     // overlay before the .advoid-loading class was added (grey button stayed).
     assert.equal(overlay.innerHTML, '')
-    // Preserve the original square logo proportions and compact spinner below.
-    const [img, spinner] = overlay.children
+    // Keep the round emblem and its orbit in one concentric wrapper.
+    const [mark] = overlay.children
+    assert.equal(mark.className, 'advoid-loading-mark')
+    const [img, spinner] = mark.children
     assert.ok(img, 'logo <img> present')
     assert.equal(img.tagName, 'IMG')
     assert.ok(String(img.src).includes('data:image/png;base64,STUB'))
@@ -334,24 +336,28 @@ describe('AdVoid loading overlay styles (STYLE_SCRIPT)', () => {
     // background nor the centre play button shows through while loading.
     assert.match(STYLE_CSS, /#advoid-loading-overlay/)
     assert.match(STYLE_CSS, /width: 100%; height: 100%/)
-    // Dense semi-transparent dark, in the spirit of YouTube's dark theme.
-    assert.match(STYLE_CSS, /background: rgba\(0,0,0,0\.[56]/)
+    // Dense navy-to-black radial plate keeps YouTube's own glyph out of view.
+    assert.match(STYLE_CSS, /background: radial-gradient\(circle at center/)
+    assert.match(STYLE_CSS, /rgba\(7,20,47,0\.88\)/)
     assert.match(STYLE_CSS, /pointer-events: none/)
     // Smooth fade-in on show (~0.2-0.3s).
     assert.match(STYLE_CSS, /animation: advoid-fade-in 0\.[23]\d*s/)
     assert.match(STYLE_CSS, /@keyframes advoid-fade-in/)
   })
 
-  it('keeps the original square logo size with a compact spinner below', () => {
-    assert.match(STYLE_CSS, /#advoid-loading-overlay > img/)
+  it('centres a round 88px emblem inside a compact 104px orbit', () => {
+    assert.match(STYLE_CSS, /\.advoid-loading-mark/)
+    assert.match(STYLE_CSS, /width: 104px; height: 104px/)
+    assert.match(STYLE_CSS, /\.advoid-loading-mark > img/)
     assert.match(STYLE_CSS, /width: 88px; height: 88px/)
-    assert.doesNotMatch(STYLE_CSS, /\.advoid-logo-ring/)
-    assert.doesNotMatch(STYLE_CSS, /#advoid-loading-overlay > img[^}]*border-radius: 50%/s)
+    assert.match(STYLE_CSS, /\.advoid-loading-mark > img[^}]*border-radius: 50%/s)
     assert.match(STYLE_CSS, /\.advoid-spinner/)
-    assert.match(STYLE_CSS, /width: 36px; height: 36px/)
-    assert.match(STYLE_CSS, /margin-top: 16px/)
+    assert.match(STYLE_CSS, /position: absolute/)
+    assert.match(STYLE_CSS, /inset: 0/)
     assert.match(STYLE_CSS, /border-radius: 50%/)
-    assert.match(STYLE_CSS, /border-top-color: #5FCA6B/)
+    assert.match(STYLE_CSS, /border-top-color: #25D9FF/)
+    assert.match(STYLE_CSS, /border-right-color: #F52A82/)
+    assert.match(STYLE_CSS, /@keyframes advoid-logo-enter/)
     assert.match(STYLE_CSS, /@keyframes advoid-spin/)
   })
 })

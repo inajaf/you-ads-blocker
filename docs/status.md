@@ -1,5 +1,24 @@
 # Project status
 
+## 2026-08-11 — Unified round Android app and video-loading emblem
+
+Android branding now uses one polished circular AdVoid emblem: a midnight navy
+disc with a thin cyan rim and the existing pink-purple shield/play mark enlarged
+and optically centred. Adaptive and round icon resources remove the launcher's
+white plate/square-within-a-circle treatment; transparent legacy mipmaps cover
+older launchers, and the Android 12 splash uses the same emblem on navy.
+
+Video loading now presents the 88px circular emblem in a concentric 104px
+cyan/magenta orbit on a navy-to-black radial plate. The emblem and spinner share
+one positioned wrapper, preventing the detached/off-centre ring seen in the
+earlier treatment. Loading lifecycle behavior is unchanged.
+
+Validation: `npm test` 165/165, `npm run build`, Android
+`testDebugUnitTest` + `assembleDebug`, and the web UI check 12/12 passed. The
+final debug APK was installed on `emulator-5554`; the Android splash and the
+real-YouTube loading plate were visually checked, and the overlay remained
+non-interactive while clearing normally after loading.
+
 ## 2026-08-11 — Android fullscreen YouTube settings made interactive
 
 YouTube's mobile settings sheet is delegated under `<ytm-app>`, outside the

@@ -4,6 +4,18 @@
 Reason: ...
 Alternatives: ... -->
 
+## 2026-08-11 — Use one circular emblem for Android launcher, splash, and video loading
+Reason: device review showed the legacy square launcher bitmap being shrunk onto a white
+system plate, while the separate video-loading logo/spinner treatments lacked a consistent
+shape. The approved direction is a circular midnight-navy emblem with a cyan rim and the
+existing shield/play mark, used through Android adaptive/round icon resources, transparent
+legacy mipmaps, the Android 12 splash, and the WebView loading overlay. The loading emblem
+is 88px inside a concentric 104px cyan/magenta orbit on a radial dark plate. This decision
+supersedes the earlier same-day square-logo/separate-spinner loading decision below.
+Alternatives: rely on launcher masking around the old square bitmap (rejected: produced the
+white plate and square centre shown on-device); use independent branding for launcher and
+loading (rejected: inconsistent and made alignment regressions more likely).
+
 ## 2026-08-11 — Bridge YouTube's delegated settings sheet across fullscreen DOM isolation
 Reason: Android fullscreen only displays descendants of the selected fullscreen element,
 while mobile YouTube owns its singleton `<bottom-sheet-container>` under `<ytm-app>` and
