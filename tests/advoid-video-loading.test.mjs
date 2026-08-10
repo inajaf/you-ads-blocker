@@ -333,7 +333,7 @@ describe('AdVoid loading overlay styles (STYLE_SCRIPT)', () => {
   it('keeps fullscreen top controls below Android transient system bars', () => {
     assert.match(STYLE_CSS, /:fullscreen \.player-controls-top/)
     assert.match(STYLE_CSS, /:-webkit-full-screen \.player-controls-top/)
-    assert.match(STYLE_CSS, /top: max\(28px, env\(safe-area-inset-top\)\)/)
+    assert.match(STYLE_CSS, /top: max\(56px, env\(safe-area-inset-top\)\)/)
   })
 
   it('covers the whole player with a dark plate and fades in', () => {

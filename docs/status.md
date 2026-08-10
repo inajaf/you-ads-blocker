@@ -8,6 +8,12 @@ buffering visible. Regression coverage exercises both the unchanged and
 advancing timestamp paths. Review also confirmed that the Android 12 splash
 references the complete round shield/play emblem already present in the branch.
 
+Release QA also found that the earlier 28px fullscreen control inset placed the
+gear centre exactly on Android's 137-physical-pixel mandatory-gesture boundary
+at 2.625 DPR, so real taps could still be intercepted. The fullscreen top row is
+now inset 56 CSS px, keeping the complete 48px gear target below that system
+touch zone.
+
 ## 2026-08-11 — Unified round Android app and video-loading emblem
 
 Android branding now uses one polished circular AdVoid emblem: a midnight navy

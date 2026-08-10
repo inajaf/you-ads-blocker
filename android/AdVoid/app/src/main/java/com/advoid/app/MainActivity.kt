@@ -979,13 +979,14 @@ class MainActivity : Activity() {
                     'html.advoid-shorts button[aria-label="Search"] {',
                     '  display: none !important;',
                     '}',
-                    // Android transient system bars cover the first ~24 CSS px
-                    // in immersive fullscreen. Move YouTube's top controls below
-                    // that touch interception zone while leaving the video edge
-                    // to edge. Support both current and legacy fullscreen names.
+                    // Android's landscape mandatory-gesture inset is about 52
+                    // CSS px on the Pixel emulator (137 physical px at 2.625
+                    // DPR). Keep the whole 48px control below that interception
+                    // zone while leaving the video edge to edge. Support both
+                    // current and legacy fullscreen names.
                     ':fullscreen .player-controls-top,',
                     ':-webkit-full-screen .player-controls-top {',
-                    '  top: max(28px, env(safe-area-inset-top)) !important;',
+                    '  top: max(56px, env(safe-area-inset-top)) !important;',
                     '}',
                     // A compact Shorts-only scrubber. Its hit area is deliberately
                     // limited to the bottom strip so vertical reel swipes continue
