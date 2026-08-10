@@ -1,5 +1,83 @@
 # Project status
 
+## 2026-08-11 — Android loading recovery review fixes
+
+Loading recovery now hides a stalled-video overlay only after `currentTime`
+actually advances; a queued `timeupdate` at the same timestamp leaves genuine
+buffering visible. Regression coverage exercises both the unchanged and
+advancing timestamp paths. Review also confirmed that the Android 12 splash
+references the complete round shield/play emblem already present in the branch.
+
+Release QA also found that the earlier 28px fullscreen control inset placed the
+gear centre exactly on Android's 137-physical-pixel mandatory-gesture boundary
+at 2.625 DPR, so real taps could still be intercepted. The fullscreen top row is
+now inset 56 CSS px, keeping the complete 48px gear target below that system
+touch zone.
+
+## 2026-08-11 — Unified round Android app and video-loading emblem
+
+Android branding now uses one polished circular AdVoid emblem: a midnight navy
+disc with a thin cyan rim and the existing pink-purple shield/play mark enlarged
+and optically centred. Adaptive and round icon resources remove the launcher's
+white plate/square-within-a-circle treatment; transparent legacy mipmaps cover
+older launchers, and the Android 12 splash uses the same emblem on navy.
+
+Video loading now presents the 88px circular emblem in a concentric 104px
+cyan/magenta orbit on a navy-to-black radial plate. The emblem and spinner share
+one positioned wrapper, preventing the detached/off-centre ring seen in the
+earlier treatment. Loading lifecycle behavior is unchanged.
+
+Validation: `npm test` 165/165, `npm run build`, Android
+`testDebugUnitTest` + `assembleDebug`, and the web UI check 12/12 passed. The
+final debug APK was installed on `emulator-5554`; the Android splash and the
+real-YouTube loading plate were visually checked, and the overlay remained
+non-interactive while clearing normally after loading.
+
+## 2026-08-11 — Android fullscreen YouTube settings made interactive
+
+YouTube's mobile settings sheet is delegated under `<ytm-app>`, outside the
+`.player-container` that AdVoid fullscreens on landscape rotation. The gear
+received real taps, but YouTube could neither open nor operate the sheet inside
+that isolated fullscreen tree. AdVoid now replays settings clicks through
+YouTube's normal in-page DOM, immediately returns to fullscreen, and mounts the
+populated bottom-sheet host inside the visible fullscreen layer. The same bridge
+handles Quality/Speed/Captions submenu taps and restores the host to its exact
+original DOM position when fullscreen ends. Verified on real YouTube in the
+installed debug APK: the gear opened the settings sheet in auto-fullscreen and
+the Quality row opened the 1080p/720p/480p/360p/240p submenu without leaving
+fullscreen. Regression suite: 162/162; web UI check: 12/12; Android unit tests
+and debug APK assembly passed.
+
+## 2026-08-11 — Android loading logo restored to original proportions
+
+The circular loading-logo treatment was reverted after hands-on review: the
+source asset is square artwork, so `border-radius: 50%` plus the oversized
+112px spinner ring made the shield look smaller and optically off-centre. The
+loading plate now uses the original 88×88 square logo without clipping and the
+original compact 36×36 spinner below it. Loading-state logic, fullscreen control
+insets, and Shorts seeking are unchanged.
+
+## 2026-08-10 — Android player controls and loading stability (branch codex/android-player-controls-stability)
+
+Three Android WebView playback defects were fixed in `android/AdVoid`:
+- YouTube's fullscreen top controls now sit below Android's transient system-bar
+  touch zone, so the top-right Playback Settings button remains tappable.
+- The AdVoid loading plate is cleared when a YouTube SPA navigation leaves
+  `/watch`, and advancing `timeupdate` events clear stale post-buffer overlays.
+- Shorts now have a narrow bottom range control tied to the active visible
+  video's duration/currentTime; it supports seeking, follows reel changes, and
+  leaves the rest of the viewport available for vertical navigation.
+
+Regression coverage was added in `tests/advoid-video-loading.test.mjs` and
+`tests/advoid-shorts-seek.test.mjs`. Gates: `npm test` 157/157, `npm run build`,
+Android `testDebugUnitTest` + `assembleDebug`, oxlint (pre-existing warnings
+only), and `./scripts/ui-check.sh` 12/12 on an isolated port. The final debug APK
+was installed side-by-side as `com.advoid.app.debug` on emulator-5554; no crash
+or ANR was found. Real YouTube reproduced the fullscreen hit-zone defect before
+the emulator lost DNS. The fixed inset was then verified with a fullscreen
+WebView fixture and a real ADB tap; real-site loading/Shorts retesting remains
+pending until the emulator's `ERR_NAME_NOT_RESOLVED` network fault clears.
+
 ## 2026-08-02 — Loading overlay redesigned: dark plate + logo ring (branch fm/android-loading-redesign)
 
 The captain rejected the v1.3.x loading overlay (88px logo + small spinner floating over

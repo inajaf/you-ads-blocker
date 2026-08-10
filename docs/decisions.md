@@ -4,19 +4,44 @@
 Reason: ...
 Alternatives: ... -->
 
-## 2026-08-02 — Loading overlay is a full-player dark plate with a logo wrapped by a spinning ring
-Reason: the captain rejected the v1.3.x overlay look (an 88px logo + small spinner
-floating over YouTube's grey player) as a "floating overlay". The overlay now stretches
-over the whole `.html5-video-player` (`width/height: 100%`, `background:
-rgba(0,0,0,0.6)`) so the grey background and centre play button are fully covered, and
-the logo sits centered inside a thin ring (`#advoid-loading-overlay .advoid-logo-ring`
-frame; `.advoid-spinner` is an absolute circular border that spins around the logo —
-one visual element, not logo + spinner below). It fades in (`advoid-fade-in`, 0.25s).
-The readyState-based loading-vs-pause logic in `VIDEO_WATCH_SCRIPT` is unchanged.
-Alternatives: keep the transparent floating overlay (rejected: it looked like content
-"floating on top" of the player); make the ring a CSS `::before` on the logo (kept an
-explicit `.advoid-spinner` element instead — matches existing markup, testable in the
-node suite, Trusted-Types-safe DOM construction preserved).
+## 2026-08-11 — Use one circular emblem for Android launcher, splash, and video loading
+Reason: device review showed the legacy square launcher bitmap being shrunk onto a white
+system plate, while the separate video-loading logo/spinner treatments lacked a consistent
+shape. The approved direction is a circular midnight-navy emblem with a cyan rim and the
+existing shield/play mark, used through Android adaptive/round icon resources, transparent
+legacy mipmaps, the Android 12 splash, and the WebView loading overlay. The loading emblem
+is 88px inside a concentric 104px cyan/magenta orbit on a radial dark plate. This decision
+supersedes the earlier same-day square-logo/separate-spinner loading decision below.
+Alternatives: rely on launcher masking around the old square bitmap (rejected: produced the
+white plate and square centre shown on-device); use independent branding for launcher and
+loading (rejected: inconsistent and made alignment regressions more likely).
+
+## 2026-08-11 — Bridge YouTube's delegated settings sheet across fullscreen DOM isolation
+Reason: Android fullscreen only displays descendants of the selected fullscreen element,
+while mobile YouTube owns its singleton `<bottom-sheet-container>` under `<ytm-app>` and
+delegates settings actions through that ancestry. Merely moving the sheet into
+`.player-container` makes it visible but breaks Quality, Speed, Captions, and other
+delegated actions. For the fullscreen gear and subsequent sheet actions, AdVoid briefly
+exits fullscreen, replays the click through YouTube's original tree, immediately requests
+fullscreen again using the same trusted activation, and then moves the populated sheet
+into the fullscreen top layer. On fullscreen exit it uses a comment marker to restore the
+sheet to the exact original DOM position.
+Alternatives: maintain a duplicate custom settings UI (rejected as fragile and incomplete),
+or exit fullscreen permanently whenever settings are opened (rejected because it breaks
+the expected fullscreen workflow).
+
+## 2026-08-11 — Loading overlay keeps the dark plate but restores the square logo and compact spinner
+Reason: hands-on review found that wrapping the square 128px source artwork in a 112px
+circular ring and applying `border-radius: 50%` made the shield appear smaller and
+optically off-centre. The full-player dark plate remains (`width/height: 100%`,
+`background: rgba(0,0,0,0.6)`) because it cleanly covers YouTube's grey loading state,
+but the branding is restored to its original proportions: an unclipped 88×88 square
+image with a separate 36×36 spinner 16px below it. The fade and readyState-based
+loading-vs-pause logic are unchanged.
+Alternatives: keep the 112px ring around the artwork (rejected after device review:
+distorted the perceived logo size); crop the asset into a circle (rejected: the source
+artwork is square); remove the dark plate (rejected: exposes YouTube's grey player and
+centre play button during loading).
 
 ## 2026-08-02 — Loading overlay must be built with DOM APIs, never `innerHTML` (Trusted Types)
 Reason: v1.3.0's loading overlay (`createOverlay` in `VIDEO_WATCH_SCRIPT_TEMPLATE`) was built

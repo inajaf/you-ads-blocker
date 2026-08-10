@@ -29,7 +29,7 @@ function extractWatchScript() {
 
 const WATCH_SCRIPT = extractWatchScript()
 
-// The overlay's look (dark plate, fade-in, logo ring) lives in STYLE_SCRIPT.
+// The overlay's look (dark plate, round emblem + orbit spinner) lives in STYLE_SCRIPT.
 // It is injected as one <style> element, so the node tests assert the raw CSS
 // contains the rules the acceptance criteria depend on.
 function extractStyleScript() {
@@ -124,6 +124,7 @@ class FakeVideo extends FakeElement {
     this.seeking = options.seeking ?? false
     this.paused = options.paused ?? true
     this.ended = options.ended ?? false
+    this.currentTime = options.currentTime ?? 0
   }
 }
 
@@ -142,6 +143,14 @@ class FakeDocument {
     if (selector === '.html5-video-player video') {
       return this._videos.filter((v) => v.closest('.html5-video-player'))
     }
+    if (selector === '.html5-video-player.advoid-loading') {
+      const players = new Set()
+      for (const video of this._videos) {
+        const player = video.closest('.html5-video-player')
+        if (player?.classList.contains('advoid-loading')) players.add(player)
+      }
+      return [...players]
+    }
     return []
   }
 }
@@ -153,11 +162,12 @@ class FakeMutationObserver {
 
 function makeEnv(pathname = '/watch') {
   const document = new FakeDocument()
+  const location = { pathname }
   const player = new FakeElement('div')
   player.classList.add('html5-video-player')
   const sandbox = {
     document,
-    location: { pathname },
+    location,
     MutationObserver: FakeMutationObserver,
     setTimeout,
     console,
@@ -174,6 +184,9 @@ function makeEnv(pathname = '/watch') {
   return {
     player,
     addVideo,
+    navigate: (nextPathname) => {
+      location.pathname = nextPathname
+    },
     sync: () => vm.runInContext('window._advoidSyncVideoState();', context),
     setup: () => vm.runInContext(WATCH_SCRIPT, context),
   }
@@ -192,12 +205,10 @@ describe('AdVoid loading overlay (VIDEO_WATCH_SCRIPT)', () => {
     // Types policy that throws on innerHTML assignment, which used to kill the
     // overlay before the .advoid-loading class was added (grey button stayed).
     assert.equal(overlay.innerHTML, '')
-    // The logo and its spinner are one element: a frame whose <img> is wrapped
-    // by the ring that spins around it (not a logo with a spinner below).
-    const [frame] = overlay.children
-    assert.ok(frame, 'logo frame present')
-    assert.equal(frame.className, 'advoid-logo-ring')
-    const [img, spinner] = frame.children
+    // Keep the round emblem and its orbit in one concentric wrapper.
+    const [mark] = overlay.children
+    assert.equal(mark.className, 'advoid-loading-mark')
+    const [img, spinner] = mark.children
     assert.ok(img, 'logo <img> present')
     assert.equal(img.tagName, 'IMG')
     assert.ok(String(img.src).includes('data:image/png;base64,STUB'))
@@ -289,30 +300,69 @@ describe('AdVoid loading overlay (VIDEO_WATCH_SCRIPT)', () => {
     env.sync()
     assert.equal(env.player.classList.contains('advoid-loading'), false)
   })
+
+  it('clears a watch loading class when SPA navigation leaves /watch', () => {
+    const env = makeEnv()
+    env.addVideo({ readyState: 0 })
+    env.setup()
+    assert.equal(env.player.classList.contains('advoid-loading'), true)
+
+    env.navigate('/shorts/abc')
+    env.sync()
+    assert.equal(env.player.classList.contains('advoid-loading'), false)
+  })
+
+  it('keeps a waiting overlay until media time actually advances', () => {
+    const env = makeEnv()
+    const video = env.addVideo({ readyState: 3, paused: false, currentTime: 12 })
+    env.setup()
+
+    video.fire('waiting')
+    assert.equal(env.player.classList.contains('advoid-loading'), true)
+
+    video.fire('timeupdate')
+    assert.equal(env.player.classList.contains('advoid-loading'), true)
+
+    video.currentTime = 12.25
+    video.fire('timeupdate')
+    assert.equal(env.player.classList.contains('advoid-loading'), false)
+  })
 })
 
 describe('AdVoid loading overlay styles (STYLE_SCRIPT)', () => {
+  it('keeps fullscreen top controls below Android transient system bars', () => {
+    assert.match(STYLE_CSS, /:fullscreen \.player-controls-top/)
+    assert.match(STYLE_CSS, /:-webkit-full-screen \.player-controls-top/)
+    assert.match(STYLE_CSS, /top: max\(56px, env\(safe-area-inset-top\)\)/)
+  })
+
   it('covers the whole player with a dark plate and fades in', () => {
     // The overlay stretches over the full player area so neither the grey
     // background nor the centre play button shows through while loading.
     assert.match(STYLE_CSS, /#advoid-loading-overlay/)
     assert.match(STYLE_CSS, /width: 100%; height: 100%/)
-    // Dense semi-transparent dark, in the spirit of YouTube's dark theme.
-    assert.match(STYLE_CSS, /background: rgba\(0,0,0,0\.[56]/)
+    // Dense navy-to-black radial plate keeps YouTube's own glyph out of view.
+    assert.match(STYLE_CSS, /background: radial-gradient\(circle at center/)
+    assert.match(STYLE_CSS, /rgba\(7,20,47,0\.88\)/)
     assert.match(STYLE_CSS, /pointer-events: none/)
     // Smooth fade-in on show (~0.2-0.3s).
     assert.match(STYLE_CSS, /animation: advoid-fade-in 0\.[23]\d*s/)
     assert.match(STYLE_CSS, /@keyframes advoid-fade-in/)
   })
 
-  it('renders the logo wrapped by a thin spinning ring', () => {
-    // The spinner is a thin circular border that rotates around the centered
-    // logo — one element, not a logo with a spinner underneath.
-    assert.match(STYLE_CSS, /\.advoid-logo-ring/)
-    assert.match(STYLE_CSS, /\.advoid-logo-ring img/)
+  it('centres a round 88px emblem inside a compact 104px orbit', () => {
+    assert.match(STYLE_CSS, /\.advoid-loading-mark/)
+    assert.match(STYLE_CSS, /width: 104px; height: 104px/)
+    assert.match(STYLE_CSS, /\.advoid-loading-mark > img/)
+    assert.match(STYLE_CSS, /width: 88px; height: 88px/)
+    assert.match(STYLE_CSS, /\.advoid-loading-mark > img[^}]*border-radius: 50%/s)
     assert.match(STYLE_CSS, /\.advoid-spinner/)
+    assert.match(STYLE_CSS, /position: absolute/)
+    assert.match(STYLE_CSS, /inset: 0/)
     assert.match(STYLE_CSS, /border-radius: 50%/)
-    assert.match(STYLE_CSS, /border-top-color: #5FCA6B/)
+    assert.match(STYLE_CSS, /border-top-color: #25D9FF/)
+    assert.match(STYLE_CSS, /border-right-color: #F52A82/)
+    assert.match(STYLE_CSS, /@keyframes advoid-logo-enter/)
     assert.match(STYLE_CSS, /@keyframes advoid-spin/)
   })
 })
