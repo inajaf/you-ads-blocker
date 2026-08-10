@@ -1,5 +1,20 @@
 # Project status
 
+## 2026-08-11 — Android fullscreen YouTube settings made interactive
+
+YouTube's mobile settings sheet is delegated under `<ytm-app>`, outside the
+`.player-container` that AdVoid fullscreens on landscape rotation. The gear
+received real taps, but YouTube could neither open nor operate the sheet inside
+that isolated fullscreen tree. AdVoid now replays settings clicks through
+YouTube's normal in-page DOM, immediately returns to fullscreen, and mounts the
+populated bottom-sheet host inside the visible fullscreen layer. The same bridge
+handles Quality/Speed/Captions submenu taps and restores the host to its exact
+original DOM position when fullscreen ends. Verified on real YouTube in the
+installed debug APK: the gear opened the settings sheet in auto-fullscreen and
+the Quality row opened the 1080p/720p/480p/360p/240p submenu without leaving
+fullscreen. Regression suite: 162/162; web UI check: 12/12; Android unit tests
+and debug APK assembly passed.
+
 ## 2026-08-11 — Android loading logo restored to original proportions
 
 The circular loading-logo treatment was reverted after hands-on review: the

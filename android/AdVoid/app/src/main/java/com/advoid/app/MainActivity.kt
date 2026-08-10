@@ -213,6 +213,7 @@ class MainActivity : Activity() {
 
     private fun injectPageScripts(view: WebView?) {
         view?.evaluateJavascript(STYLE_SCRIPT, null)
+        view?.evaluateJavascript(FULLSCREEN_SETTINGS_SCRIPT, null)
         view?.evaluateJavascript(VIDEO_WATCH_SCRIPT, null)
         view?.evaluateJavascript(SHORTS_SEEK_SCRIPT, null)
         view?.evaluateJavascript(PULL_REFRESH_SCRIPT, null)
@@ -453,6 +454,122 @@ class MainActivity : Activity() {
                 } finally {
                     if (overlay) overlay.remove();
                 }
+            })();
+        """
+
+        /**
+         * YouTube mounts its playback-settings bottom sheet under <ytm-app>,
+         * outside `.player-container`. Android fullscreen only renders the
+         * fullscreen element and its descendants, so the gear receives the tap
+         * but the resulting sheet is invisible. Temporarily move YouTube's
+         * singleton bottom-sheet host into the fullscreen player, then restore
+         * it to the exact original DOM position when fullscreen ends.
+         */
+        internal const val FULLSCREEN_SETTINGS_SCRIPT = """
+            (function() {
+                function restoreSheet() {
+                    var sheet = window._advoidFullscreenSettingsSheet;
+                    var marker = window._advoidFullscreenSettingsMarker;
+                    if (sheet && marker && marker.parentNode) {
+                        marker.parentNode.insertBefore(sheet, marker.nextSibling);
+                        marker.remove();
+                    }
+                    window._advoidFullscreenSettingsSheet = null;
+                    window._advoidFullscreenSettingsMarker = null;
+                }
+
+                function mountSheet() {
+                    var fullscreen = document.fullscreenElement;
+                    if (!fullscreen) { restoreSheet(); return false; }
+                    var sheet = document.querySelector('bottom-sheet-container');
+                    if (!sheet || fullscreen.contains(sheet)) return !!sheet;
+
+                    restoreSheet();
+                    var marker = document.createComment('advoid-settings-sheet');
+                    sheet.parentNode.insertBefore(marker, sheet);
+                    window._advoidFullscreenSettingsSheet = sheet;
+                    window._advoidFullscreenSettingsMarker = marker;
+                    fullscreen.appendChild(sheet);
+                    return true;
+                }
+
+                function mountSheetWhenReady(retries) {
+                    if (!document.fullscreenElement) return;
+                    var sheet = document.querySelector('bottom-sheet-container');
+                    // YouTube may populate the sheet asynchronously. Moving an
+                    // empty host too early disconnects it from the delegated
+                    // <ytm-app> update path and leaves a blank menu.
+                    if (sheet && sheet.childElementCount > 0) {
+                        mountSheet();
+                    } else if (retries > 0) {
+                        setTimeout(function() {
+                            mountSheetWhenReady(retries - 1);
+                        }, 16);
+                    }
+                }
+
+                function reportFailure(error) {
+                    if (window.AdVoidBridge && AdVoidBridge.onRotationError) {
+                        AdVoidBridge.onRotationError(
+                            'fullscreen settings failed: ' + (error && error.message)
+                        );
+                    }
+                }
+
+                function replayClickInPage(clicked, fullscreen, isGear) {
+                    document.exitFullscreen().then(function() {
+                        // fullscreenchange normally restores first; do it here
+                        // too so the replay always bubbles through <ytm-app>.
+                        restoreSheet();
+                        if (isGear) {
+                            clicked = document.querySelector('button.player-settings-icon') || clicked;
+                        }
+                        window._advoidReplayingSettingsClick = true;
+                        try { clicked.click(); }
+                        finally { window._advoidReplayingSettingsClick = false; }
+
+                        // The trusted outer click keeps transient activation for
+                        // this microtask, allowing us to return to fullscreen.
+                        var request = fullscreen.requestFullscreen();
+                        if (request && request.then) {
+                            request.then(function() {
+                                mountSheetWhenReady(30);
+                            }).catch(reportFailure);
+                        } else {
+                            mountSheetWhenReady(30);
+                        }
+                    }).catch(reportFailure);
+                }
+
+                window._advoidMountFullscreenSettings = mountSheet;
+                if (window._advoidFullscreenSettingsSetup) return;
+                window._advoidFullscreenSettingsSetup = true;
+
+                document.addEventListener('click', function(event) {
+                    if (window._advoidReplayingSettingsClick) return;
+                    var gear = event.target && event.target.closest
+                        ? event.target.closest('button.player-settings-icon')
+                        : null;
+                    var fullscreen = document.fullscreenElement;
+                    var sheet = window._advoidFullscreenSettingsSheet;
+                    var sheetClick = !!(
+                        fullscreen && sheet && fullscreen.contains(sheet) &&
+                        sheet.contains(event.target)
+                    );
+                    if (!fullscreen || (!gear && !sheetClick)) return;
+
+                    // YouTube's settings handlers are delegated under <ytm-app>
+                    // and do nothing while their sheet is in the fullscreen
+                    // player. Briefly leave fullscreen, replay the click through
+                    // YouTube's expected tree, then immediately return and mount
+                    // the populated sheet in the visible fullscreen top layer.
+                    event.preventDefault();
+                    event.stopImmediatePropagation();
+                    replayClickInPage(gear || event.target, fullscreen, !!gear);
+                }, true);
+                document.addEventListener('fullscreenchange', function() {
+                    if (!document.fullscreenElement) restoreSheet();
+                });
             })();
         """
 

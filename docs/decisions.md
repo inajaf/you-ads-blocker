@@ -4,6 +4,20 @@
 Reason: ...
 Alternatives: ... -->
 
+## 2026-08-11 — Bridge YouTube's delegated settings sheet across fullscreen DOM isolation
+Reason: Android fullscreen only displays descendants of the selected fullscreen element,
+while mobile YouTube owns its singleton `<bottom-sheet-container>` under `<ytm-app>` and
+delegates settings actions through that ancestry. Merely moving the sheet into
+`.player-container` makes it visible but breaks Quality, Speed, Captions, and other
+delegated actions. For the fullscreen gear and subsequent sheet actions, AdVoid briefly
+exits fullscreen, replays the click through YouTube's original tree, immediately requests
+fullscreen again using the same trusted activation, and then moves the populated sheet
+into the fullscreen top layer. On fullscreen exit it uses a comment marker to restore the
+sheet to the exact original DOM position.
+Alternatives: maintain a duplicate custom settings UI (rejected as fragile and incomplete),
+or exit fullscreen permanently whenever settings are opened (rejected because it breaks
+the expected fullscreen workflow).
+
 ## 2026-08-11 — Loading overlay keeps the dark plate but restores the square logo and compact spinner
 Reason: hands-on review found that wrapping the square 128px source artwork in a 112px
 circular ring and applying `border-radius: 50%` made the shield appear smaller and
