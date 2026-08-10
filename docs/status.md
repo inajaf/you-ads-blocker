@@ -1,5 +1,30 @@
 # Project status
 
+## 2026-08-11 — Android v1.3.3 release cut: player control stability and round branding
+
+PR #35 (`Android player control stability and round branding`) merged to `main`
+(`4fecd85`) and release `v1.3.3-android` cut with the signed `app-release.apk`
+(CN=AdVoid). The six branch commits land the stability and branding work below;
+see the entries after this one for details:
+- **Player control reliability** — robust play/pause/seek handling in the WebView
+  wrapper; fullscreen top controls sit below Android's transient system-bar touch
+  zone so Playback Settings stays tappable; loading overlay clears only after
+  `currentTime` actually advances; Shorts gain a narrow bottom seek range tied to
+  the active reel's duration.
+- **Fullscreen settings** — YouTube's delegated settings sheet (gear/Quality/
+  Speed/Captions) is bridged across fullscreen DOM isolation instead of breaking.
+- **Round branding** — one circular midnight-navy AdVoid emblem (cyan rim +
+  shield/play mark) across launcher adaptive/round icons, the Android 12 splash,
+  and the WebView loading plate; the loading emblem keeps its original square
+  logo proportions with the compact spinner.
+- Validated on the branch: `npm test` 165/165, `npm run build`, Android
+  `testDebugUnitTest` + `assembleDebug`, web UI check 12/12; gates re-verified
+  on merged main: `npm test` 165/165, `npm run build`, Android
+  `testDebugUnitTest`, and signed `assembleRelease` (CN=AdVoid).
+- Asset: `app-release.apk` (signed, CN=AdVoid); landing page
+  `releases/latest/download/app-release.apk` link keeps resolving to the new
+  release.
+
 ## 2026-08-11 — Android loading recovery review fixes
 
 Loading recovery now hides a stalled-video overlay only after `currentTime`
