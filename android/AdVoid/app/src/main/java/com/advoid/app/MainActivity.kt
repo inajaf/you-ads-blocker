@@ -701,12 +701,15 @@ class MainActivity : Activity() {
                         video.addEventListener('canplay', function() { setLoading(video, false); });
                         video.addEventListener('playing', function() { setLoading(video, false); });
                         video.addEventListener('seeking', function() { setLoading(video, false); });
-                        // `playing` is not guaranteed to fire again after every
-                        // transient stall. Advancing media time is definitive
-                        // proof that playback recovered, so it must clear a
-                        // late/stale waiting overlay as well.
+                        video._advoidLastMediaTime = Number(video.currentTime);
                         video.addEventListener('timeupdate', function() {
-                            if (!video.paused) setLoading(video, false);
+                            var previousTime = video._advoidLastMediaTime;
+                            var currentTime = Number(video.currentTime);
+                            video._advoidLastMediaTime = currentTime;
+                            if (!video.paused && Number.isFinite(previousTime) &&
+                                    Number.isFinite(currentTime) && currentTime > previousTime) {
+                                setLoading(video, false);
+                            }
                         });
 
                         // Fresh element (new video or SPA navigation): not ready

@@ -1,5 +1,13 @@
 # Project status
 
+## 2026-08-11 — Android loading recovery review fixes
+
+Loading recovery now hides a stalled-video overlay only after `currentTime`
+actually advances; a queued `timeupdate` at the same timestamp leaves genuine
+buffering visible. Regression coverage exercises both the unchanged and
+advancing timestamp paths. Review also confirmed that the Android 12 splash
+references the complete round shield/play emblem already present in the branch.
+
 ## 2026-08-11 — Unified round Android app and video-loading emblem
 
 Android branding now uses one polished circular AdVoid emblem: a midnight navy

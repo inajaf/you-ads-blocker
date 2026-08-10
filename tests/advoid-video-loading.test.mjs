@@ -124,6 +124,7 @@ class FakeVideo extends FakeElement {
     this.seeking = options.seeking ?? false
     this.paused = options.paused ?? true
     this.ended = options.ended ?? false
+    this.currentTime = options.currentTime ?? 0
   }
 }
 
@@ -311,14 +312,18 @@ describe('AdVoid loading overlay (VIDEO_WATCH_SCRIPT)', () => {
     assert.equal(env.player.classList.contains('advoid-loading'), false)
   })
 
-  it('clears a stale waiting overlay once media time advances', () => {
+  it('keeps a waiting overlay until media time actually advances', () => {
     const env = makeEnv()
-    const video = env.addVideo({ readyState: 3, paused: false })
+    const video = env.addVideo({ readyState: 3, paused: false, currentTime: 12 })
     env.setup()
 
     video.fire('waiting')
     assert.equal(env.player.classList.contains('advoid-loading'), true)
 
+    video.fire('timeupdate')
+    assert.equal(env.player.classList.contains('advoid-loading'), true)
+
+    video.currentTime = 12.25
     video.fire('timeupdate')
     assert.equal(env.player.classList.contains('advoid-loading'), false)
   })
