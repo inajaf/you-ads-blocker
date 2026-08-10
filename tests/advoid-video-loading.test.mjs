@@ -29,7 +29,7 @@ function extractWatchScript() {
 
 const WATCH_SCRIPT = extractWatchScript()
 
-// The overlay's look (dark plate, fade-in, logo ring) lives in STYLE_SCRIPT.
+// The overlay's look (dark plate, fade-in, square logo + spinner) lives in STYLE_SCRIPT.
 // It is injected as one <style> element, so the node tests assert the raw CSS
 // contains the rules the acceptance criteria depend on.
 function extractStyleScript() {
@@ -204,12 +204,8 @@ describe('AdVoid loading overlay (VIDEO_WATCH_SCRIPT)', () => {
     // Types policy that throws on innerHTML assignment, which used to kill the
     // overlay before the .advoid-loading class was added (grey button stayed).
     assert.equal(overlay.innerHTML, '')
-    // The logo and its spinner are one element: a frame whose <img> is wrapped
-    // by the ring that spins around it (not a logo with a spinner below).
-    const [frame] = overlay.children
-    assert.ok(frame, 'logo frame present')
-    assert.equal(frame.className, 'advoid-logo-ring')
-    const [img, spinner] = frame.children
+    // Preserve the original square logo proportions and compact spinner below.
+    const [img, spinner] = overlay.children
     assert.ok(img, 'logo <img> present')
     assert.equal(img.tagName, 'IMG')
     assert.ok(String(img.src).includes('data:image/png;base64,STUB'))
@@ -346,12 +342,14 @@ describe('AdVoid loading overlay styles (STYLE_SCRIPT)', () => {
     assert.match(STYLE_CSS, /@keyframes advoid-fade-in/)
   })
 
-  it('renders the logo wrapped by a thin spinning ring', () => {
-    // The spinner is a thin circular border that rotates around the centered
-    // logo — one element, not a logo with a spinner underneath.
-    assert.match(STYLE_CSS, /\.advoid-logo-ring/)
-    assert.match(STYLE_CSS, /\.advoid-logo-ring img/)
+  it('keeps the original square logo size with a compact spinner below', () => {
+    assert.match(STYLE_CSS, /#advoid-loading-overlay > img/)
+    assert.match(STYLE_CSS, /width: 88px; height: 88px/)
+    assert.doesNotMatch(STYLE_CSS, /\.advoid-logo-ring/)
+    assert.doesNotMatch(STYLE_CSS, /#advoid-loading-overlay > img[^}]*border-radius: 50%/s)
     assert.match(STYLE_CSS, /\.advoid-spinner/)
+    assert.match(STYLE_CSS, /width: 36px; height: 36px/)
+    assert.match(STYLE_CSS, /margin-top: 16px/)
     assert.match(STYLE_CSS, /border-radius: 50%/)
     assert.match(STYLE_CSS, /border-top-color: #5FCA6B/)
     assert.match(STYLE_CSS, /@keyframes advoid-spin/)

@@ -707,10 +707,6 @@ class MainActivity : Activity() {
                     // play button visible during loading.
                     var el = document.createElement('div');
                     el.id = 'advoid-loading-overlay';
-                    // The logo and its spinner are one element: a frame holding
-                    // the logo, wrapped by a ring that spins around it.
-                    var frame = document.createElement('div');
-                    frame.className = 'advoid-logo-ring';
                     var img = document.createElement('img');
                     img.src = '__ADVOID_LOGO_DATA_URI__';
                     img.alt = 'AdVoid';
@@ -718,9 +714,12 @@ class MainActivity : Activity() {
                     var spinner = document.createElement('div');
                     spinner.className = 'advoid-spinner';
                     spinner.setAttribute('aria-hidden', 'true');
-                    frame.appendChild(img);
-                    frame.appendChild(spinner);
-                    el.appendChild(frame);
+                    // Keep the original loading treatment: the square brand
+                    // artwork at its natural proportions with a compact spinner
+                    // below it. Cropping the square PNG into a circle makes the
+                    // shield look smaller and optically off-centre.
+                    el.appendChild(img);
+                    el.appendChild(spinner);
                     player.appendChild(el);
                     return el;
                 }
@@ -1045,7 +1044,7 @@ class MainActivity : Activity() {
          * .html5-video-player carries the .advoid-loading class that
          * VIDEO_WATCH_SCRIPT toggles), a dark plate fades in over the whole
          * player — hiding the grey background and centre play button — with
-         * the AdVoid logo in the middle and a thin spinner ring around it.
+         * the original square AdVoid logo and a compact spinner below it.
          */
         private const val STYLE_SCRIPT = """
             (function() {
@@ -1104,6 +1103,7 @@ class MainActivity : Activity() {
                     '  left: 0; top: 0;',
                     '  width: 100%; height: 100%;',
                     '  display: none;',
+                    '  flex-direction: column;',
                     '  align-items: center;',
                     '  justify-content: center;',
                     '  background: rgba(0,0,0,0.6);',
@@ -1118,26 +1118,16 @@ class MainActivity : Activity() {
                     '  from { opacity: 0; }',
                     '  to { opacity: 1; }',
                     '}',
-                    // The logo sits centered inside the ring, which spins around
-                    // it as a thin circular border; together they read as a
-                    // single element rather than a logo with a spinner below.
-                    '#advoid-loading-overlay .advoid-logo-ring {',
-                    '  position: relative;',
-                    '  width: 112px; height: 112px;',
-                    '  display: flex;',
-                    '  align-items: center;',
-                    '  justify-content: center;',
-                    '}',
-                    '#advoid-loading-overlay .advoid-logo-ring img {',
+                    // Preserve the square source artwork without circular
+                    // clipping; this matches the original loading-logo size.
+                    '#advoid-loading-overlay > img {',
                     '  width: 88px; height: 88px;',
                     '  display: block;',
-                    '  border-radius: 50%;',
                     '  box-shadow: 0 2px 16px rgba(0,0,0,0.45);',
                     '}',
                     '#advoid-loading-overlay .advoid-spinner {',
-                    '  position: absolute;',
-                    '  left: 0; top: 0;',
-                    '  width: 112px; height: 112px;',
+                    '  width: 36px; height: 36px;',
+                    '  margin-top: 16px;',
                     '  border-radius: 50%;',
                     '  border: 3px solid rgba(255,255,255,0.25);',
                     '  border-top-color: #5FCA6B;',

@@ -1,5 +1,14 @@
 # Project status
 
+## 2026-08-11 — Android loading logo restored to original proportions
+
+The circular loading-logo treatment was reverted after hands-on review: the
+source asset is square artwork, so `border-radius: 50%` plus the oversized
+112px spinner ring made the shield look smaller and optically off-centre. The
+loading plate now uses the original 88×88 square logo without clipping and the
+original compact 36×36 spinner below it. Loading-state logic, fullscreen control
+insets, and Shorts seeking are unchanged.
+
 ## 2026-08-10 — Android player controls and loading stability (branch codex/android-player-controls-stability)
 
 Three Android WebView playback defects were fixed in `android/AdVoid`:
