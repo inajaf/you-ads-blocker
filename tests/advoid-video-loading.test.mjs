@@ -142,6 +142,14 @@ class FakeDocument {
     if (selector === '.html5-video-player video') {
       return this._videos.filter((v) => v.closest('.html5-video-player'))
     }
+    if (selector === '.html5-video-player.advoid-loading') {
+      const players = new Set()
+      for (const video of this._videos) {
+        const player = video.closest('.html5-video-player')
+        if (player?.classList.contains('advoid-loading')) players.add(player)
+      }
+      return [...players]
+    }
     return []
   }
 }
@@ -153,11 +161,12 @@ class FakeMutationObserver {
 
 function makeEnv(pathname = '/watch') {
   const document = new FakeDocument()
+  const location = { pathname }
   const player = new FakeElement('div')
   player.classList.add('html5-video-player')
   const sandbox = {
     document,
-    location: { pathname },
+    location,
     MutationObserver: FakeMutationObserver,
     setTimeout,
     console,
@@ -174,6 +183,9 @@ function makeEnv(pathname = '/watch') {
   return {
     player,
     addVideo,
+    navigate: (nextPathname) => {
+      location.pathname = nextPathname
+    },
     sync: () => vm.runInContext('window._advoidSyncVideoState();', context),
     setup: () => vm.runInContext(WATCH_SCRIPT, context),
   }
@@ -289,9 +301,38 @@ describe('AdVoid loading overlay (VIDEO_WATCH_SCRIPT)', () => {
     env.sync()
     assert.equal(env.player.classList.contains('advoid-loading'), false)
   })
+
+  it('clears a watch loading class when SPA navigation leaves /watch', () => {
+    const env = makeEnv()
+    env.addVideo({ readyState: 0 })
+    env.setup()
+    assert.equal(env.player.classList.contains('advoid-loading'), true)
+
+    env.navigate('/shorts/abc')
+    env.sync()
+    assert.equal(env.player.classList.contains('advoid-loading'), false)
+  })
+
+  it('clears a stale waiting overlay once media time advances', () => {
+    const env = makeEnv()
+    const video = env.addVideo({ readyState: 3, paused: false })
+    env.setup()
+
+    video.fire('waiting')
+    assert.equal(env.player.classList.contains('advoid-loading'), true)
+
+    video.fire('timeupdate')
+    assert.equal(env.player.classList.contains('advoid-loading'), false)
+  })
 })
 
 describe('AdVoid loading overlay styles (STYLE_SCRIPT)', () => {
+  it('keeps fullscreen top controls below Android transient system bars', () => {
+    assert.match(STYLE_CSS, /:fullscreen \.player-controls-top/)
+    assert.match(STYLE_CSS, /:-webkit-full-screen \.player-controls-top/)
+    assert.match(STYLE_CSS, /top: max\(28px, env\(safe-area-inset-top\)\)/)
+  })
+
   it('covers the whole player with a dark plate and fades in', () => {
     // The overlay stretches over the full player area so neither the grey
     // background nor the centre play button shows through while loading.

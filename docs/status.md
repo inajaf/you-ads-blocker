@@ -1,5 +1,26 @@
 # Project status
 
+## 2026-08-10 — Android player controls and loading stability (branch codex/android-player-controls-stability)
+
+Three Android WebView playback defects were fixed in `android/AdVoid`:
+- YouTube's fullscreen top controls now sit below Android's transient system-bar
+  touch zone, so the top-right Playback Settings button remains tappable.
+- The AdVoid loading plate is cleared when a YouTube SPA navigation leaves
+  `/watch`, and advancing `timeupdate` events clear stale post-buffer overlays.
+- Shorts now have a narrow bottom range control tied to the active visible
+  video's duration/currentTime; it supports seeking, follows reel changes, and
+  leaves the rest of the viewport available for vertical navigation.
+
+Regression coverage was added in `tests/advoid-video-loading.test.mjs` and
+`tests/advoid-shorts-seek.test.mjs`. Gates: `npm test` 157/157, `npm run build`,
+Android `testDebugUnitTest` + `assembleDebug`, oxlint (pre-existing warnings
+only), and `./scripts/ui-check.sh` 12/12 on an isolated port. The final debug APK
+was installed side-by-side as `com.advoid.app.debug` on emulator-5554; no crash
+or ANR was found. Real YouTube reproduced the fullscreen hit-zone defect before
+the emulator lost DNS. The fixed inset was then verified with a fullscreen
+WebView fixture and a real ADB tap; real-site loading/Shorts retesting remains
+pending until the emulator's `ERR_NAME_NOT_RESOLVED` network fault clears.
+
 ## 2026-08-02 — Loading overlay redesigned: dark plate + logo ring (branch fm/android-loading-redesign)
 
 The captain rejected the v1.3.x loading overlay (88px logo + small spinner floating over

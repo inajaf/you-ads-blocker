@@ -214,6 +214,7 @@ class MainActivity : Activity() {
     private fun injectPageScripts(view: WebView?) {
         view?.evaluateJavascript(STYLE_SCRIPT, null)
         view?.evaluateJavascript(VIDEO_WATCH_SCRIPT, null)
+        view?.evaluateJavascript(SHORTS_SEEK_SCRIPT, null)
         view?.evaluateJavascript(PULL_REFRESH_SCRIPT, null)
         // Keep the Shorts marker class + reel-entry tracking current on SPA navs.
         view?.evaluateJavascript("window._advoidTrackNav && window._advoidTrackNav();", null)
@@ -725,9 +726,15 @@ class MainActivity : Activity() {
                 }
 
                 function setLoading(video, loading) {
-                    if (!isOnWatchPage()) return;
                     var player = playerOf(video);
                     if (!player) return;
+                    // YouTube reuses player nodes across SPA routes. Never leave
+                    // a loading class from /watch attached after navigation to
+                    // Shorts, the feed, or another non-watch surface.
+                    if (!isOnWatchPage()) {
+                        player.classList.remove('advoid-loading');
+                        return;
+                    }
                     if (loading) {
                         if (!player.querySelector('#advoid-loading-overlay')) {
                             createOverlay(player);
@@ -784,6 +791,13 @@ class MainActivity : Activity() {
                         video.addEventListener('canplay', function() { setLoading(video, false); });
                         video.addEventListener('playing', function() { setLoading(video, false); });
                         video.addEventListener('seeking', function() { setLoading(video, false); });
+                        // `playing` is not guaranteed to fire again after every
+                        // transient stall. Advancing media time is definitive
+                        // proof that playback recovered, so it must clear a
+                        // late/stale waiting overlay as well.
+                        video.addEventListener('timeupdate', function() {
+                            if (!video.paused) setLoading(video, false);
+                        });
 
                         // Fresh element (new video or SPA navigation): not ready
                         // yet means it is loading, so show the overlay now.
@@ -793,7 +807,13 @@ class MainActivity : Activity() {
                 }
 
                 function refreshAllLoading() {
-                    if (!isOnWatchPage()) return;
+                    if (!isOnWatchPage()) {
+                        document.querySelectorAll('.html5-video-player.advoid-loading')
+                            .forEach(function(player) {
+                                player.classList.remove('advoid-loading');
+                            });
+                        return;
+                    }
                     // Only the main player video drives the overlay; feed preview
                     // thumbnails (readyState 0) live outside .html5-video-player
                     // and must never trigger it.
@@ -819,6 +839,117 @@ class MainActivity : Activity() {
 
         private val VIDEO_WATCH_SCRIPT = VIDEO_WATCH_SCRIPT_TEMPLATE
             .replace("__ADVOID_LOGO_DATA_URI__", ADVOID_LOGO_DATA_URI)
+
+        /**
+         * YouTube's mobile Shorts player does not consistently expose a
+         * draggable progress control in WebView. Add a narrow native range at
+         * the bottom of the active Short: horizontal drags seek, while the rest
+         * of the viewport remains available for the normal vertical reel swipe.
+         */
+        private const val SHORTS_SEEK_SCRIPT = """
+            (function() {
+                function isOnShortsPage() {
+                    return location.pathname.indexOf('/shorts/') === 0;
+                }
+
+                function removeControl() {
+                    var old = document.getElementById('advoid-shorts-seek');
+                    if (old) old.remove();
+                }
+
+                function visibleArea(video) {
+                    var r = video.getBoundingClientRect();
+                    var width = Math.max(0, Math.min(r.right, innerWidth) - Math.max(r.left, 0));
+                    var height = Math.max(0, Math.min(r.bottom, innerHeight) - Math.max(r.top, 0));
+                    return width * height;
+                }
+
+                function activeVideo() {
+                    var best = null;
+                    var bestScore = -1;
+                    document.querySelectorAll('video').forEach(function(video) {
+                        if (video.ended || !Number.isFinite(video.duration) || video.duration <= 0) return;
+                        var area = visibleArea(video);
+                        if (area <= 0) return;
+                        // Prefer the currently playing reel; visible area breaks
+                        // ties while YouTube keeps neighbouring Shorts mounted.
+                        var score = area + (video.paused ? 0 : 1000000000);
+                        if (score > bestScore) { best = video; bestScore = score; }
+                    });
+                    return best;
+                }
+
+                function createControl() {
+                    var control = document.createElement('input');
+                    control.id = 'advoid-shorts-seek';
+                    control.type = 'range';
+                    control.min = '0';
+                    control.step = '0.05';
+                    control.setAttribute('aria-label', 'Seek Short');
+                    control.addEventListener('input', function() {
+                        var video = control._advoidVideo;
+                        var next = Number(control.value);
+                        if (!video || !Number.isFinite(next) || !Number.isFinite(video.duration)) return;
+                        video.currentTime = Math.max(0, Math.min(video.duration, next));
+                    });
+                    // Keep YouTube's reel carousel from interpreting a horizontal
+                    // seek as navigation. The listener is passive: the range
+                    // retains its native drag behaviour.
+                    ['touchstart', 'pointerdown'].forEach(function(type) {
+                        control.addEventListener(type, function(event) {
+                            control._advoidDragging = true;
+                            event.stopPropagation();
+                        }, { passive: true });
+                    });
+                    control.addEventListener('touchmove', function(event) {
+                        event.stopPropagation();
+                    }, { passive: true });
+                    ['touchend', 'touchcancel', 'pointerup', 'pointercancel', 'change']
+                        .forEach(function(type) {
+                            control.addEventListener(type, function(event) {
+                                control._advoidDragging = false;
+                                event.stopPropagation();
+                                sync();
+                            }, { passive: true });
+                        });
+                    control.addEventListener('blur', function() {
+                        control._advoidDragging = false;
+                        sync();
+                    });
+                    (document.body || document.documentElement).appendChild(control);
+                    return control;
+                }
+
+                function sync() {
+                    if (!isOnShortsPage()) { removeControl(); return; }
+                    var video = activeVideo();
+                    if (!video) { removeControl(); return; }
+                    var control = document.getElementById('advoid-shorts-seek') || createControl();
+                    var videoChanged = control._advoidVideo !== video;
+                    control._advoidVideo = video;
+                    control.max = String(video.duration);
+                    if (videoChanged || !control._advoidDragging) {
+                        control.value = String(Math.max(0, Math.min(video.duration, video.currentTime || 0)));
+                    }
+                }
+
+                window._advoidSyncShortsSeek = sync;
+                if (!window._advoidShortsSeekSetup) {
+                    window._advoidShortsSeekSetup = true;
+                    ['loadedmetadata', 'durationchange', 'timeupdate', 'playing', 'emptied']
+                        .forEach(function(type) {
+                            document.addEventListener(type, sync, true);
+                        });
+                    document.addEventListener('yt-navigate-finish', sync, true);
+                    window.addEventListener('popstate', sync);
+                    new MutationObserver(sync).observe(document.documentElement, {
+                        childList: true,
+                        subtree: true
+                    });
+                }
+                sync();
+            })();
+        """
 
         /**
          * Pull-to-refresh. Listens in the CAPTURE phase: YouTube's Shorts
@@ -936,6 +1067,29 @@ class MainActivity : Activity() {
                     'html.advoid-shorts ytm-searchbox,',
                     'html.advoid-shorts button[aria-label="Search"] {',
                     '  display: none !important;',
+                    '}',
+                    // Android transient system bars cover the first ~24 CSS px
+                    // in immersive fullscreen. Move YouTube's top controls below
+                    // that touch interception zone while leaving the video edge
+                    // to edge. Support both current and legacy fullscreen names.
+                    ':fullscreen .player-controls-top,',
+                    ':-webkit-full-screen .player-controls-top {',
+                    '  top: max(28px, env(safe-area-inset-top)) !important;',
+                    '}',
+                    // A compact Shorts-only scrubber. Its hit area is deliberately
+                    // limited to the bottom strip so vertical reel swipes continue
+                    // to work everywhere else.
+                    '#advoid-shorts-seek {',
+                    '  position: fixed;',
+                    '  left: 10%;',
+                    '  bottom: max(14px, env(safe-area-inset-bottom));',
+                    '  width: 80%;',
+                    '  height: 28px;',
+                    '  margin: 0;',
+                    '  z-index: 2147483000;',
+                    '  accent-color: #5FCA6B;',
+                    '  opacity: 0.92;',
+                    '  touch-action: none;',
                     '}',
                     '.html5-video-player.advoid-loading .ytp-large-play-button {',
                     '  display: none !important;',
