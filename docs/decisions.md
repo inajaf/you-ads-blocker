@@ -112,6 +112,10 @@ prevents the operating system's default Cmd+W behavior from closing the whole
 window when focus is inside a `WebContentsView`. The tabs onboarding step is
 Electron-only. Visible managed-Chrome metadata is migrated to AdVoid while the
 legacy runtime/profile paths stay stable to retain existing sign-in data.
+The shipped package identity is `advoid-desktop` / `com.advoid.desktop`, and
+new configuration uses `ADVOID_*` environment variables. Pre-existing
+`NOIRVA_*` variables and legacy managed-runtime paths remain accepted as
+compatibility aliases so users do not lose their private Chrome profile.
 Alternatives: (a) duplicate a macOS tab implementation — rejected because the
 platforms would drift; (b) keep the standard title bar — functional but wastes
 vertical space and makes the shared tabs look bolted on; (c) auto-upload every

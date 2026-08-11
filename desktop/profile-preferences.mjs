@@ -9,11 +9,11 @@ import {
 import path from 'node:path'
 
 /**
- * Keep Chrome-only prompts out of Noirva's dedicated private profile.
+ * Keep Chrome-only prompts out of AdVoid's dedicated private profile.
  * This never touches the user's normal Chrome profile or authentication data.
  */
 export function prepareNoirvaProfilePreferences(profileDir) {
-  if (!profileDir) throw new TypeError('A Noirva profile directory is required')
+  if (!profileDir) throw new TypeError('An AdVoid profile directory is required')
 
   const preferencesPath = path.join(profileDir, 'Default', 'Preferences')
   if (!existsSync(preferencesPath)) {
@@ -36,7 +36,7 @@ export function prepareNoirvaProfilePreferences(profileDir) {
   }
 
   preferences.translate = { ...translate, enabled: false }
-  const temporaryPath = `${preferencesPath}.noirva-tmp`
+  const temporaryPath = `${preferencesPath}.advoid-tmp`
   const mode = statSync(preferencesPath).mode
   writeFileSync(temporaryPath, JSON.stringify(preferences), 'utf8')
   chmodSync(temporaryPath, mode & 0o777)

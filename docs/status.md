@@ -12,6 +12,13 @@ the legacy Noirva name; the existing runtime/profile paths remain unchanged so
 saved sign-in data is preserved. The Electron-only guide explains tabs without
 showing unsupported tab instructions in Chrome App Mode.
 
+The follow-up branding pass also renamed the root/desktop npm package metadata
+to `advoid`/`advoid-desktop`, changed the desktop bundle identifier to
+`com.advoid.desktop`, added preferred `ADVOID_*` environment variables, and
+removed the remaining legacy name from user-visible errors and logs. Old
+`NOIRVA_*` variables, managed-runtime directories, marker files, asset
+filenames, and JavaScript bridge globals remain compatibility aliases only.
+
 macOS tab shortcuts use native application-menu accelerators: Cmd+T creates a
 tab and Cmd+W closes only the active tab, including the last-tab replacement
 path. Windows/Linux retain the existing renderer shortcut handling.
@@ -22,7 +29,7 @@ Windows-only workflow was replaced by a cross-platform macOS/Windows artifact
 build for pull requests and manual runs; it has no broad `v*` trigger and does
 not publish partial releases automatically.
 
-Validation completed: full repository tests 177/177, production build, targeted
+Validation completed: full repository tests 178/178, production build, targeted
 desktop tests, isolated web UI check 12/12, code review, valid x64/arm64 DMG
 checksums, and strict codesign verification. Hands-on Apple Silicon QA covered
 the five-step AdVoid onboarding, traffic-light spacing, strip dragging,

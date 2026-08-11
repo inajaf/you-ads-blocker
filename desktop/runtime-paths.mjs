@@ -37,18 +37,20 @@ const defaultProfileDir = defaultDataDir('Tube Desktop Chrome', 'Noirva Desktop 
 const defaultRuntimeDir = defaultDataDir('Tube Desktop Runtime', 'Noirva Desktop Runtime')
 
 export const profileDir =
+  process.env.ADVOID_PROFILE_DIR ||
   process.env.NOIRVA_PROFILE_DIR ||
   process.env.TUBE_PROFILE_DIR ||
   defaultProfileDir
 
 export const chromePath =
+  process.env.ADVOID_CHROME_PATH ||
   process.env.NOIRVA_CHROME_PATH ||
   process.env.TUBE_CHROME_PATH ||
   (layout ? path.join(defaultRuntimeDir, layout.bundleDir, ...layout.executableParts) : '')
 
 export function ensureChromeRuntime() {
   if (!layout) {
-    console.error('Noirva Desktop currently supports macOS and Windows only.')
+    console.error('AdVoid Desktop currently supports macOS and Windows only.')
     process.exit(1)
   }
   if (existsSync(chromePath)) return
@@ -56,6 +58,6 @@ export function ensureChromeRuntime() {
   console.error('Chrome for Testing was not found.')
   console.error(`Expected: ${chromePath}`)
   console.error('Download: https://googlechromelabs.github.io/chrome-for-testing/')
-  console.error('Set NOIRVA_CHROME_PATH to the Chrome for Testing executable and retry.')
+  console.error('Set ADVOID_CHROME_PATH to the Chrome for Testing executable and retry.')
   process.exit(1)
 }

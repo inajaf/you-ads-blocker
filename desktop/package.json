@@ -1,5 +1,5 @@
 {
-  "name": "noirva-desktop",
+  "name": "advoid-desktop",
   "version": "1.0.0",
   "private": true,
   "description": "AdVoid desktop video window with supported Google sign-in and ad filtering.",
@@ -17,7 +17,7 @@
     "dist:win": "cd .. && npm run build:extension && cd desktop && electron-builder --win"
   },
   "build": {
-    "appId": "com.noirva.desktop",
+    "appId": "com.advoid.desktop",
     "productName": "AdVoid",
     "directories": {
       "output": "release"

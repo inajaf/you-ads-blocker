@@ -95,7 +95,7 @@ function showChromeHandoffError(error) {
   mainWindow?.show()
   dialog.showErrorBox(
     'Chrome sign-in is unavailable',
-    `${error.message}\n\nInstall the AdVoid Chrome runtime or set NOIRVA_CHROME_PATH and try again.`,
+    `${error.message}\n\nInstall the AdVoid Chrome runtime or set ADVOID_CHROME_PATH and try again.`,
   )
 }
 
@@ -431,7 +431,14 @@ function createTabStrip() {
 }
 
 function scheduleScreenshotIfRequested() {
-  if (!(process.env.NOIRVA_SCREENSHOT || process.env.TUBE_SCREENSHOT)) return
+  if (
+    !(
+      process.env.ADVOID_SCREENSHOT ||
+      process.env.NOIRVA_SCREENSHOT ||
+      process.env.TUBE_SCREENSHOT
+    )
+  )
+    return
   const view = viewsByTabId.get(tabModel.activeId)
   if (!view) return
   view.webContents.once('did-finish-load', () => {

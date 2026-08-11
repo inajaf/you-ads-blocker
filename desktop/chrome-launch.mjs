@@ -89,7 +89,7 @@ export function waitForChromeStartup(
             return
           }
           const reason = signal ? `signal ${signal}` : `exit code ${code}`
-          fail(new Error(`Chrome exited before opening Noirva (${reason}).`))
+          fail(new Error(`Chrome exited before opening AdVoid (${reason}).`))
         },
         fail,
       )
