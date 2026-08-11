@@ -105,7 +105,7 @@ describe('Electron Google sign-in handoff', () => {
     assert.match(loginSource, /--disable-extensions-except=/)
   })
 
-  it('brands only the private Chrome runtime as Noirva before launch', () => {
+  it('brands only the private Chrome runtime as AdVoid before launch', () => {
     const startSource = fs.readFileSync(
       new URL('../desktop/start-chrome-app.mjs', import.meta.url),
       'utf8',
@@ -129,6 +129,8 @@ describe('Electron Google sign-in handoff', () => {
     assert.match(brandingSource, /CFBundleDisplayName/)
     assert.match(brandingSource, /CFBundleName/)
     assert.match(brandingSource, /CFBundleIconFile/)
+    assert.match(brandingSource, /CFBundleDisplayName'\) !== 'AdVoid'/)
+    assert.match(brandingSource, /'ProductName',\s*'AdVoid'/)
     assert.match(brandingSource, /removePlistKey\(infoPlistPath, 'CFBundleIconName'\)/)
     assert.match(brandingSource, /Noirva Desktop Runtime/)
     assert.match(brandingSource, /Tube Desktop Runtime/)

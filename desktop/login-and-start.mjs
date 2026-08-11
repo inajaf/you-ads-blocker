@@ -13,7 +13,7 @@ ensureChromeRuntime()
 prepareChromeRuntimeBranding(chromePath)
 
 console.log('Sign in with the supported Google Chrome window.')
-console.log('Close that window after YouTube shows your avatar; Noirva will open automatically.')
+console.log('Close that window after YouTube shows your avatar; AdVoid will open automatically.')
 
 const login = spawn(
   chromePath,

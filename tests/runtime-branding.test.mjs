@@ -98,6 +98,8 @@ describe('private Chrome runtime branding', () => {
       brandingCalls += 1
       assert.equal(executablePath, rceditPath)
       assert.ok(args.includes('--set-icon'))
+      assert.equal(args.filter((value) => value === 'AdVoid').length, 3)
+      assert.equal(args.includes('Noirva'), false)
       writeFileSync(windowsExecutable, 'branded chrome')
     }
     const options = {
@@ -117,5 +119,11 @@ describe('private Chrome runtime branding', () => {
       'original chrome',
     )
     assert.equal(existsSync(`${windowsExecutable}.noirva-branding.json`), true)
+    assert.equal(
+      JSON.parse(
+        readFileSync(`${windowsExecutable}.noirva-branding.json`, 'utf8'),
+      ).version,
+      2,
+    )
   })
 })

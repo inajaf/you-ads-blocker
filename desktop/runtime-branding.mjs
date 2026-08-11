@@ -105,7 +105,7 @@ function ensureWindowsChromeRuntimeBranding({
 
   for (const requiredPath of [chromeExecutablePath, iconPath, rceditPath]) {
     if (!existsSync(requiredPath)) {
-      throw new Error(`Noirva runtime branding file was not found: ${requiredPath}`)
+      throw new Error(`AdVoid runtime branding file was not found: ${requiredPath}`)
     }
   }
 
@@ -115,7 +115,7 @@ function ensureWindowsChromeRuntimeBranding({
   const executableDigest = fileDigest(chromeExecutablePath)
   const marker = readJsonFile(markerPath)
   if (
-    marker?.version === 1 &&
+    marker?.version === 2 &&
     marker.iconDigest === iconDigest &&
     marker.executableDigest === executableDigest
   ) {
@@ -136,13 +136,13 @@ function ensureWindowsChromeRuntimeBranding({
       iconPath,
       '--set-version-string',
       'ProductName',
-      'Noirva',
+      'AdVoid',
       '--set-version-string',
       'FileDescription',
-      'Noirva',
+      'AdVoid',
       '--set-version-string',
       'InternalName',
-      'Noirva',
+      'AdVoid',
     ],
     { stdio: 'ignore' },
   )
@@ -150,7 +150,7 @@ function ensureWindowsChromeRuntimeBranding({
   writeFileSync(
     markerPath,
     `${JSON.stringify({
-      version: 1,
+      version: 2,
       iconDigest,
       executableDigest: fileDigest(chromeExecutablePath),
     }, null, 2)}\n`,
@@ -189,11 +189,11 @@ function removePlistKey(infoPlistPath, key) {
 }
 
 /**
- * Brands Noirva's private Chrome for Testing bundle without touching a user's
+ * Brands AdVoid's private Chrome for Testing bundle without touching a user's
  * installed browser. On Windows the original executable is backed up before
  * its private resources are branded. Chrome for Testing on macOS ships both
  * CFBundleIconName and CFBundleIconFile; macOS prefers the Assets.car icon
- * named by the first key, so it must be removed before the Noirva .icns file
+ * named by the first key, so it must be removed before the AdVoid .icns file
  * can be displayed.
  */
 export function ensureChromeRuntimeBranding({
@@ -209,7 +209,7 @@ export function ensureChromeRuntimeBranding({
     return { branded: false, changed: false, reason: 'unsupported-platform' }
   }
   if (!chromeExecutablePath) {
-    throw new Error('Chrome executable path is required for Noirva branding.')
+    throw new Error('Chrome executable path is required for AdVoid branding.')
   }
 
   if (platform === 'win32') {
@@ -231,7 +231,7 @@ export function ensureChromeRuntimeBranding({
   const appIconPath = path.join(appPath, 'Contents', 'Resources', 'app.icns')
   for (const requiredPath of [chromeExecutablePath, infoPlistPath, iconPath]) {
     if (!existsSync(requiredPath)) {
-      throw new Error(`Noirva runtime branding file was not found: ${requiredPath}`)
+      throw new Error(`AdVoid runtime branding file was not found: ${requiredPath}`)
     }
   }
 
@@ -241,15 +241,15 @@ export function ensureChromeRuntimeBranding({
     changed = true
   }
 
-  if (readPlistValue(infoPlistPath, 'CFBundleDisplayName') !== 'Noirva') {
-    setPlistString(infoPlistPath, 'CFBundleDisplayName', 'Noirva')
+  if (readPlistValue(infoPlistPath, 'CFBundleDisplayName') !== 'AdVoid') {
+    setPlistString(infoPlistPath, 'CFBundleDisplayName', 'AdVoid')
     changed = true
   }
   // macOS uses CFBundleName for the first application-menu item. Keeping it
   // branded prevents the private runtime from surfacing "Chrome for Testing"
-  // inside the otherwise standalone Noirva app experience.
-  if (readPlistValue(infoPlistPath, 'CFBundleName') !== 'Noirva') {
-    setPlistString(infoPlistPath, 'CFBundleName', 'Noirva')
+  // inside the otherwise standalone AdVoid app experience.
+  if (readPlistValue(infoPlistPath, 'CFBundleName') !== 'AdVoid') {
+    setPlistString(infoPlistPath, 'CFBundleName', 'AdVoid')
     changed = true
   }
   if (readPlistValue(infoPlistPath, 'CFBundleIconFile') !== 'app.icns') {
@@ -274,14 +274,14 @@ export function prepareChromeRuntimeBranding(chromeExecutablePath) {
   try {
     const result = ensureChromeRuntimeBranding({ chromeExecutablePath })
     if (result.changed) {
-      console.log('Noirva name and app icon were applied to the private Chrome runtime.')
+      console.log('AdVoid name and app icon were applied to the private Chrome runtime.')
     }
     if (result.reason === 'external-runtime') {
-      console.warn('Custom Chrome path detected; Noirva left that external browser bundle unchanged.')
+      console.warn('Custom Chrome path detected; AdVoid left that external browser bundle unchanged.')
     }
     return result
   } catch (error) {
-    console.warn(`Noirva could not brand the private Chrome runtime: ${error.message}`)
+    console.warn(`AdVoid could not brand the private Chrome runtime: ${error.message}`)
     return { branded: false, changed: false, reason: 'branding-error', error }
   }
 }

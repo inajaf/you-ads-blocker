@@ -18,7 +18,12 @@ const { resolveProjectPath } = require('./project-path')
 const { classifyElectronNavigation, createChromeHandoffArgs } = require('./chrome-auth')
 const { createTabModel, HOME_URL, isVideoOpenUrl, isYouTubeUrl } = require('./tab-model')
 const { buildContextMenuItems } = require('./tab-context-menu')
+const { createApplicationMenuTemplate } = require('./application-menu')
 const { TAB_OPEN_CHANNEL, TAB_STRIP_CHANNELS } = require('./tab-ipc')
+const {
+  createDesktopWindowOptions,
+  createTabStripLoadOptions,
+} = require('./window-options')
 
 // Keep YouTube rendering consistent with the Chromium engine bundled in this
 // Electron build. Google account authentication is handled separately in a
@@ -32,7 +37,7 @@ const chromeUserAgent = [
   'Safari/537.36',
 ].join(' ')
 app.userAgentFallback = chromeUserAgent
-app.setName('Noirva')
+app.setName('AdVoid')
 
 // Height of the in-window tab strip; video pages render below it.
 const STRIP_HEIGHT = 42
@@ -43,9 +48,9 @@ let blockList = []
 try {
   const parsed = JSON.parse(fs.readFileSync(hostsPath, 'utf8'))
   blockList = Array.isArray(parsed.block) ? parsed.block : []
-  console.log(`[Noirva] loaded ${blockList.length} block substrings from ${hostsPath}`)
+  console.log(`[AdVoid] loaded ${blockList.length} block substrings from ${hostsPath}`)
 } catch (err) {
-  console.error('[Noirva] failed to load hosts.json:', err)
+  console.error('[AdVoid] failed to load hosts.json:', err)
 }
 
 // Module-level counter so blocking is observable in stdout.
@@ -86,11 +91,11 @@ function findExtensionDir() {
 
 function showChromeHandoffError(error) {
   chromeHandoffStarted = false
-  console.error('[Noirva] failed to open supported Chrome sign-in:', error)
+  console.error('[AdVoid] failed to open supported Chrome sign-in:', error)
   mainWindow?.show()
   dialog.showErrorBox(
     'Chrome sign-in is unavailable',
-    `${error.message}\n\nInstall the Noirva Chrome runtime or set NOIRVA_CHROME_PATH and try again.`,
+    `${error.message}\n\nInstall the AdVoid Chrome runtime or set NOIRVA_CHROME_PATH and try again.`,
   )
 }
 
@@ -109,7 +114,7 @@ async function openSupportedChromeSignIn() {
 
     const extensionDir = findExtensionDir()
     if (!extensionDir) {
-      throw new Error('The Noirva Chrome extension is not available')
+      throw new Error('The AdVoid Chrome extension is not available')
     }
 
     const chrome = spawn(
@@ -121,7 +126,7 @@ async function openSupportedChromeSignIn() {
       isProfileRunning: () => isChromeProfileRunning({ chromePath, profileDir }),
     })
     if (chrome.exitCode === null) chrome.unref()
-    console.log('[Noirva] Google sign-in handed off to supported Chrome')
+    console.log('[AdVoid] Google sign-in handed off to supported Chrome')
     app.quit()
   } catch (error) {
     showChromeHandoffError(error)
@@ -221,7 +226,7 @@ function createTabView(tab) {
   viewsByTabId.set(tab.id, view)
   layoutViews()
   void contents.loadURL(tab.url).catch((error) => {
-    console.error(`[Noirva] tab ${tab.id} failed to load ${tab.url}:`, error)
+    console.error(`[AdVoid] tab ${tab.id} failed to load ${tab.url}:`, error)
   })
   return view
 }
@@ -245,7 +250,7 @@ function handleTabNavigation(tabId, details) {
   }
   if (action === 'external') {
     void shell.openExternal(details.url).catch((error) => {
-      console.error('[Noirva] failed to open external link:', error)
+      console.error('[AdVoid] failed to open external link:', error)
     })
   }
 }
@@ -256,13 +261,17 @@ function handleWindowOpen({ url }) {
   else if (action === 'allow') openNewTab(url, { forceNew: true })
   else if (action === 'external') {
     void shell.openExternal(url).catch((error) => {
-      console.error('[Noirva] failed to open external link:', error)
+      console.error('[AdVoid] failed to open external link:', error)
     })
   }
   return { action: 'deny' }
 }
 
 function installTabShortcuts(contents) {
+  // macOS routes Command accelerators through the native application menu.
+  // BrowserWindow's default Cmd+W closes the whole window if the renderer
+  // hook misses an event, so keep this hook as the Windows/Linux fallback.
+  if (process.platform === 'darwin') return
   contents.on('before-input-event', (event, input) => {
     if (input.type !== 'keyDown') return
     const primary = process.platform === 'darwin' ? input.meta : input.control
@@ -276,6 +285,20 @@ function installTabShortcuts(contents) {
       if (tabModel.activeId !== null) closeTab(tabModel.activeId)
     }
   })
+}
+
+function installApplicationMenu() {
+  const template = createApplicationMenuTemplate({
+    platform: process.platform,
+    appName: 'AdVoid',
+    onNewTab: () => {
+      if (tabModel) openNewTab(HOME_URL, { forceNew: true })
+    },
+    onCloseTab: () => {
+      if (tabModel && tabModel.activeId !== null) closeTab(tabModel.activeId)
+    },
+  })
+  Menu.setApplicationMenu(template ? Menu.buildFromTemplate(template) : null)
 }
 
 // Right-click menu for a tab. YouTube links get a native "Open in New Tab" item
@@ -397,7 +420,14 @@ function createTabStrip() {
     console.log('[strip]', message)
   })
   installTabShortcuts(stripContents)
-  stripContents.loadFile(path.join(__dirname, 'tab-strip.html'))
+  void stripContents
+    .loadFile(
+      path.join(__dirname, 'tab-strip.html'),
+      createTabStripLoadOptions(),
+    )
+    .catch((error) => {
+      console.error('[AdVoid] tab strip failed to load:', error)
+    })
 }
 
 function scheduleScreenshotIfRequested() {
@@ -409,9 +439,9 @@ function scheduleScreenshotIfRequested() {
       try {
         const img = await view.webContents.capturePage()
         fs.writeFileSync(path.join(__dirname, 'screenshot.png'), img.toPNG())
-        console.log('[Noirva] screenshot saved')
+        console.log('[AdVoid] screenshot saved')
       } catch (error) {
-        console.error('[Noirva] screenshot failed:', error)
+        console.error('[AdVoid] screenshot failed:', error)
       }
       setTimeout(() => app.quit(), 1500)
     }, 6000)
@@ -419,22 +449,13 @@ function scheduleScreenshotIfRequested() {
 }
 
 function createWindow() {
-  mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
-    title: 'Noirva',
-    backgroundColor: '#0b0b0d',
-    icon: resolveProjectPath('assets', 'brand', 'noirva-logo-v2-512.png'),
-    webPreferences: {
-      contextIsolation: true,
-      sandbox: false,
-      nodeIntegration: false,
-    },
-  })
+  mainWindow = new BrowserWindow(
+    createDesktopWindowOptions({
+      icon: resolveProjectPath('assets', 'brand', 'noirva-logo-v2-512.png'),
+    }),
+  )
 
-  // Read as an app, not a browser: no application menu.
-  Menu.setApplicationMenu(null)
-  mainWindow.setTitle('Noirva')
+  mainWindow.setTitle('AdVoid')
 
   tabModel = createTabModel()
   createTabStrip()
@@ -474,6 +495,7 @@ app.whenReady().then(() => {
   }
 
   createWindow()
+  installApplicationMenu()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

@@ -67,6 +67,11 @@ function renderStrip(container, state) {
 }
 
 function init() {
+  const platform = new URLSearchParams(window.location.search).get('platform')
+  if (platform === 'darwin' || platform === 'win32' || platform === 'linux') {
+    document.body.dataset.platform = platform
+  }
+
   const tabs = document.getElementById('tabs')
   const newTab = document.getElementById('new-tab')
   if (!window.advoidTabs || !tabs || !newTab) return

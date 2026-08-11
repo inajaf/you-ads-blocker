@@ -1,5 +1,36 @@
 # Project status
 
+## 2026-08-11 — macOS desktop parity with Windows tabs (branch codex/macos-windows-tabs-parity)
+
+The shared Electron multi-tab implementation is now explicitly packaged and
+integrated for macOS. Darwin windows use an inset native title bar, the tab
+strip reserves space for the traffic lights, empty strip space drags the
+window, and tabs/buttons remain interactive. Overflow scrolling now lives on
+the actual tab container instead of being clipped by it. User-visible Electron
+window, onboarding, and managed Chrome runtime branding say AdVoid rather than
+the legacy Noirva name; the existing runtime/profile paths remain unchanged so
+saved sign-in data is preserved. The Electron-only guide explains tabs without
+showing unsupported tab instructions in Chrome App Mode.
+
+macOS tab shortcuts use native application-menu accelerators: Cmd+T creates a
+tab and Cmd+W closes only the active tab, including the last-tab replacement
+path. Windows/Linux retain the existing renderer shortcut handling.
+
+macOS packaging now follows the working Windows path and rebuilds the shared
+extension from the repository root before invoking electron-builder. The old
+Windows-only workflow was replaced by a cross-platform macOS/Windows artifact
+build for pull requests and manual runs; it has no broad `v*` trigger and does
+not publish partial releases automatically.
+
+Validation completed: full repository tests 177/177, production build, targeted
+desktop tests, isolated web UI check 12/12, code review, valid x64/arm64 DMG
+checksums, and strict codesign verification. Hands-on Apple Silicon QA covered
+the five-step AdVoid onboarding, traffic-light spacing, strip dragging,
+Cmd+T/Cmd+W, plus/select/close, last-tab replacement, 20+ tab overflow, and
+Dock window recreation; all passed with no crash. The local packages are
+Apple Development-signed but not notarized, so a public macOS release still
+needs Developer ID distribution signing and Apple notarization.
+
 ## 2026-08-11 — Android v1.3.3 release cut: player control stability and round branding
 
 PR #35 (`Android player control stability and round branding`) merged to `main`

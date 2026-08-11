@@ -94,6 +94,30 @@ Reason: Browser-style multi-tab support. `BrowserWindow`-based tabs would each n
 Approach: each tab is a `WebContentsView` (`contextIsolation: true`, `sandbox: false`, `nodeIntegration: false`, `backgroundThrottling: false`) managed by `desktop/tab-model.js`; the strip is a separate `WebContentsView` below `STRIP_HEIGHT = 42`; `desktop/tab-ipc.js` bridges strip clicks to the main process.
 Alternatives: (a) one `BrowserWindow` per tab with hidden windows — heavy, no shared UI; (b) a single `WebContentsView` with SPA-tab state — can't isolate ad blocking or page crashes per tab.
 
+## 2026-08-11 — macOS uses the shared Electron tabs inside an inset native title bar
+Reason: the Windows Electron build already had browser-style tabs, but the
+macOS packaging command did not rebuild the shared extension and the default
+title bar left the tab strip looking like a second toolbar. A newly built DMG
+could therefore miss current extension behavior even though `main.js` was
+shared.
+Approach: keep one cross-platform tab implementation; on Darwin only, create
+the `BrowserWindow` with `titleBarStyle: hiddenInset`, reserve 82px in the strip
+for the traffic lights, and make only empty strip space draggable. The tab
+buttons remain `no-drag`. Both `dist:mac` and `dist:win` rebuild the root
+extension before packaging. The desktop CI builds both platforms on pull
+requests/manual dispatch and deliberately has no broad `v*` tag trigger, so an
+Android tag cannot publish a stale desktop asset. On macOS, Cmd+T and Cmd+W are
+native application-menu accelerators rather than renderer-only listeners; this
+prevents the operating system's default Cmd+W behavior from closing the whole
+window when focus is inside a `WebContentsView`. The tabs onboarding step is
+Electron-only. Visible managed-Chrome metadata is migrated to AdVoid while the
+legacy runtime/profile paths stay stable to retain existing sign-in data.
+Alternatives: (a) duplicate a macOS tab implementation — rejected because the
+platforms would drift; (b) keep the standard title bar — functional but wastes
+vertical space and makes the shared tabs look bolted on; (c) auto-upload every
+desktop build to a release — rejected because `releases/latest` serves all
+platform links and a partial release would break the other downloads.
+
 ## 2026-08-01 — Explicit desktop tab gestures always create a distinct tab
 Reason: Cmd/Ctrl-click, middle-click, context-menu open, and `window.open` express an explicit browser new-tab intent, even when the same URL is already open.
 Approach: every explicit entry point passes `forceNew`; allowed context-menu links use the shared YouTube URL allowlist; trusted gestures are captured in the isolated preload without a forgeable page-world event bridge.

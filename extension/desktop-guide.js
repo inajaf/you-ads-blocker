@@ -1,16 +1,27 @@
 /**
- * Shared, dependency-free model for the Noirva desktop first-run guide.
+ * Shared, dependency-free model for the AdVoid desktop first-run guide.
  *
  * This file is loaded before content.js as a classic content script. Keeping
  * the step data and navigation rules here also lets Node exercise them without
  * requiring a browser DOM.
  */
 (function registerTubeDesktopGuide(global) {
-  // Version 2 intentionally reopens onboarding for people who completed the
-  // original Tube walkthrough before the Noirva rebrand.
-  const VERSION = 2
-  const PRODUCT_NAME = 'Noirva'
+  // Version 3 introduces the final AdVoid name and the shared desktop tabs.
+  const VERSION = 3
+  const PRODUCT_NAME = 'AdVoid'
   const TAGLINE = 'Focused video with fewer interruptions.'
+
+  const TAB_STEP = Object.freeze({
+    eyebrow: 'Browser-style tabs',
+    title: 'Keep more than one video open',
+    description:
+      'Each tab has its own YouTube view while sharing your AdVoid session and protection.',
+    points: Object.freeze([
+      'Use Command + T on Mac or Ctrl + T on Windows to open a tab.',
+      'Command/Ctrl + click, middle-click, or the right-click menu opens a link in a new tab.',
+    ]),
+    icon: 'tabs',
+  })
 
   const STEPS = Object.freeze([
     Object.freeze({
@@ -26,7 +37,7 @@
     }),
     Object.freeze({
       eyebrow: 'Automatic protection',
-      title: 'Noirva Shield is already running',
+      title: 'AdVoid Shield is already running',
       description:
         `${PRODUCT_NAME} starts its built-in Shield protection with the app and filters known YouTube ad requests automatically.`,
       points: Object.freeze([
@@ -59,20 +70,21 @@
     }),
   ])
 
-  const ELECTRON_STEPS = Object.freeze(
-    STEPS.map((step, index) => {
-      if (index !== 0) return step
-      return Object.freeze({
-        ...step,
-        description:
-          `Browse as a guest here. When you choose Sign in, ${PRODUCT_NAME} switches to a supported Chrome app window.`,
-        points: Object.freeze([
-          `Google blocks account sign-in inside Electron, so ${PRODUCT_NAME} never asks you to bypass that warning.`,
-          `The private ${PRODUCT_NAME} Chrome profile remembers your Google session.`,
-        ]),
-      })
-    }),
-  )
+  const electronIntro = Object.freeze({
+    ...STEPS[0],
+    description:
+      `Browse as a guest here. When you choose Sign in, ${PRODUCT_NAME} switches to a supported Chrome app window.`,
+    points: Object.freeze([
+      `Google blocks account sign-in inside Electron, so ${PRODUCT_NAME} never asks you to bypass that warning.`,
+      `The private ${PRODUCT_NAME} Chrome profile remembers your Google session.`,
+    ]),
+  })
+  const ELECTRON_STEPS = Object.freeze([
+    electronIntro,
+    STEPS[1],
+    TAB_STEP,
+    ...STEPS.slice(2),
+  ])
 
   function createGuide(steps) {
     function clampStep(index) {

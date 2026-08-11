@@ -9,9 +9,10 @@ For Windows install steps (SmartScreen bypass), see the [root README](../README.
 
 ## Install on macOS
 
-### 1. Bypass Gatekeeper
+### 1. Open an unnotarized build
 
-The app is unsigned (no Apple Developer ID). Pick one:
+Public artifacts are not yet signed with a Developer ID certificate or
+notarized by Apple. Pick one:
 
 **Right-click → Open (permanent)**
 1. Right-click **AdVoid.app** in Finder
@@ -45,3 +46,10 @@ Click **Sign in** — a clean Chrome window opens. Sign into your Google account
 ## Development
 
 Run `npm run start:electron` from this directory. Its prestart hook rebuilds the extension before Electron launches. Tab wiring lives in `main.js` + `tab-model.js`; the strip UI is `tab-strip.html`/`.js`; click conventions are in `desktop-tab-open.js`; the context menu is `tab-context-menu.js`.
+
+The same Electron tab implementation is packaged on both platforms. On macOS,
+the strip occupies the native inset title bar, keeps the traffic-light controls
+clear, and leaves empty strip space draggable. Build installers with
+`npm run dist:mac` or `npm run dist:win`; both commands rebuild the shared
+extension first. The cross-platform GitHub Actions workflow builds both formats
+for pull requests and manual runs, but does not publish releases automatically.
