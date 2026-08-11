@@ -10,7 +10,7 @@ before(async () => {
 describe('desktop first-run guide model', () => {
   it('contains a short ordered walkthrough', () => {
     const guide = globalThis.TubeDesktopGuide
-    assert.equal(guide.VERSION, 4)
+assert.equal(guide.VERSION, 4)
     assert.equal(guide.PRODUCT_NAME, 'AdVoid')
     assert.equal(guide.STEPS.length, 4)
     assert.deepEqual(
