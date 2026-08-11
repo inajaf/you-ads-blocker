@@ -6,7 +6,7 @@
  * requiring a browser DOM.
  */
 (function registerTubeDesktopGuide(global) {
-// Version 4 explains that sign-in returns to the in-app Electron tabs.
+  // Version 4 explains that sign-in returns to the in-app Electron tabs.
   const VERSION = 4
   const PRODUCT_NAME = 'AdVoid'
   const TAGLINE = 'Focused video with fewer interruptions.'
