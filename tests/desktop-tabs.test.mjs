@@ -19,7 +19,10 @@ describe('AdVoid desktop multi-tab wiring', () => {
     assert.match(mainSource, /contentView\.addChildView/)
     assert.match(mainSource, /setVisible/)
     assert.match(mainSource, /STRIP_HEIGHT/)
-    assert.match(mainSource, /loadFile\(path\.join\(__dirname, 'tab-strip\.html'\)\)/)
+    assert.match(
+      mainSource,
+      /loadFile\([\s\S]*path\.join\(__dirname, 'tab-strip\.html'\)[\s\S]*createTabStripLoadOptions\(\)/,
+    )
     assert.match(mainSource, /backgroundThrottling:\s*false/)
     assert.match(mainSource, /contextIsolation:\s*true/)
   })
@@ -70,7 +73,24 @@ describe('AdVoid desktop multi-tab wiring', () => {
   })
 
   it('scrolls overflowing tabs and keeps the active tab visible', () => {
-    assert.match(tabStripHtml, /overflow-x:\s*auto/)
+    assert.match(tabStripHtml, /#tabs[\s\S]*overflow-x:\s*auto/)
     assert.match(tabStripSource, /scrollIntoView/)
+  })
+
+  it('keeps macOS traffic lights clear and makes empty strip space draggable', () => {
+    assert.match(tabStripSource, /document\.body\.dataset\.platform = platform/)
+    assert.match(tabStripHtml, /data-platform='darwin'/)
+    assert.match(tabStripHtml, /padding-left:\s*82px/)
+    assert.match(tabStripHtml, /-webkit-app-region:\s*drag/)
+    assert.match(tabStripHtml, /-webkit-app-region:\s*no-drag/)
+  })
+
+  it('routes macOS tab shortcuts through the native menu', () => {
+    assert.match(mainSource, /require\('\.\/application-menu'\)/)
+    assert.match(
+      mainSource,
+      /function installTabShortcuts\(contents\) \{[\s\S]*process\.platform === 'darwin'[\s\S]*return/,
+    )
+    assert.match(mainSource, /createWindow\(\)[\s\S]*installApplicationMenu\(\)/)
   })
 })

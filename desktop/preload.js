@@ -30,7 +30,7 @@ function readProjectImageDataUrl(segments) {
 
 async function executeProjectScript(segments, label) {
   await webFrame.executeJavaScript(readProjectFile(...segments))
-  console.log(`[Noirva] preload injected ${label} into page world`)
+  console.log(`[AdVoid] preload injected ${label} into page world`)
 }
 
 async function initializePage() {
@@ -62,9 +62,9 @@ async function initializePage() {
       logoUrl: ${JSON.stringify(logoUrl)},
     })
   `)
-  console.log('[Noirva] Electron first-run guide initialized')
+  console.log('[AdVoid] Electron first-run guide initialized')
 }
 
 initializePage().catch((error) => {
-  console.error('[Noirva] preload initialization failed:', error)
+  console.error('[AdVoid] preload initialization failed:', error)
 })

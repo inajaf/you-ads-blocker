@@ -4,6 +4,25 @@
 Reason: ...
 Alternatives: ... -->
 
+## 2026-08-11 — Google sign-in returns to Electron instead of becoming the browsing runtime
+Reason: Google blocks direct account authentication inside Electron, so the
+previous handoff quit Electron and left the user in Chrome App Mode. That made
+the signed-in experience lose AdVoid's `WebContentsView` tab system. AdVoid now
+uses its private supported Chrome runtime only as a temporary authentication
+surface, reads the resulting cookies through a loopback-only DevTools session,
+imports only live Google/YouTube-domain cookies into Electron, closes Chrome,
+and reloads every in-app tab. Cookie values are never logged or transmitted.
+The extension is launched from a versioned directory so an existing private
+Chrome profile cannot keep a stale MV3 service worker after an app update.
+Before relaunching the temporary auth window, AdVoid waits for both the main
+Chrome process and its profile-owning helper processes to exit; otherwise
+Chromium may forward the request to a stale process and silently ignore the
+new loopback DevTools port.
+Alternatives: keep Chrome App Mode after sign-in (rejected because it cannot
+host Electron tabs); use a normal Chrome browser window (rejected because the
+user explicitly requires browsing inside AdVoid); bypass Google's unsupported
+browser warning (rejected as insecure and unreliable).
+
 ## 2026-08-11 — Use one circular emblem for Android launcher, splash, and video loading
 Reason: device review showed the legacy square launcher bitmap being shrunk onto a white
 system plate, while the separate video-loading logo/spinner treatments lacked a consistent
@@ -93,6 +112,34 @@ surface area with no user benefit.
 Reason: Browser-style multi-tab support. `BrowserWindow`-based tabs would each need their own window chrome; a `WebContentsView` per tab keeps all tabs inside one window with an in-window strip, and shares `session.defaultSession` so a single sign-in cookie store applies to every tab.
 Approach: each tab is a `WebContentsView` (`contextIsolation: true`, `sandbox: false`, `nodeIntegration: false`, `backgroundThrottling: false`) managed by `desktop/tab-model.js`; the strip is a separate `WebContentsView` below `STRIP_HEIGHT = 42`; `desktop/tab-ipc.js` bridges strip clicks to the main process.
 Alternatives: (a) one `BrowserWindow` per tab with hidden windows — heavy, no shared UI; (b) a single `WebContentsView` with SPA-tab state — can't isolate ad blocking or page crashes per tab.
+
+## 2026-08-11 — macOS uses the shared Electron tabs inside an inset native title bar
+Reason: the Windows Electron build already had browser-style tabs, but the
+macOS packaging command did not rebuild the shared extension and the default
+title bar left the tab strip looking like a second toolbar. A newly built DMG
+could therefore miss current extension behavior even though `main.js` was
+shared.
+Approach: keep one cross-platform tab implementation; on Darwin only, create
+the `BrowserWindow` with `titleBarStyle: hiddenInset`, reserve 82px in the strip
+for the traffic lights, and make only empty strip space draggable. The tab
+buttons remain `no-drag`. Both `dist:mac` and `dist:win` rebuild the root
+extension before packaging. The desktop CI builds both platforms on pull
+requests/manual dispatch and deliberately has no broad `v*` tag trigger, so an
+Android tag cannot publish a stale desktop asset. On macOS, Cmd+T and Cmd+W are
+native application-menu accelerators rather than renderer-only listeners; this
+prevents the operating system's default Cmd+W behavior from closing the whole
+window when focus is inside a `WebContentsView`. The tabs onboarding step is
+Electron-only. Visible managed-Chrome metadata is migrated to AdVoid while the
+legacy runtime/profile paths stay stable to retain existing sign-in data.
+The shipped package identity is `advoid-desktop` / `com.advoid.desktop`, and
+new configuration uses `ADVOID_*` environment variables. Pre-existing
+`NOIRVA_*` variables and legacy managed-runtime paths remain accepted as
+compatibility aliases so users do not lose their private Chrome profile.
+Alternatives: (a) duplicate a macOS tab implementation — rejected because the
+platforms would drift; (b) keep the standard title bar — functional but wastes
+vertical space and makes the shared tabs look bolted on; (c) auto-upload every
+desktop build to a release — rejected because `releases/latest` serves all
+platform links and a partial release would break the other downloads.
 
 ## 2026-08-01 — Explicit desktop tab gestures always create a distinct tab
 Reason: Cmd/Ctrl-click, middle-click, context-menu open, and `window.open` express an explicit browser new-tab intent, even when the same URL is already open.

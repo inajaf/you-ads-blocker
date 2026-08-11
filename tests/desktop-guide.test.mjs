@@ -10,8 +10,8 @@ before(async () => {
 describe('desktop first-run guide model', () => {
   it('contains a short ordered walkthrough', () => {
     const guide = globalThis.TubeDesktopGuide
-    assert.equal(guide.VERSION, 2)
-    assert.equal(guide.PRODUCT_NAME, 'Noirva')
+    assert.equal(guide.VERSION, 4)
+    assert.equal(guide.PRODUCT_NAME, 'AdVoid')
     assert.equal(guide.STEPS.length, 4)
     assert.deepEqual(
       guide.STEPS.map((step) => step.icon),
@@ -24,11 +24,25 @@ describe('desktop first-run guide model', () => {
     }
   })
 
+  it('explains the shared macOS and Windows tab controls', () => {
+    const chromeGuide = globalThis.TubeDesktopGuide
+    const electronGuide = chromeGuide.forEnvironment('electron')
+    const tabStep = electronGuide.STEPS.find(
+      (step) => step.icon === 'tabs',
+    )
+    assert.ok(tabStep)
+    assert.equal(chromeGuide.STEPS.some((step) => step.icon === 'tabs'), false)
+    assert.equal(electronGuide.STEPS.length, 5)
+    assert.match(tabStep.points.join(' '), /Command \+ T on Mac/)
+    assert.match(tabStep.points.join(' '), /Ctrl \+ T on Windows/)
+    assert.match(tabStep.points.join(' '), /right-click menu/)
+  })
+
   it('explains the supported Chrome handoff only in Electron', () => {
     const guide = globalThis.TubeDesktopGuide
     const electronGuide = guide.forEnvironment('electron')
     assert.notEqual(electronGuide, guide)
-    assert.match(electronGuide.STEPS[0].description, /supported Chrome app window/)
+    assert.match(electronGuide.STEPS[0].description, /brings the signed-in session back here/)
     assert.match(electronGuide.STEPS[0].points[0], /blocks account sign-in inside Electron/)
     assert.doesNotMatch(guide.STEPS[0].description, /Electron/)
   })
@@ -85,7 +99,7 @@ describe('desktop first-run guide model', () => {
     assert.doesNotMatch(guideUI, /\.innerHTML\s*=/)
   })
 
-  it('publishes the Noirva logo to the Chrome guide', () => {
+  it('publishes the AdVoid logo to the Chrome guide', () => {
     const manifest = JSON.parse(
       fs.readFileSync(new URL('../extension/manifest.json', import.meta.url), 'utf8'),
     )

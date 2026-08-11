@@ -1,4 +1,4 @@
-import { cpSync, mkdirSync, rmSync, existsSync } from 'node:fs'
+import { cpSync, mkdirSync, rmSync, existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const root = process.cwd()
@@ -13,5 +13,9 @@ if (!existsSync(src)) {
 rmSync(out, { recursive: true, force: true })
 mkdirSync(out, { recursive: true })
 cpSync(src, out, { recursive: true })
+const manifest = JSON.parse(readFileSync(join(src, 'manifest.json'), 'utf8'))
+const versionedOut = join(out, `advoid-${manifest.version}`)
+cpSync(src, versionedOut, { recursive: true })
 console.log('Extension copied to dist-extension/')
-console.log('Load unpacked in chrome://extensions → dist-extension (or extension/)')
+console.log(`Runtime extension: dist-extension/advoid-${manifest.version}/`)
+console.log('Manual development: load dist-extension/ or extension/ unpacked')

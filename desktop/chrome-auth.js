@@ -51,11 +51,11 @@ function classifyElectronNavigation(rawUrl) {
   return 'external'
 }
 
-function createChromeHandoffArgs({ profileDir, extensionDir }) {
+function createChromeHandoffArgs({ profileDir, extensionDir, debuggingPort }) {
   if (!profileDir) throw new TypeError('A Chrome profile directory is required')
   if (!extensionDir) throw new TypeError('A Chrome extension directory is required')
 
-  return [
+  const args = [
     `--user-data-dir=${profileDir}`,
     `--disable-extensions-except=${extensionDir}`,
     `--load-extension=${extensionDir}`,
@@ -67,6 +67,11 @@ function createChromeHandoffArgs({ profileDir, extensionDir }) {
     '--disable-features=Translate,TranslateUI',
     `--app=${GOOGLE_LOGIN_URL}`,
   ]
+  if (Number.isInteger(debuggingPort) && debuggingPort > 0) {
+    args.push('--remote-debugging-address=127.0.0.1')
+    args.push(`--remote-debugging-port=${debuggingPort}`)
+  }
+  return args
 }
 
 module.exports = {

@@ -1,0 +1,60 @@
+name: Desktop cross-platform build
+
+on:
+  workflow_dispatch: {}
+  pull_request:
+    paths:
+      - 'desktop/**'
+      - 'extension/**'
+      - 'adblock/**'
+      - 'assets/brand/**'
+      - 'scripts/pack-extension.mjs'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/desktop-build.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            platform: macOS
+            command: npm run dist:mac
+            artifact_path: desktop/release/*.dmg
+          - os: windows-latest
+            platform: Windows
+            command: npm run dist:win
+            artifact_path: desktop/release/*.exe
+    name: Build ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install desktop dependencies
+        working-directory: desktop
+        run: npm ci
+
+      - name: Build installer
+        working-directory: desktop
+        run: ${{ matrix.command }}
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: AdVoid-${{ matrix.platform }}
+          path: ${{ matrix.artifact_path }}
+          if-no-files-found: error

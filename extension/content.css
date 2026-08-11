@@ -52,7 +52,7 @@ ytd-statement-banner-renderer {
   display: none !important;
 }
 
-/* Noirva desktop navigation, shared by Chrome App Mode and Electron. */
+/* AdVoid desktop navigation, shared by Chrome App Mode and Electron. */
 #tube-desktop-back,
 #tube-desktop-help,
 #tube-desktop-maintenance {
@@ -136,7 +136,7 @@ ytd-statement-banner-renderer {
 
 /* Chrome's tab strip, address bar and browser menu are already removed by
    --app. In the dedicated window, also remove YouTube's lookalike hamburger
-   so the header reads as Noirva rather than another browser toolbar. */
+   so the header reads as AdVoid rather than another browser toolbar. */
 .tube-desktop-app ytd-masthead #guide-button {
   display: none !important;
 }

@@ -26,13 +26,13 @@ const maintenanceService = createMaintenanceService({
 
 chrome.windows.onCreated.addListener((createdWindow) => {
   desktopWindowGuard.handleWindowCreated(createdWindow).catch((error) => {
-    console.error('[Noirva] failed to handle the Chrome reopen window:', error)
+    console.error('[AdVoid] failed to handle the Chrome reopen window:', error)
   })
 })
 
 chrome.windows.onRemoved.addListener((windowId) => {
   desktopWindowGuard.handleWindowRemoved(windowId).catch((error) => {
-    console.error('[Noirva] failed to clear the desktop app window:', error)
+    console.error('[AdVoid] failed to clear the desktop app window:', error)
   })
 })
 

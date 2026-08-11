@@ -4,8 +4,11 @@ import { EventEmitter } from 'node:events'
 
 import {
   chromeProcessListCommand,
+  isChromeProfileBusy,
   isChromeProfileCommand,
+  isChromeProfileProcessCommand,
   isChromeProfileRunning,
+  stopChromeProfile,
   waitForChromeStartup,
 } from '../desktop/chrome-launch.mjs'
 
@@ -24,6 +27,13 @@ describe('Chrome launcher lifecycle', () => {
       false,
     )
     assert.equal(
+      isChromeProfileProcessCommand(`${browserCommand} --type=renderer`, {
+        chromePath,
+        profileDir,
+      }),
+      true,
+    )
+    assert.equal(
       await isChromeProfileRunning({
         chromePath,
         profileDir,
@@ -37,11 +47,60 @@ describe('Chrome launcher lifecycle', () => {
     )
   })
 
+  it('waits for macOS helper processes to release the private profile', async () => {
+    const chromePath =
+      '/Applications/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing'
+    const profileDir = '/tmp/advoid-profile'
+    const helperCommand =
+      '/Applications/Google Chrome for Testing.app/Contents/Frameworks/' +
+      `Google Chrome for Testing Helper.app/Contents/MacOS/Google Chrome for Testing Helper --type=renderer --user-data-dir=${profileDir}`
+
+    assert.equal(
+      isChromeProfileProcessCommand(helperCommand, { chromePath, profileDir }),
+      true,
+    )
+    assert.equal(
+      await isChromeProfileBusy({
+        chromePath,
+        profileDir,
+        platform: 'darwin',
+        execFileImpl(executable, args, options, callback) {
+          callback(null, helperCommand)
+        },
+      }),
+      true,
+    )
+  })
+
   it('accepts a process that remains alive through the startup grace period', async () => {
     const child = new FakeChild()
     const startup = waitForChromeStartup(child, { graceMs: 1 })
     child.emit('spawn')
     assert.deepEqual(await startup, { forwarded: false })
+  })
+
+  it('stops only the main process for the dedicated Chrome profile', async () => {
+    const chromePath = '/Applications/Chrome.app/Contents/MacOS/Chrome'
+    const profileDir = '/tmp/advoid-profile'
+    const killed = []
+    const count = await stopChromeProfile({
+      chromePath,
+      profileDir,
+      platform: 'darwin',
+      execFileImpl(executable, args, options, callback) {
+        callback(
+          null,
+          `101 ${chromePath} --user-data-dir=${profileDir}\n` +
+            `102 ${chromePath} --user-data-dir=${profileDir} --type=renderer\n` +
+            '103 /Applications/Other.app/Contents/MacOS/Other\n',
+        )
+      },
+      killImpl(processId, signal) {
+        killed.push([processId, signal])
+      },
+    })
+    assert.equal(count, 1)
+    assert.deepEqual(killed, [[101, 'SIGTERM']])
   })
 
   it('accepts a successful request forwarded to an existing profile', async () => {

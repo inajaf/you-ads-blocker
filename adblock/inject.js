@@ -187,5 +187,5 @@
     return XS.apply(this, arguments)
   }
 
-  console.info('[Noirva Shield] page hooks active')
+  console.info('[AdVoid Shield] page hooks active')
 })()

@@ -22,12 +22,24 @@ export function chromeProcessListCommand(platform = process.platform) {
 }
 
 export function isChromeProfileCommand(command, { chromePath, profileDir }) {
-  const normalizedCommand = command.replaceAll('"', '').toLowerCase()
   return (
-    normalizedCommand.includes(chromePath.toLowerCase()) &&
+    isChromeProfileProcessCommand(command, { chromePath, profileDir }) &&
+    !command.replaceAll('"', '').toLowerCase().includes('--type=')
+  )
+}
+
+export function isChromeProfileProcessCommand(command, { chromePath, profileDir }) {
+  const normalizedCommand = command.replaceAll('"', '').toLowerCase()
+  const normalizedChromePath = chromePath.toLowerCase()
+  const appBundleEnd = normalizedChromePath.indexOf('.app/')
+  const runtimeMarker =
+    appBundleEnd >= 0
+      ? normalizedChromePath.slice(0, appBundleEnd + '.app'.length)
+      : normalizedChromePath
+  return (
+    normalizedCommand.includes(runtimeMarker) &&
     normalizedCommand.includes('--user-data-dir=') &&
-    normalizedCommand.includes(profileDir.toLowerCase()) &&
-    !normalizedCommand.includes('--type=')
+    normalizedCommand.includes(profileDir.toLowerCase())
   )
 }
 
@@ -49,6 +61,65 @@ export async function isChromeProfileRunning({
   return stdout
     .split('\n')
     .some((command) => isChromeProfileCommand(command, { chromePath, profileDir }))
+}
+
+export async function isChromeProfileBusy({
+  chromePath,
+  profileDir,
+  platform = process.platform,
+  execFileImpl = execFile,
+}) {
+  const processList = chromeProcessListCommand(platform)
+  const stdout = await new Promise((resolve) => {
+    execFileImpl(
+      processList.executable,
+      processList.args,
+      { maxBuffer: 4 * 1024 * 1024 },
+      (error, output) => resolve(error ? '' : output),
+    )
+  })
+  return stdout
+    .split('\n')
+    .some((command) =>
+      isChromeProfileProcessCommand(command, { chromePath, profileDir }),
+    )
+}
+
+export async function stopChromeProfile({
+  chromePath,
+  profileDir,
+  platform = process.platform,
+  execFileImpl = execFile,
+  killImpl = process.kill,
+}) {
+  const command = chromeProcessListCommand(platform)
+  const args = platform === 'win32'
+    ? [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        'Get-CimInstance Win32_Process -Filter "Name = \'chrome.exe\'" | ForEach-Object { "$($_.ProcessId)`t$($_.CommandLine)" }',
+      ]
+    : ['ax', '-o', 'pid=', '-o', 'command=']
+  const stdout = await new Promise((resolve) => {
+    execFileImpl(command.executable, args, { maxBuffer: 4 * 1024 * 1024 }, (error, output) =>
+      resolve(error ? '' : output),
+    )
+  })
+  const processIds = stdout
+    .split('\n')
+    .map((line) => line.match(/^\s*(\d+)\s+([\s\S]+)$/))
+    .filter((match) => match && isChromeProfileCommand(match[2], { chromePath, profileDir }))
+    .map((match) => Number(match[1]))
+
+  for (const processId of processIds) {
+    try {
+      killImpl(processId, 'SIGTERM')
+    } catch (error) {
+      if (error?.code !== 'ESRCH') throw error
+    }
+  }
+  return processIds.length
 }
 
 export function waitForChromeStartup(
@@ -89,7 +160,7 @@ export function waitForChromeStartup(
             return
           }
           const reason = signal ? `signal ${signal}` : `exit code ${code}`
-          fail(new Error(`Chrome exited before opening Noirva (${reason}).`))
+          fail(new Error(`Chrome exited before opening AdVoid (${reason}).`))
         },
         fail,
       )

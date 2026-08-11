@@ -90,7 +90,7 @@ async function refreshDesktopAppMode() {
     ensureDesktopGuide()
     return true
   } catch (error) {
-    console.error('[Noirva] failed to detect the desktop app window:', error)
+    console.error('[AdVoid] failed to detect the desktop app window:', error)
     return false
   }
 }
@@ -173,11 +173,11 @@ function registerDesktopAppWindow() {
         return
       }
       desktopWindowLastConfirmedAt = 0
-      console.error('[Noirva] desktop app window registration was rejected')
+      console.error('[AdVoid] desktop app window registration was rejected')
     })
     .catch((error) => {
       desktopWindowLastConfirmedAt = 0
-      console.error('[Noirva] failed to register the desktop app window:', error)
+      console.error('[AdVoid] failed to register the desktop app window:', error)
     })
     .finally(() => {
       clearTimeout(registrationTimeoutId)
@@ -208,13 +208,13 @@ function ensureDesktopGuide() {
   }
   const maintenance = {
     async clear(action) {
-      if (!maintenanceModel) throw new Error('Noirva maintenance service is unavailable')
+      if (!maintenanceModel) throw new Error('AdVoid maintenance service is unavailable')
       const response = await chrome.runtime.sendMessage({
         type: maintenanceModel.MAINTENANCE_MESSAGE,
         action,
       })
       if (!response?.ok) {
-        throw new Error(response?.error || 'Noirva could not clear browsing data')
+        throw new Error(response?.error || 'AdVoid could not clear browsing data')
       }
       return response
     },
@@ -235,7 +235,7 @@ function ensureDesktopGuide() {
     })
   })().catch((error) => {
     desktopGuideInstalled = false
-    console.error('[Noirva] failed to initialize desktop guide:', error)
+    console.error('[AdVoid] failed to initialize desktop guide:', error)
   })
 }
 

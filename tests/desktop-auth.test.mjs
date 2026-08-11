@@ -65,7 +65,7 @@ describe('Electron Google sign-in handoff', () => {
     assert.equal(classifyElectronNavigation('javascript:alert(1)'), 'block')
   })
 
-  it('opens Chrome with the private profile, extension, and Noirva app return URL', () => {
+  it('opens a temporary Chrome sign-in window with local debugging', () => {
     const args = createChromeHandoffArgs({
       profileDir: '/tmp/tube-profile',
       extensionDir: '/tmp/tube-extension',
@@ -77,6 +77,13 @@ describe('Electron Google sign-in handoff', () => {
     assert.ok(args.includes('--disable-translate'))
     assert.ok(args.includes('--disable-features=Translate,TranslateUI'))
     assert.ok(args.includes(`--app=${GOOGLE_LOGIN_URL}`))
+    const debugArgs = createChromeHandoffArgs({
+      profileDir: '/tmp/tube-profile',
+      extensionDir: '/tmp/tube-extension',
+      debuggingPort: 9333,
+    })
+    assert.ok(debugArgs.includes('--remote-debugging-address=127.0.0.1'))
+    assert.ok(debugArgs.includes('--remote-debugging-port=9333'))
     assert.match(decodeURIComponent(GOOGLE_LOGIN_URL), /youtube\.com\/\?tube_app=1/)
     assert.match(decodeURIComponent(GOOGLE_LOGIN_URL), /tube_guide=done/)
   })
@@ -103,9 +110,10 @@ describe('Electron Google sign-in handoff', () => {
     assert.match(packageJson.scripts.prelogin, /build:extension/)
     assert.match(loginSource, /--load-extension=/)
     assert.match(loginSource, /--disable-extensions-except=/)
+    assert.match(loginSource, /--app=/)
   })
 
-  it('brands only the private Chrome runtime as Noirva before launch', () => {
+  it('brands only the private Chrome runtime as AdVoid before launch', () => {
     const startSource = fs.readFileSync(
       new URL('../desktop/start-chrome-app.mjs', import.meta.url),
       'utf8',
@@ -126,9 +134,21 @@ describe('Electron Google sign-in handoff', () => {
     assert.match(startSource, /prepareNoirvaProfilePreferences\(profileDir\)/)
     assert.match(startSource, /profileAlreadyRunning/)
     assert.match(loginSource, /prepareChromeRuntimeBranding\(chromePath\)/)
+    const mainSource = fs.readFileSync(
+      new URL('../desktop/main.js', import.meta.url),
+      'utf8',
+    )
+    assert.match(mainSource, /prepareChromeRuntimeBranding\(chromePath\)/)
+    assert.match(mainSource, /prepareNoirvaProfilePreferences\(profileDir\)/)
+    assert.match(mainSource, /waitForChromeAuthentication/)
+    assert.match(mainSource, /importChromeCookies/)
+    assert.match(mainSource, /mainWindow\?\.show\(\)[\s\S]*chromeHandoffStarted = false[\s\S]*showChromeHandoffError/)
+    assert.doesNotMatch(mainSource, /Google sign-in handed off[\s\S]*app\.quit\(\)/)
     assert.match(brandingSource, /CFBundleDisplayName/)
     assert.match(brandingSource, /CFBundleName/)
     assert.match(brandingSource, /CFBundleIconFile/)
+    assert.match(brandingSource, /CFBundleDisplayName'\) !== 'AdVoid'/)
+    assert.match(brandingSource, /'ProductName',\s*'AdVoid'/)
     assert.match(brandingSource, /removePlistKey\(infoPlistPath, 'CFBundleIconName'\)/)
     assert.match(brandingSource, /Noirva Desktop Runtime/)
     assert.match(brandingSource, /Tube Desktop Runtime/)

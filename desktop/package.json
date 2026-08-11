@@ -1,5 +1,5 @@
 {
-  "name": "noirva-desktop",
+  "name": "advoid-desktop",
   "version": "1.0.0",
   "private": true,
   "description": "AdVoid desktop video window with supported Google sign-in and ad filtering.",
@@ -11,12 +11,13 @@
     "login": "node login-and-start.mjs",
     "prestart:electron": "cd .. && npm run build:extension",
     "start:electron": "electron .",
-    "dist": "npm run build:extension && electron-builder --mac",
-    "dist:dmg": "npm run build:extension && electron-builder --mac dmg",
+    "dist": "npm run dist:mac",
+    "dist:mac": "cd .. && npm run build:extension && cd desktop && electron-builder --mac",
+    "dist:dmg": "cd .. && npm run build:extension && cd desktop && electron-builder --mac dmg",
     "dist:win": "cd .. && npm run build:extension && cd desktop && electron-builder --win"
   },
   "build": {
-    "appId": "com.noirva.desktop",
+    "appId": "com.advoid.desktop",
     "productName": "AdVoid",
     "directories": {
       "output": "release"
@@ -59,6 +60,7 @@
     },
     "win": {
       "icon": "../assets/brand/noirva-logo-v2.ico",
+      "artifactName": "AdVoid-Setup-1.0.0.${ext}",
       "target": [
         {
           "target": "nsis",

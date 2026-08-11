@@ -1,5 +1,5 @@
 /**
- * Shared DOM UI for the Noirva first-run guide.
+ * Shared DOM UI for the AdVoid first-run guide.
  *
  * Chrome App Mode and Electron provide different persistence adapters, while
  * this module owns the common dialog and YouTube header controls.
@@ -72,6 +72,7 @@
         'm9.4 12 1.7 1.7 3.8-4',
       ],
       back: ['m15 18-6-6 6-6'],
+      tabs: ['M4 5h16v14H4z', 'M4 9h16', 'M8 5v4'],
       check: ['m5 12 4 4L19 6'],
       history: ['M3 12a9 9 0 1 0 3-6.7', 'M3 4v5h5', 'M12 7v5l3 2'],
       cache: [
@@ -85,13 +86,13 @@
 
   function getMaintenanceCopy() {
     return {
-      buttonLabel: 'Clean up Noirva data',
-      dialogTitle: 'Clean up Noirva data',
+      buttonLabel: 'Clean up AdVoid data',
+      dialogTitle: 'Clean up AdVoid data',
       dialogDescription:
         'Remove history or temporary files from this private app profile. YouTube sign-in and cookies are preserved.',
       closeLabel: 'Close data cleanup',
       historyTitle: 'Browser history',
-      historyDescription: 'Removes the list of pages visited in the Noirva profile.',
+      historyDescription: 'Removes the list of pages visited in the AdVoid profile.',
       historyAction: 'Clear history',
       cacheTitle: 'Browser cache',
       cacheDescription: 'Removes temporary files. Needed content will download again.',
@@ -106,11 +107,11 @@
         history: 'History cleared. Your YouTube sign-in was preserved.',
         cache: 'Cache cleared. Your YouTube sign-in was preserved.',
       },
-      error: 'Noirva could not clear the data. Please try again.',
+      error: 'AdVoid could not clear the data. Please try again.',
     }
   }
 
-  // The back button is only ever injected while Noirva runs in desktop app
+  // The back button is only ever injected while AdVoid runs in desktop app
   // mode, so every fallback must return to the app's YouTube home with its
   // tube_app context intact. Studio and the upload popup open as fresh surfaces
   // where history.length === 1; the old plain-youtube.com fallback dropped app
@@ -298,7 +299,7 @@
           closeDialog()
           showToast(copy.success[action])
         } catch (error) {
-          console.error('[Noirva] failed to clear browsing data:', error)
+          console.error('[AdVoid] failed to clear browsing data:', error)
           errorMessage.textContent = copy.error
           errorMessage.hidden = false
         } finally {
@@ -337,7 +338,7 @@
 
     function markComplete() {
       Promise.resolve(storage.setCompletedVersion(guide.VERSION)).catch((error) => {
-        console.error('[Noirva] failed to save first-run guide state:', error)
+        console.error('[AdVoid] failed to save first-run guide state:', error)
       })
     }
 
@@ -385,7 +386,7 @@
       }
       brand.append(
         brandMark,
-        createElement('span', { text: guide.PRODUCT_NAME || 'Noirva' }),
+        createElement('span', { text: guide.PRODUCT_NAME || 'AdVoid' }),
       )
       const heroIcon = createElement('div', { className: 'tube-guide-hero-icon' })
       const visualCopy = createElement('p', {
@@ -511,7 +512,7 @@
       const button = document.createElement('button')
       button.id = DESKTOP_HELP_ID
       button.type = 'button'
-      button.setAttribute('aria-label', 'Open Noirva getting started guide')
+      button.setAttribute('aria-label', 'Open AdVoid getting started guide')
       button.title = 'Getting started'
       button.append(
         createSvgIcon(
@@ -531,7 +532,7 @@
         const completedVersion = await storage.getCompletedVersion()
         if (guide.isFirstRun(completedVersion)) openGuide()
       } catch (error) {
-        console.error('[Noirva] failed to read first-run guide state:', error)
+        console.error('[AdVoid] failed to read first-run guide state:', error)
         openGuide()
       }
     }
@@ -549,7 +550,7 @@
           navigationHost = createElement('nav', {
             id: 'tube-desktop-studio-navigation',
           })
-          navigationHost.setAttribute('aria-label', 'Noirva navigation')
+          navigationHost.setAttribute('aria-label', 'AdVoid navigation')
           document.body.append(navigationHost)
         }
       }
@@ -563,7 +564,7 @@
           navigationHost = createElement('nav', {
             id: 'tube-desktop-studio-navigation',
           })
-          navigationHost.setAttribute('aria-label', 'Noirva navigation')
+          navigationHost.setAttribute('aria-label', 'AdVoid navigation')
           document.body.append(navigationHost)
         }
       }
@@ -605,7 +606,7 @@
       throw new TypeError('A desktop guide storage adapter is required')
     }
     if (maintenance && typeof maintenance.clear !== 'function') {
-      throw new TypeError('A Noirva maintenance adapter must provide clear(action)')
+      throw new TypeError('An AdVoid maintenance adapter must provide clear(action)')
     }
 
     installedController = createController(guide, storage, logoUrl, maintenance)

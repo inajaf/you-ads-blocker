@@ -6,9 +6,11 @@ import { isChromeProfileRunning, waitForChromeStartup } from './chrome-launch.mj
 import { chromePath, ensureChromeRuntime, profileDir } from './runtime-paths.mjs'
 import { prepareChromeRuntimeBranding } from './runtime-branding.mjs'
 import { prepareNoirvaProfilePreferences } from './profile-preferences.mjs'
+import extensionPath from './extension-path.js'
 
 const desktopDir = path.dirname(fileURLToPath(import.meta.url))
-const extensionDir = path.resolve(desktopDir, '..', 'dist-extension')
+const extensionRoot = path.resolve(desktopDir, '..', 'dist-extension')
+const extensionDir = extensionPath.resolveVersionedExtensionDir(extensionRoot)
 
 ensureChromeRuntime()
 prepareChromeRuntimeBranding(chromePath)
@@ -17,12 +19,12 @@ const profileAlreadyRunning = await isChromeProfileRunning({ chromePath, profile
 if (!profileAlreadyRunning) {
   const preferences = prepareNoirvaProfilePreferences(profileDir)
   if (preferences.changed) {
-    console.log('Noirva disabled Chrome translation prompts in its private profile.')
+    console.log('AdVoid disabled Chrome translation prompts in its private profile.')
   }
 }
 
 if (!existsSync(path.join(extensionDir, 'manifest.json'))) {
-  console.error('The Noirva extension is not built. Run npm run build:extension first.')
+  console.error('The AdVoid extension is not built. Run npm run build:extension first.')
   process.exit(1)
 }
 
@@ -52,13 +54,13 @@ try {
   })
   if (chrome.exitCode === null) chrome.unref()
   if (result.forwarded) {
-    console.log('Noirva request was forwarded to the existing Chrome profile.')
+    console.log('AdVoid request was forwarded to the existing Chrome profile.')
   }
 } catch (error) {
   console.error(error.message)
   process.exit(1)
 }
 
-console.log('Noirva opened in a dedicated Google Chrome app window.')
+console.log('AdVoid opened in a dedicated Google Chrome app window.')
 console.log(`Persistent profile: ${profileDir}`)
 console.log(`Ad blocker: ${extensionDir}`)

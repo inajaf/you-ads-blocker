@@ -1,5 +1,73 @@
 # Project status
 
+## 2026-08-11 — signed-in YouTube stays inside AdVoid tabs
+
+The Electron sign-in handoff no longer exits the application. Supported Chrome
+opens only long enough to authenticate the private profile; AdVoid retrieves
+the local Google/YouTube session over a reserved loopback DevTools port,
+imports trusted live cookies into Electron, closes Chrome, reloads all current
+`WebContentsView` tabs, and focuses the original AdVoid window. Existing
+private Chrome instances are closed first, and AdVoid waits for helper
+processes to release the profile before relaunching, avoiding profile-lock and
+debugger-forwarding races. Extension runtime paths include the manifest version so
+Chrome cannot retain a stale unpacked MV3 worker across upgrades.
+
+Hands-on macOS validation from a clean temporary Electron profile confirmed
+the full flow: Chrome opened only for Google authentication, then closed;
+Electron regained focus with the account avatar and signed-in YouTube content.
+The final release audit repeated the flow with the private Chrome profile
+already running and confirmed the helper-process wait prevents a DevTools
+timeout caused by request forwarding to the stale process.
+The in-app `+` control created a second signed-in tab, while earlier native
+shortcut QA confirmed Cmd+T and Cmd+W create/close only Electron tabs.
+
+Repository gates: `npm test` 188/188, `npm run build`, targeted oxlint, and
+`git diff --check` pass. The mandatory UI loop passed 12/12 against the current
+app on isolated port 4173 (port 5173 belonged to another local project).
+Both x64 and arm64 DMGs build successfully and pass `hdiutil verify`; both app
+bundles pass strict deep codesign verification. The arm64 package identifies
+itself as `AdVoid` / `com.advoid.desktop`, and its packaged ASAR contains the
+loopback-only auth sync, in-app tab reload, and error recovery code. Apple
+notarization remains unconfigured and is required before public distribution.
+
+## 2026-08-11 — macOS desktop parity with Windows tabs (branch codex/macos-windows-tabs-parity)
+
+The shared Electron multi-tab implementation is now explicitly packaged and
+integrated for macOS. Darwin windows use an inset native title bar, the tab
+strip reserves space for the traffic lights, empty strip space drags the
+window, and tabs/buttons remain interactive. Overflow scrolling now lives on
+the actual tab container instead of being clipped by it. User-visible Electron
+window, onboarding, and managed Chrome runtime branding say AdVoid rather than
+the legacy Noirva name; the existing runtime/profile paths remain unchanged so
+saved sign-in data is preserved. The Electron-only guide explains tabs without
+showing unsupported tab instructions in Chrome App Mode.
+
+The follow-up branding pass also renamed the root/desktop npm package metadata
+to `advoid`/`advoid-desktop`, changed the desktop bundle identifier to
+`com.advoid.desktop`, added preferred `ADVOID_*` environment variables, and
+removed the remaining legacy name from user-visible errors and logs. Old
+`NOIRVA_*` variables, managed-runtime directories, marker files, asset
+filenames, and JavaScript bridge globals remain compatibility aliases only.
+
+macOS tab shortcuts use native application-menu accelerators: Cmd+T creates a
+tab and Cmd+W closes only the active tab, including the last-tab replacement
+path. Windows/Linux retain the existing renderer shortcut handling.
+
+macOS packaging now follows the working Windows path and rebuilds the shared
+extension from the repository root before invoking electron-builder. The old
+Windows-only workflow was replaced by a cross-platform macOS/Windows artifact
+build for pull requests and manual runs; it has no broad `v*` trigger and does
+not publish partial releases automatically.
+
+Validation completed: full repository tests 178/178, production build, targeted
+desktop tests, isolated web UI check 12/12, code review, valid x64/arm64 DMG
+checksums, and strict codesign verification. Hands-on Apple Silicon QA covered
+the five-step AdVoid onboarding, traffic-light spacing, strip dragging,
+Cmd+T/Cmd+W, plus/select/close, last-tab replacement, 20+ tab overflow, and
+Dock window recreation; all passed with no crash. The local packages are
+Apple Development-signed but not notarized, so a public macOS release still
+needs Developer ID distribution signing and Apple notarization.
+
 ## 2026-08-11 — Android v1.3.3 release cut: player control stability and round branding
 
 PR #35 (`Android player control stability and round branding`) merged to `main`

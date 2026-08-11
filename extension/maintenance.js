@@ -1,4 +1,4 @@
-/** Shared, dependency-free maintenance commands for the Noirva app profile. */
+/** Shared, dependency-free maintenance commands for the AdVoid app profile. */
 (function installNoirvaMaintenance(globalScope) {
   const MAINTENANCE_MESSAGE = 'NOIRVA_CLEAR_BROWSING_DATA'
   const ACTIONS = Object.freeze({
@@ -26,7 +26,7 @@
       }
 
       // Intentionally preserve cookies, passwords and site storage so clearing
-      // Noirva's history or cache never signs the user out of YouTube.
+      // AdVoid's history or cache never signs the user out of YouTube.
       await browsingData.remove({ since: 0 }, DATA_TYPES[action])
       return { ok: true, action }
     }
