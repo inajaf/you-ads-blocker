@@ -7,17 +7,21 @@ opens only long enough to authenticate the private profile; AdVoid retrieves
 the local Google/YouTube session over a reserved loopback DevTools port,
 imports trusted live cookies into Electron, closes Chrome, reloads all current
 `WebContentsView` tabs, and focuses the original AdVoid window. Existing
-private Chrome instances are closed first to avoid profile-lock and debugger
-forwarding races. Extension runtime paths include the manifest version so
+private Chrome instances are closed first, and AdVoid waits for helper
+processes to release the profile before relaunching, avoiding profile-lock and
+debugger-forwarding races. Extension runtime paths include the manifest version so
 Chrome cannot retain a stale unpacked MV3 worker across upgrades.
 
 Hands-on macOS validation from a clean temporary Electron profile confirmed
 the full flow: Chrome opened only for Google authentication, then closed;
 Electron regained focus with the account avatar and signed-in YouTube content.
+The final release audit repeated the flow with the private Chrome profile
+already running and confirmed the helper-process wait prevents a DevTools
+timeout caused by request forwarding to the stale process.
 The in-app `+` control created a second signed-in tab, while earlier native
 shortcut QA confirmed Cmd+T and Cmd+W create/close only Electron tabs.
 
-Repository gates: `npm test` 187/187, `npm run build`, targeted oxlint, and
+Repository gates: `npm test` 188/188, `npm run build`, targeted oxlint, and
 `git diff --check` pass. The mandatory UI loop passed 12/12 against the current
 app on isolated port 4173 (port 5173 belonged to another local project).
 Both x64 and arm64 DMGs build successfully and pass `hdiutil verify`; both app

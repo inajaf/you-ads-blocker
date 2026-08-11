@@ -4,7 +4,9 @@ import { EventEmitter } from 'node:events'
 
 import {
   chromeProcessListCommand,
+  isChromeProfileBusy,
   isChromeProfileCommand,
+  isChromeProfileProcessCommand,
   isChromeProfileRunning,
   stopChromeProfile,
   waitForChromeStartup,
@@ -25,6 +27,13 @@ describe('Chrome launcher lifecycle', () => {
       false,
     )
     assert.equal(
+      isChromeProfileProcessCommand(`${browserCommand} --type=renderer`, {
+        chromePath,
+        profileDir,
+      }),
+      true,
+    )
+    assert.equal(
       await isChromeProfileRunning({
         chromePath,
         profileDir,
@@ -32,6 +41,31 @@ describe('Chrome launcher lifecycle', () => {
         execFileImpl: (executable, args, options, callback) => {
           assert.equal(executable, 'powershell.exe')
           callback(null, browserCommand)
+        },
+      }),
+      true,
+    )
+  })
+
+  it('waits for macOS helper processes to release the private profile', async () => {
+    const chromePath =
+      '/Applications/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing'
+    const profileDir = '/tmp/advoid-profile'
+    const helperCommand =
+      '/Applications/Google Chrome for Testing.app/Contents/Frameworks/' +
+      `Google Chrome for Testing Helper.app/Contents/MacOS/Google Chrome for Testing Helper --type=renderer --user-data-dir=${profileDir}`
+
+    assert.equal(
+      isChromeProfileProcessCommand(helperCommand, { chromePath, profileDir }),
+      true,
+    )
+    assert.equal(
+      await isChromeProfileBusy({
+        chromePath,
+        profileDir,
+        platform: 'darwin',
+        execFileImpl(executable, args, options, callback) {
+          callback(null, helperCommand)
         },
       }),
       true,

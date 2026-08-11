@@ -22,12 +22,24 @@ export function chromeProcessListCommand(platform = process.platform) {
 }
 
 export function isChromeProfileCommand(command, { chromePath, profileDir }) {
-  const normalizedCommand = command.replaceAll('"', '').toLowerCase()
   return (
-    normalizedCommand.includes(chromePath.toLowerCase()) &&
+    isChromeProfileProcessCommand(command, { chromePath, profileDir }) &&
+    !command.replaceAll('"', '').toLowerCase().includes('--type=')
+  )
+}
+
+export function isChromeProfileProcessCommand(command, { chromePath, profileDir }) {
+  const normalizedCommand = command.replaceAll('"', '').toLowerCase()
+  const normalizedChromePath = chromePath.toLowerCase()
+  const appBundleEnd = normalizedChromePath.indexOf('.app/')
+  const runtimeMarker =
+    appBundleEnd >= 0
+      ? normalizedChromePath.slice(0, appBundleEnd + '.app'.length)
+      : normalizedChromePath
+  return (
+    normalizedCommand.includes(runtimeMarker) &&
     normalizedCommand.includes('--user-data-dir=') &&
-    normalizedCommand.includes(profileDir.toLowerCase()) &&
-    !normalizedCommand.includes('--type=')
+    normalizedCommand.includes(profileDir.toLowerCase())
   )
 }
 
@@ -49,6 +61,28 @@ export async function isChromeProfileRunning({
   return stdout
     .split('\n')
     .some((command) => isChromeProfileCommand(command, { chromePath, profileDir }))
+}
+
+export async function isChromeProfileBusy({
+  chromePath,
+  profileDir,
+  platform = process.platform,
+  execFileImpl = execFile,
+}) {
+  const processList = chromeProcessListCommand(platform)
+  const stdout = await new Promise((resolve) => {
+    execFileImpl(
+      processList.executable,
+      processList.args,
+      { maxBuffer: 4 * 1024 * 1024 },
+      (error, output) => resolve(error ? '' : output),
+    )
+  })
+  return stdout
+    .split('\n')
+    .some((command) =>
+      isChromeProfileProcessCommand(command, { chromePath, profileDir }),
+    )
 }
 
 export async function stopChromeProfile({

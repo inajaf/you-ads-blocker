@@ -111,7 +111,7 @@ async function openSupportedChromeSignIn() {
 
   try {
     const { chromePath, profileDir } = await import('./runtime-paths.mjs')
-    const { isChromeProfileRunning, stopChromeProfile } = await import(
+    const { isChromeProfileBusy, isChromeProfileRunning, stopChromeProfile } = await import(
       './chrome-launch.mjs'
     )
     const {
@@ -131,10 +131,10 @@ async function openSupportedChromeSignIn() {
     if (await isChromeProfileRunning({ chromePath, profileDir })) {
       await stopChromeProfile({ chromePath, profileDir })
       for (let attempt = 0; attempt < 30; attempt += 1) {
-        if (!(await isChromeProfileRunning({ chromePath, profileDir }))) break
+        if (!(await isChromeProfileBusy({ chromePath, profileDir }))) break
         await new Promise((resolve) => setTimeout(resolve, 100))
       }
-      if (await isChromeProfileRunning({ chromePath, profileDir })) {
+      if (await isChromeProfileBusy({ chromePath, profileDir })) {
         throw new Error('Close the existing AdVoid sign-in window and try again')
       }
     }

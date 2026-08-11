@@ -14,6 +14,10 @@ imports only live Google/YouTube-domain cookies into Electron, closes Chrome,
 and reloads every in-app tab. Cookie values are never logged or transmitted.
 The extension is launched from a versioned directory so an existing private
 Chrome profile cannot keep a stale MV3 service worker after an app update.
+Before relaunching the temporary auth window, AdVoid waits for both the main
+Chrome process and its profile-owning helper processes to exit; otherwise
+Chromium may forward the request to a stale process and silently ignore the
+new loopback DevTools port.
 Alternatives: keep Chrome App Mode after sign-in (rejected because it cannot
 host Electron tabs); use a normal Chrome browser window (rejected because the
 user explicitly requires browsing inside AdVoid); bypass Google's unsupported
