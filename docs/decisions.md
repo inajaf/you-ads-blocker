@@ -4,6 +4,21 @@
 Reason: ...
 Alternatives: ... -->
 
+## 2026-08-11 — Google sign-in returns to Electron instead of becoming the browsing runtime
+Reason: Google blocks direct account authentication inside Electron, so the
+previous handoff quit Electron and left the user in Chrome App Mode. That made
+the signed-in experience lose AdVoid's `WebContentsView` tab system. AdVoid now
+uses its private supported Chrome runtime only as a temporary authentication
+surface, reads the resulting cookies through a loopback-only DevTools session,
+imports only live Google/YouTube-domain cookies into Electron, closes Chrome,
+and reloads every in-app tab. Cookie values are never logged or transmitted.
+The extension is launched from a versioned directory so an existing private
+Chrome profile cannot keep a stale MV3 service worker after an app update.
+Alternatives: keep Chrome App Mode after sign-in (rejected because it cannot
+host Electron tabs); use a normal Chrome browser window (rejected because the
+user explicitly requires browsing inside AdVoid); bypass Google's unsupported
+browser warning (rejected as insecure and unreliable).
+
 ## 2026-08-11 — Use one circular emblem for Android launcher, splash, and video loading
 Reason: device review showed the legacy square launcher bitmap being shrunk onto a white
 system plate, while the separate video-loading logo/spinner treatments lacked a consistent

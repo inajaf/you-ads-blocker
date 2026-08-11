@@ -19,6 +19,7 @@ const { classifyElectronNavigation, createChromeHandoffArgs } = require('./chrom
 const { createTabModel, HOME_URL, isVideoOpenUrl, isYouTubeUrl } = require('./tab-model')
 const { buildContextMenuItems } = require('./tab-context-menu')
 const { createApplicationMenuTemplate } = require('./application-menu')
+const { resolveVersionedExtensionDir } = require('./extension-path')
 const { TAB_OPEN_CHANNEL, TAB_STRIP_CHANNELS } = require('./tab-ipc')
 const {
   createDesktopWindowOptions,
@@ -86,7 +87,11 @@ function findExtensionDir() {
     resolveProjectPath('dist-extension'),
     resolveProjectPath('extension'),
   ]
-  return candidates.find((dir) => fs.existsSync(path.join(dir, 'manifest.json')))
+  for (const dir of candidates) {
+    const resolved = resolveVersionedExtensionDir(dir)
+    if (resolved) return resolved
+  }
+  return null
 }
 
 function showChromeHandoffError(error) {
@@ -102,33 +107,85 @@ function showChromeHandoffError(error) {
 async function openSupportedChromeSignIn() {
   if (chromeHandoffStarted) return
   chromeHandoffStarted = true
+  let chrome = null
 
   try {
     const { chromePath, profileDir } = await import('./runtime-paths.mjs')
-    const { isChromeProfileRunning, waitForChromeStartup } = await import(
+    const { isChromeProfileRunning, stopChromeProfile } = await import(
       './chrome-launch.mjs'
+    )
+    const {
+      importChromeCookies,
+      reserveLoopbackPort,
+      waitForChromeAuthentication,
+    } = await import('./chrome-cookie-sync.mjs')
+    const { prepareChromeRuntimeBranding } = await import('./runtime-branding.mjs')
+    const { prepareNoirvaProfilePreferences } = await import(
+      './profile-preferences.mjs'
     )
     if (!fs.existsSync(chromePath)) {
       throw new Error(`Chrome for Testing was not found at ${chromePath}`)
     }
+
+    prepareChromeRuntimeBranding(chromePath)
+    if (await isChromeProfileRunning({ chromePath, profileDir })) {
+      await stopChromeProfile({ chromePath, profileDir })
+      for (let attempt = 0; attempt < 30; attempt += 1) {
+        if (!(await isChromeProfileRunning({ chromePath, profileDir }))) break
+        await new Promise((resolve) => setTimeout(resolve, 100))
+      }
+      if (await isChromeProfileRunning({ chromePath, profileDir })) {
+        throw new Error('Close the existing AdVoid sign-in window and try again')
+      }
+    }
+    prepareNoirvaProfilePreferences(profileDir)
 
     const extensionDir = findExtensionDir()
     if (!extensionDir) {
       throw new Error('The AdVoid Chrome extension is not available')
     }
 
-    const chrome = spawn(
+    const debuggingPort = await reserveLoopbackPort()
+    chrome = spawn(
       chromePath,
-      createChromeHandoffArgs({ profileDir, extensionDir }),
-      { detached: true, stdio: 'ignore' },
+      createChromeHandoffArgs({ profileDir, extensionDir, debuggingPort }),
+      { stdio: 'ignore' },
     )
-    await waitForChromeStartup(chrome, {
-      isProfileRunning: () => isChromeProfileRunning({ chromePath, profileDir }),
+    const chromeClosed = new Promise((_, reject) => {
+      chrome.once('error', reject)
+      chrome.once('exit', (code, signal) => {
+        const reason = signal ? `signal ${signal}` : `exit code ${code}`
+        reject(new Error(`Chrome sign-in closed before completion (${reason})`))
+      })
     })
-    if (chrome.exitCode === null) chrome.unref()
-    console.log('[AdVoid] Google sign-in handed off to supported Chrome')
-    app.quit()
+    mainWindow?.hide()
+    const cookies = await Promise.race([
+      waitForChromeAuthentication({ port: debuggingPort }),
+      chromeClosed,
+    ])
+    const importedCount = await importChromeCookies(
+      cookies,
+      session.defaultSession.cookies,
+    )
+    if (importedCount === 0) {
+      throw new Error('Chrome did not provide a usable YouTube session')
+    }
+    await session.defaultSession.cookies.flushStore()
+    if (chrome.exitCode === null) chrome.kill()
+    chrome = null
+
+    for (const view of viewsByTabId.values()) {
+      if (!view.webContents.isDestroyed()) view.webContents.reload()
+    }
+    mainWindow?.show()
+    mainWindow?.focus()
+    chromeHandoffStarted = false
+    console.log(`[AdVoid] signed-in session imported into ${viewsByTabId.size} app tabs`)
   } catch (error) {
+    if (chrome?.exitCode === null) chrome.kill()
+    mainWindow?.show()
+    mainWindow?.focus()
+    chromeHandoffStarted = false
     showChromeHandoffError(error)
   }
 }

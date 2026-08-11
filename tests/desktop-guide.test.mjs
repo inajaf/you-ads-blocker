@@ -10,7 +10,7 @@ before(async () => {
 describe('desktop first-run guide model', () => {
   it('contains a short ordered walkthrough', () => {
     const guide = globalThis.TubeDesktopGuide
-    assert.equal(guide.VERSION, 3)
+    assert.equal(guide.VERSION, 4)
     assert.equal(guide.PRODUCT_NAME, 'AdVoid')
     assert.equal(guide.STEPS.length, 4)
     assert.deepEqual(
@@ -42,7 +42,7 @@ describe('desktop first-run guide model', () => {
     const guide = globalThis.TubeDesktopGuide
     const electronGuide = guide.forEnvironment('electron')
     assert.notEqual(electronGuide, guide)
-    assert.match(electronGuide.STEPS[0].description, /supported Chrome app window/)
+    assert.match(electronGuide.STEPS[0].description, /brings the signed-in session back here/)
     assert.match(electronGuide.STEPS[0].points[0], /blocks account sign-in inside Electron/)
     assert.doesNotMatch(guide.STEPS[0].description, /Electron/)
   })

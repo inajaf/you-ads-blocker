@@ -4,9 +4,11 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromePath, ensureChromeRuntime, profileDir } from './runtime-paths.mjs'
 import { prepareChromeRuntimeBranding } from './runtime-branding.mjs'
+import extensionPath from './extension-path.js'
 
 const desktopDir = path.dirname(fileURLToPath(import.meta.url))
-const extensionDir = path.resolve(desktopDir, '..', 'dist-extension')
+const extensionRoot = path.resolve(desktopDir, '..', 'dist-extension')
+const extensionDir = extensionPath.resolveVersionedExtensionDir(extensionRoot)
 const { GOOGLE_LOGIN_URL } = chromeAuth
 
 ensureChromeRuntime()

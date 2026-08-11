@@ -51,6 +51,43 @@ export async function isChromeProfileRunning({
     .some((command) => isChromeProfileCommand(command, { chromePath, profileDir }))
 }
 
+export async function stopChromeProfile({
+  chromePath,
+  profileDir,
+  platform = process.platform,
+  execFileImpl = execFile,
+  killImpl = process.kill,
+}) {
+  const command = chromeProcessListCommand(platform)
+  const args = platform === 'win32'
+    ? [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        'Get-CimInstance Win32_Process -Filter "Name = \'chrome.exe\'" | ForEach-Object { "$($_.ProcessId)`t$($_.CommandLine)" }',
+      ]
+    : ['ax', '-o', 'pid=', '-o', 'command=']
+  const stdout = await new Promise((resolve) => {
+    execFileImpl(command.executable, args, { maxBuffer: 4 * 1024 * 1024 }, (error, output) =>
+      resolve(error ? '' : output),
+    )
+  })
+  const processIds = stdout
+    .split('\n')
+    .map((line) => line.match(/^\s*(\d+)\s+([\s\S]+)$/))
+    .filter((match) => match && isChromeProfileCommand(match[2], { chromePath, profileDir }))
+    .map((match) => Number(match[1]))
+
+  for (const processId of processIds) {
+    try {
+      killImpl(processId, 'SIGTERM')
+    } catch (error) {
+      if (error?.code !== 'ESRCH') throw error
+    }
+  }
+  return processIds.length
+}
+
 export function waitForChromeStartup(
   child,
   { graceMs = DEFAULT_STARTUP_GRACE_MS, isProfileRunning = async () => false } = {},

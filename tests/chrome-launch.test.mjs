@@ -6,6 +6,7 @@ import {
   chromeProcessListCommand,
   isChromeProfileCommand,
   isChromeProfileRunning,
+  stopChromeProfile,
   waitForChromeStartup,
 } from '../desktop/chrome-launch.mjs'
 
@@ -42,6 +43,30 @@ describe('Chrome launcher lifecycle', () => {
     const startup = waitForChromeStartup(child, { graceMs: 1 })
     child.emit('spawn')
     assert.deepEqual(await startup, { forwarded: false })
+  })
+
+  it('stops only the main process for the dedicated Chrome profile', async () => {
+    const chromePath = '/Applications/Chrome.app/Contents/MacOS/Chrome'
+    const profileDir = '/tmp/advoid-profile'
+    const killed = []
+    const count = await stopChromeProfile({
+      chromePath,
+      profileDir,
+      platform: 'darwin',
+      execFileImpl(executable, args, options, callback) {
+        callback(
+          null,
+          `101 ${chromePath} --user-data-dir=${profileDir}\n` +
+            `102 ${chromePath} --user-data-dir=${profileDir} --type=renderer\n` +
+            '103 /Applications/Other.app/Contents/MacOS/Other\n',
+        )
+      },
+      killImpl(processId, signal) {
+        killed.push([processId, signal])
+      },
+    })
+    assert.equal(count, 1)
+    assert.deepEqual(killed, [[101, 'SIGTERM']])
   })
 
   it('accepts a successful request forwarded to an existing profile', async () => {

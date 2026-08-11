@@ -6,8 +6,8 @@
  * requiring a browser DOM.
  */
 (function registerTubeDesktopGuide(global) {
-  // Version 3 introduces the final AdVoid name and the shared desktop tabs.
-  const VERSION = 3
+  // Version 4 explains that sign-in returns to the in-app Electron tabs.
+  const VERSION = 4
   const PRODUCT_NAME = 'AdVoid'
   const TAGLINE = 'Focused video with fewer interruptions.'
 
@@ -73,10 +73,10 @@
   const electronIntro = Object.freeze({
     ...STEPS[0],
     description:
-      `Browse as a guest here. When you choose Sign in, ${PRODUCT_NAME} switches to a supported Chrome app window.`,
+      `Browse as a guest here. When you choose Sign in, ${PRODUCT_NAME} briefly opens supported Chrome, then brings the signed-in session back here.`,
     points: Object.freeze([
       `Google blocks account sign-in inside Electron, so ${PRODUCT_NAME} never asks you to bypass that warning.`,
-      `The private ${PRODUCT_NAME} Chrome profile remembers your Google session.`,
+      `The private ${PRODUCT_NAME} Chrome profile returns the signed-in session to this app.`,
     ]),
   })
   const ELECTRON_STEPS = Object.freeze([

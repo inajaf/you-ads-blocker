@@ -6,9 +6,11 @@ import { isChromeProfileRunning, waitForChromeStartup } from './chrome-launch.mj
 import { chromePath, ensureChromeRuntime, profileDir } from './runtime-paths.mjs'
 import { prepareChromeRuntimeBranding } from './runtime-branding.mjs'
 import { prepareNoirvaProfilePreferences } from './profile-preferences.mjs'
+import extensionPath from './extension-path.js'
 
 const desktopDir = path.dirname(fileURLToPath(import.meta.url))
-const extensionDir = path.resolve(desktopDir, '..', 'dist-extension')
+const extensionRoot = path.resolve(desktopDir, '..', 'dist-extension')
+const extensionDir = extensionPath.resolveVersionedExtensionDir(extensionRoot)
 
 ensureChromeRuntime()
 prepareChromeRuntimeBranding(chromePath)

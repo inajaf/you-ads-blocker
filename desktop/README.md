@@ -36,7 +36,11 @@ Open AdVoid from Applications (or Spotlight). YouTube loads with ad blocking and
 
 ## First sign-in
 
-Click **Sign in** — a clean Chrome window opens. Sign into your Google account, then close it. AdVoid remembers your session.
+Click **Sign in**. AdVoid briefly opens its private supported Chrome window
+because Google rejects direct Electron sign-in. Once YouTube authentication is
+available, AdVoid imports that local session, closes the temporary window, and
+returns you to the same in-app tabs. Cookie values stay on the device and are
+never written to logs.
 
 ## Features
 

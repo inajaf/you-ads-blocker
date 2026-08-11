@@ -1,5 +1,31 @@
 # Project status
 
+## 2026-08-11 — signed-in YouTube stays inside AdVoid tabs
+
+The Electron sign-in handoff no longer exits the application. Supported Chrome
+opens only long enough to authenticate the private profile; AdVoid retrieves
+the local Google/YouTube session over a reserved loopback DevTools port,
+imports trusted live cookies into Electron, closes Chrome, reloads all current
+`WebContentsView` tabs, and focuses the original AdVoid window. Existing
+private Chrome instances are closed first to avoid profile-lock and debugger
+forwarding races. Extension runtime paths include the manifest version so
+Chrome cannot retain a stale unpacked MV3 worker across upgrades.
+
+Hands-on macOS validation from a clean temporary Electron profile confirmed
+the full flow: Chrome opened only for Google authentication, then closed;
+Electron regained focus with the account avatar and signed-in YouTube content.
+The in-app `+` control created a second signed-in tab, while earlier native
+shortcut QA confirmed Cmd+T and Cmd+W create/close only Electron tabs.
+
+Repository gates: `npm test` 187/187, `npm run build`, targeted oxlint, and
+`git diff --check` pass. The mandatory UI loop passed 12/12 against the current
+app on isolated port 4173 (port 5173 belonged to another local project).
+Both x64 and arm64 DMGs build successfully and pass `hdiutil verify`; both app
+bundles pass strict deep codesign verification. The arm64 package identifies
+itself as `AdVoid` / `com.advoid.desktop`, and its packaged ASAR contains the
+loopback-only auth sync, in-app tab reload, and error recovery code. Apple
+notarization remains unconfigured and is required before public distribution.
+
 ## 2026-08-11 — macOS desktop parity with Windows tabs (branch codex/macos-windows-tabs-parity)
 
 The shared Electron multi-tab implementation is now explicitly packaged and
