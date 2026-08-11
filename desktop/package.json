@@ -1,6 +1,6 @@
 {
   "name": "advoid-desktop",
-  "version": "1.0.0",
+  "version": "1.4.0",
   "private": true,
   "description": "AdVoid desktop video window with supported Google sign-in and ad filtering.",
   "main": "main.js",
@@ -51,6 +51,7 @@
     "mac": {
       "category": "public.app-category.entertainment",
       "icon": "../assets/brand/noirva-logo-v2.icns",
+      "artifactName": "AdVoid-1.0.0-${arch}.${ext}",
       "target": [
         {
           "target": "dmg",
