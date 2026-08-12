@@ -10,7 +10,7 @@ Cinema-dark React PWA for browsing videos with best-effort ad filtering and no A
 | Landing | `src/landing/` | Marketing page at `/` (own scoped CSS + fonts); also the GitHub Pages bundle |
 | Proxy | `vite-plugin-proxy.ts` + `server/` | Media proxy with allowlisted hosts; also `netlify/` functions |
 | Extension | `extension/` | Chrome Manifest V3 ad-block companion (AdVoid Shield) |
-| Desktop | `desktop/` | Chrome App Mode wrapper |
+| Desktop | `desktop/` | Electron app with one `WebContentsView` per tab; a private Chrome for Testing runtime handles sign-in only, then AdVoid imports the local Google/YouTube session and returns to its tabs (see `docs/decisions.md` 2026-08-11) |
 | Android | `android/AdVoid/` | Actively-developed native WebView wrapper (release package `com.advoid.app`; debug builds use `com.advoid.app.debug` so QA never removes release login data), self-contained ad-block + UI, not synced from `adblock/`. Directory/package renamed from Noirva 2026-07-22 — the applicationId change means it's a distinct app to Android, so anyone with the old `com.noirva.app` build installed needs to reinstall. Playback/UI state has local Kotlin unit tests; still verify WebView behavior hands-on in an emulator. |
 | Android (legacy) | `android/` (package `app.tube`) | Older wrapper backed by `adblock/` via `scripts/sync-adblock.mjs`; not the one being developed — check `git log -- android/AdVoid android/` before assuming which wrapper a change belongs in. |
 
