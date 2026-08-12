@@ -39,11 +39,11 @@ describe('AdVoid desktop cross-platform packaging', () => {
     )
   })
 
-  it('builds both desktop platforms without reacting to unrelated release tags', () => {
+  it('builds both desktop platforms and publishes update feed on manual dispatch', () => {
     assert.match(workflow, /macos-14/)
     assert.match(workflow, /windows-latest/)
     assert.match(workflow, /workflow_dispatch/)
     assert.doesNotMatch(workflow, /tags:/)
-    assert.doesNotMatch(workflow, /gh release upload/)
+    assert.match(workflow, /gh release upload/)
   })
 })

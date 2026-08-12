@@ -21,6 +21,15 @@ const { buildContextMenuItems } = require('./tab-context-menu')
 const { createApplicationMenuTemplate } = require('./application-menu')
 const { resolveVersionedExtensionDir } = require('./extension-path')
 const { TAB_OPEN_CHANNEL, TAB_STRIP_CHANNELS } = require('./tab-ipc')
+// autoUpdater lives in an optional dependency so dev/electron-less tooling
+// (Node-only scripts) can require this file without pulling in the updater.
+let autoUpdater = null
+try {
+  // eslint-disable-next-line global-require
+  autoUpdater = require('electron-updater').autoUpdater
+} catch (error) {
+  console.error('[AdVoid] electron-updater unavailable, auto-update disabled:', error)
+}
 const {
   createDesktopWindowOptions,
   createTabStripLoadOptions,
@@ -512,6 +521,76 @@ function scheduleScreenshotIfRequested() {
   })
 }
 
+// electron-updater expects a console-style logger; route through the same
+// [AdVoid] prefix so updater logs are greppable alongside the rest.
+const updaterLogger = {
+  debug: (message) => console.log(`[AdVoid][auto-update] ${message}`),
+  info: (message) => console.log(`[AdVoid][auto-update] ${message}`),
+  warn: (message) => console.warn(`[AdVoid][auto-update] ${message}`),
+  error: (message) => console.error(`[AdVoid][auto-update] ${message}`),
+}
+
+// Updater errors can arrive as strings or objects depending on the sink;
+// normalize so logging never throws inside an error handler.
+function updaterErrorMessage(error) {
+  return error instanceof Error ? error.message : String(error)
+}
+
+// Silent background update check for packaged builds. Errors must never crash
+// the app: Gatekeeper/network/feed failures downgrade to a logged note only.
+function setupAutoUpdate() {
+  if (!app.isPackaged || !autoUpdater) return
+  autoUpdater.logger = updaterLogger
+  autoUpdater.autoDownload = true
+  autoUpdater.autoInstallOnAppQuit = true
+
+  autoUpdater.on('error', (error) => {
+    updaterLogger.error(`update check failed (non-fatal): ${updaterErrorMessage(error)}`)
+  })
+
+  autoUpdater.on('update-available', () => {
+    updaterLogger.info('update available, downloading in the background')
+  })
+
+  autoUpdater.on('update-not-available', () => {
+    updaterLogger.info('no update available')
+  })
+
+  autoUpdater.on('update-downloaded', (info) => {
+    updaterLogger.info(`update ${info.version} downloaded`)
+    const win = mainWindow || BrowserWindow.getAllWindows()[0]
+    const options = {
+      type: 'info',
+      buttons: ['Restart now', 'Later'],
+      defaultId: 0,
+      cancelId: 1,
+      title: 'AdVoid update ready',
+      message: `Version ${info.version} has been downloaded.`,
+      detail: 'Restart AdVoid to install the update and get the latest fixes.',
+    }
+    const onChoice = (result) => {
+      if (result.response === 0) {
+        setImmediate(() => autoUpdater.quitAndInstall())
+      }
+    }
+    if (win) {
+      dialog.showMessageBox(win, options).then(onChoice).catch((error) => {
+        updaterLogger.error(`update prompt failed: ${updaterErrorMessage(error)}`)
+      })
+    } else {
+      dialog.showMessageBox(options).then(onChoice).catch((error) => {
+        updaterLogger.error(`update prompt failed: ${updaterErrorMessage(error)}`)
+      })
+    }
+  })
+
+  autoUpdater
+    .checkForUpdates()
+    .catch((error) => {
+      updaterLogger.error(`update check failed (non-fatal): ${updaterErrorMessage(error)}`)
+    })
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow(
     createDesktopWindowOptions({
@@ -560,6 +639,8 @@ app.whenReady().then(() => {
 
   createWindow()
   installApplicationMenu()
+
+  setupAutoUpdate()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
