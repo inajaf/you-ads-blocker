@@ -1,5 +1,28 @@
 # Project status
 
+## 2026-08-12 — Desktop apps auto-update from the GitHub release feed (branch fm/you-ads-desktop-auto-update)
+
+Packaged macOS/Windows builds now self-update via `electron-updater` (^6.8.9):
+`desktop/main.js` registers a `[AdVoid][auto-update]` logger, checks the GitHub
+release feed on launch only for packaged builds (`app.isPackaged`), downloads
+updates in the background, and prompts **Restart now / Later** → `quitAndInstall()`.
+Update failures (Gatekeeper, network, stale feed) are non-fatal — they log a
+warning instead of crashing the app. `electron-updater` is loaded as an optional
+dependency so Node-only tooling can still require `main.js`. electron-builder
+gains a `publish` block (provider github, inajaf/you-ads-blocker) and a `zip`
+mac target so `latest-mac.yml` (MacUpdater feed) is emitted next to the DMG.
+
+`.github/workflows/desktop-build.yml` raises its permission to `contents: write`
+and, on manual `workflow_dispatch` runs only, uploads the feed
+(`latest-mac.yml`/`latest.yml`, blockmaps, plus the DMG/zip/exe) to the current
+latest GitHub release via `gh release upload --clobber` with `GITHUB_TOKEN`.
+There is no `v*`/tag trigger and no PR-triggered upload, so `releases/latest`
+can't be broken by a stale partial build; artifact names stay pinned at the
+stable `AdVoid-1.0.0-*` / `AdVoid-Setup-1.0.0.exe` (the app version is 1.4.0 and
+only drives the feed's version field). macOS remains un-notarized / no Developer
+ID — unchanged from the existing unsigned posture. `tests/desktop-packaging.test.mjs`
+now asserts the dispatch-gated `gh release upload` and the absence of a `tags:` trigger.
+
 ## 2026-08-11 — signed-in YouTube stays inside AdVoid tabs
 
 The Electron sign-in handoff no longer exits the application. Supported Chrome

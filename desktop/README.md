@@ -46,6 +46,7 @@ never written to logs.
 
 - **Browser-style tabs** — each tab is its own web view and shares the signed-in session. Open a link in a new tab with **Cmd/Ctrl+click** or **middle-click**; right-click a link for a native menu (**Open in New Tab**, **Copy Link Address**, **Back**/**Forward**/**Reload**). New tab: **Cmd/Ctrl+T**; close tab: **Cmd/Ctrl+W** or the × button. A plain click navigates in the current tab. On first run, dismiss the guide before using the page's right-click menu.
 - **Ad blocking per tab** — every tab gets the same best-effort network host blocking and response pruning, including synchronous pruning of initial player data on full-page loads.
+- **Automatic updates** — packaged builds silently check GitHub Releases in the background on launch and offer **Restart now** once a new version downloads. Update checks are non-fatal: a missing network or stale feed simply logs a warning.
 
 ## Development
 
@@ -56,4 +57,6 @@ the strip occupies the native inset title bar, keeps the traffic-light controls
 clear, and leaves empty strip space draggable. Build installers with
 `npm run dist:mac` or `npm run dist:win`; both commands rebuild the shared
 extension first. The cross-platform GitHub Actions workflow builds both formats
-for pull requests and manual runs, but does not publish releases automatically.
+for pull requests and manual runs; a manual run also uploads the auto-update
+feed (`latest-mac.yml`/`latest.yml`, blockmaps, and the installers) to the
+latest GitHub release, while pull-request builds never touch releases.
