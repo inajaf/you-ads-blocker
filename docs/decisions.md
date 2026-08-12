@@ -4,6 +4,33 @@
 Reason: ...
 Alternatives: ... -->
 
+## 2026-08-12 — Packaged macOS/Windows apps auto-update from the GitHub release feed
+Reason: desktop builds were shipped as static Downloads that never updated,
+forcing users to re-download installers manually. The app is already distributed
+unsigned (macOS)/uncertified (Windows) through GitHub releases, so
+electron-updater's GitHub feed needs no new infrastructure.
+Approach: add `electron-updater` (^6.8.9), configured as an optional load in
+`desktop/main.js` so Node-only tooling can still require the file; add an
+electron-builder `publish` block (provider github, inajaf/you-ads-blocker); add
+a `zip` mac target so the `latest-mac.yml` MacUpdater feed is generated. In
+`setupAutoUpdate()` `checkForUpdates()` runs only when `app.isPackaged`,
+downloads in the background (`autoDownload`), and prompts **Restart now/Later**
+via a native dialog that calls `quitAndInstall()`. Every update-check failure
+(Gatekeeper, network, stale feed) logs an `[AdVoid][auto-update]` warning and is
+never fatal. CI (`.github/workflows/desktop-build.yml`) raises its permission to
+`contents: write` and, on manual `workflow_dispatch` runs only, uploads
+`latest-mac.yml`/`latest.yml`, the blockmaps, and the installers to the current
+latest GitHub release via `gh release upload --clobber` authenticated with
+`GITHUB_TOKEN`. Artifact names remain the stable `AdVoid-1.0.0-*` /
+`AdVoid-Setup-1.0.0.exe` so the feed and the landing-page links keep resolving;
+the app version (currently 1.4.0) only drives the feed's version field.
+Alternatives: (a) auto-upload every desktop build to a release on every run —
+rejected on 2026-08-11 because `releases/latest` serves all platform links and
+a partial build would break the other downloads; the manual-dispatch gate keeps
+that guarantee while allowing deliberate feed publishes; (b) a Sparkle/Squirrel
+feed — extra infrastructure, electron-updater is the standard electron-builder
+companion; (c) keep requiring manual re-downloads — leaves users on stale builds.
+
 ## 2026-08-11 — Google sign-in returns to Electron instead of becoming the browsing runtime
 Reason: Google blocks direct account authentication inside Electron, so the
 previous handoff quit Electron and left the user in Chrome App Mode. That made

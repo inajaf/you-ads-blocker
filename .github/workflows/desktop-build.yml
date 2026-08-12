@@ -14,7 +14,7 @@ on:
       - '.github/workflows/desktop-build.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-desktop:
@@ -25,11 +25,18 @@ jobs:
           - os: macos-14
             platform: macOS
             command: npm run dist:mac
-            artifact_path: desktop/release/*.dmg
+            artifact_path: |
+              desktop/release/*.dmg
+              desktop/release/*.zip
+              desktop/release/latest-mac.yml
+              desktop/release/*.blockmap
           - os: windows-latest
             platform: Windows
             command: npm run dist:win
-            artifact_path: desktop/release/*.exe
+            artifact_path: |
+              desktop/release/*.exe
+              desktop/release/latest.yml
+              desktop/release/*.blockmap
     name: Build ${{ matrix.platform }}
     runs-on: ${{ matrix.os }}
     steps:
@@ -51,6 +58,39 @@ jobs:
       - name: Build installer
         working-directory: desktop
         run: ${{ matrix.command }}
+
+      - name: Publish update feed to GitHub release (macOS)
+        if: ${{ github.event_name == 'workflow_dispatch' && matrix.os == 'macos-14' }}
+        working-directory: desktop
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="$(gh release view --json tagName --jq '.tagName')"
+          echo "Publishing macOS update feed to release: ${tag}"
+          cd release
+          gh release upload "${tag}" \
+            latest-mac.yml \
+            AdVoid-1.0.0-*.dmg \
+            AdVoid-1.0.0-*.zip \
+            AdVoid-1.0.0-*.blockmap \
+            --clobber
+
+      - name: Publish update feed to GitHub release (Windows)
+        if: ${{ github.event_name == 'workflow_dispatch' && matrix.os == 'windows-latest' }}
+        working-directory: desktop
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="$(gh release view --json tagName --jq '.tagName')"
+          echo "Publishing Windows update feed to release: ${tag}"
+          cd release
+          gh release upload "${tag}" \
+            latest.yml \
+            AdVoid-Setup-1.0.0.exe \
+            *.blockmap \
+            --clobber
 
       - name: Upload installer
         uses: actions/upload-artifact@v4
