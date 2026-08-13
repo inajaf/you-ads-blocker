@@ -755,6 +755,131 @@ ytd-statement-banner-renderer {
   }
 }
 
+/* AdVoid desktop: extend video when YouTube's right column is empty (e.g. live
+   without chat, or when ads/secondary shelf is blocked). Flexy keeps
+   #primary at 70% + #secondary 30% even when #secondary has no content,
+   leaving a blank white strip in screenshots 213929/213953. Collapse empty
+   secondary and let primary fill width. Also ensure HTML fullscreen truly
+   covers viewport when Electron promotes it to OS fullscreen. */
+.tube-desktop-app ytd-watch-flexy #secondary:empty,
+.tube-desktop-app ytd-watch-flexy #secondary-inner:empty,
+.tube-desktop-app ytd-watch-flexy #secondary ytd-live-chat-frame[collapsed],
+.tube-desktop-app ytd-watch-flexy #chat:empty {
+  display: none !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  flex: 0 0 0 !important;
+}
+
+.tube-desktop-app ytd-watch-flexy #secondary:has(> #secondary-inner:empty),
+.tube-desktop-app ytd-watch-flexy #secondary:has(> #panels:empty) {
+  display: none !important;
+}
+
+.tube-desktop-app ytd-watch-flexy:has(#secondary:empty) #primary,
+.tube-desktop-app ytd-watch-flexy:has(#secondary[hidden]) #primary,
+.tube-desktop-app ytd-watch-flexy[theater] #primary {
+  max-width: none !important;
+  width: 100% !important;
+  flex: 1 1 auto !important;
+}
+
+.tube-desktop-app ytd-watch-flexy[theater] #secondary {
+  display: none !important;
+}
+
+/* In any HTML fullscreen (player or doc), hide the entire right rail — chat or not.
+   Previous patch only handled :empty, so loading/visible ytd-live-chat-frame
+   still reserved 30% flex width in fullscreen (your 213929/213953). */
+.tube-desktop-app:has(.html5-video-player:fullscreen) #secondary,
+.tube-desktop-app:has(.html5-video-player.ytp-fullscreen) #secondary,
+.tube-desktop-app:has(:fullscreen) #secondary,
+.tube-desktop-app ytd-watch-flexy:has(.html5-video-player:fullscreen) #secondary,
+.tube-desktop-app ytd-watch-flexy:has(.html5-video-player.ytp-fullscreen) #columns #secondary,
+:has(.html5-video-player:fullscreen) #secondary,
+:has(.html5-video-player.ytp-fullscreen) #secondary,
+:has(:fullscreen) #secondary,
+ytd-watch-flexy:has(.html5-video-player:fullscreen) #secondary,
+ytd-watch-flexy:fullscreen #secondary,
+#player:fullscreen ~ #secondary,
+#columns:has(:fullscreen) #secondary {
+  display: none !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  flex: 0 0 0 !important;
+}
+
+.tube-desktop-app:has(.html5-video-player:fullscreen) #primary,
+.tube-desktop-app:has(.html5-video-player.ytp-fullscreen) #primary,
+:has(.html5-video-player:fullscreen) #primary,
+:has(.html5-video-player.ytp-fullscreen) #primary,
+:has(:fullscreen) #primary,
+ytd-watch-flexy:has(.html5-video-player:fullscreen) #primary,
+ytd-watch-flexy:fullscreen #primary {
+  max-width: none !important;
+  width: 100% !important;
+  flex: 1 1 auto !important;
+}
+
+.tube-desktop-app:has(:fullscreen) #chat,
+.tube-desktop-app:has(:fullscreen) ytd-live-chat-frame,
+.tube-desktop-app:has(:fullscreen) #chat-container,
+.tube-desktop-app:has(:fullscreen) #chatframe,
+.tube-desktop-app:has(:fullscreen) iframe#chatframe,
+:has(:fullscreen) #chat,
+:has(:fullscreen) ytd-live-chat-frame,
+:has(:fullscreen) #chat-container,
+:has(:fullscreen) #chatframe,
+:has(:fullscreen) iframe#chatframe,
+ytd-live-chat-frame:fullscreen,
+#chat:fullscreen,
+#chatframe:fullscreen,
+iframe#chatframe:fullscreen,
+.html5-video-player:fullscreen ytd-live-chat-frame,
+.html5-video-player:fullscreen #chat,
+.html5-video-player:fullscreen #chatframe,
+.ytp-fullscreen ytd-live-chat-frame,
+.ytp-fullscreen #chat,
+.ytp-fullscreen #chatframe,
+#player:fullscreen ytd-live-chat-frame,
+#player:fullscreen #chat {
+  display: none !important;
+}
+
+/* Windowed: if chat is still loading (iframe empty), collapse secondary so video extends
+   while chat loads — fixes “chat going on loading too long” white strip */
+#secondary:has(ytd-live-chat-frame:not([has-loaded])),
+#secondary:has(ytd-live-chat-frame[is-loading]),
+#secondary:has(iframe#chatframe:not([src])),
+#secondary:has(iframe#chatframe[src=""]),
+#secondary:has(ytd-live-chat-frame[collapsed]),
+#secondary:has(#chatframe[loading]) {
+  display: none !important;
+  width: 0 !important;
+  flex: 0 0 0 !important;
+}
+#secondary:has(ytd-live-chat-frame:not([has-loaded])) + #primary,
+#secondary:has(iframe#chatframe:not([src])) + #primary {
+  max-width: none !important;
+  flex: 1 1 auto !important;
+}
+
+/* Fullscreen video should truly cover viewport (Enter vs windowed 1200x800) */
+.tube-desktop-app ytd-watch-flexy #full-bleed-container,
+.tube-desktop-app #player {
+  width: 100% !important;
+  max-width: none !important;
+}
+
+.tube-desktop-app .html5-video-player:fullscreen,
+.tube-desktop-app .html5-video-container:fullscreen,
+.tube-desktop-app #player-container:fullscreen {
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: 100vw !important;
+  max-height: 100vh !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   #tube-desktop-back,
   #tube-desktop-help,

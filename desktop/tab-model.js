@@ -3,7 +3,7 @@
 // Pure, dependency-free tab model for the AdVoid desktop window. Kept free of
 // Electron so node:test can exercise it directly (see tests/tab-model.test.mjs).
 
-const HOME_URL = 'https://www.youtube.com/'
+const HOME_URL = 'https://www.youtube.com/?tube_app=1'
 const DEFAULT_TITLE = 'New tab'
 
 function isYouTubeUrl(rawUrl) {

@@ -430,10 +430,16 @@ function attachTabListeners(contents, tabId) {
   })
   contents.on('enter-html-full-screen', () => {
     htmlFullscreenTabId = tabId
+    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isFullScreen()) {
+      mainWindow.setFullScreen(true)
+    }
     layoutViews()
   })
   contents.on('leave-html-full-screen', () => {
     if (htmlFullscreenTabId === tabId) htmlFullscreenTabId = null
+    if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isFullScreen()) {
+      mainWindow.setFullScreen(false)
+    }
     layoutViews()
   })
 
@@ -605,6 +611,15 @@ function createWindow() {
   openNewTab(HOME_URL)
 
   mainWindow.on('resize', layoutViews)
+  mainWindow.on('enter-full-screen', () => layoutViews())
+  // If user exits OS fullscreen with Esc, ensure the HTML fullscreen state is
+  // cleared and the tab strip is restored.
+  mainWindow.on('leave-full-screen', () => {
+    if (htmlFullscreenTabId !== null) {
+      htmlFullscreenTabId = null
+      layoutViews()
+    }
+  })
   mainWindow.on('closed', () => {
     mainWindow = null
     stripView = null
