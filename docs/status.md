@@ -456,14 +456,18 @@ Done:
   `KEYSTORE_PASSWORD` / `KEY_ALIAS` / `KEY_PASSWORD`, gitignored.
 - `app/build.gradle.kts`: reads `keystore.properties`, applies a
   `signingConfigs["release"]` to the `release` build type **only when the
-  keystore file actually exists** — so a fresh checkout or CI without the
-  secret configured still builds (unsigned) instead of hard-failing.
+  keystore file actually exists**; the `release` build no longer silently
+  falls back to unsigned — since the Play-prep change above,
+  `assembleRelease`/`bundleRelease` now FAIL closed when the keystore is
+  absent (see the 2026-08-14 entry at the top of this file).
 - Also disabled `lintVitalAnalyzeRelease` (`lint { checkReleaseBuilds =
   false; abortOnError = false }` — same fix the abandoned branch had
-  independently arrived at): AGP 8.7.3's lint tooling fails outright under
+  independently arrived at, and still intentionally left in place after the
+  Play-prep change): AGP 8.7.3's lint tooling fails outright under
   this machine's JDK 26 (Homebrew, newer than AGP 8.7.3 supports for that
   specific check); this is a packaging build, not a lint gate, so skipping
-  it here is appropriate.
+  it here is appropriate. This workaround was intentionally left unchanged by
+  the Play-prep change (see `docs/decisions.md` 2026-08-14).
 - Added `.gitignore` entries repo-wide for `*.keystore`/`*.jks` plus the
   specific `keystore.properties`/`local.properties` paths, and untracked
   `android/AdVoid/local.properties` (was previously tracked by mistake —

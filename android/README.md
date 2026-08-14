@@ -187,7 +187,11 @@ android/
   YouTube/Google, and does not use their marks.
 - **Personal use.** This wrapper is intended for your own device. It is not
   suitable for distribution on Google Play (both the trademark and the
-  ad-block-on-YouTube policy make that a non-starter).
+  ad-block-on-YouTube policy make that a non-starter). A Play release is
+  prepared for in `android/AdVoid/` (the actively-developed wrapper); see
+  `docs/decisions.md` 2026-08-14. That change also adds an in-app
+  "Privacy policy" entry with a placeholder URL (`TODO(captain)`) that the
+  captain must replace with the real hosted policy before the upload.
 - **WebView version matters.** `addDocumentStartJavaScript` needs a reasonably
   recent Android System WebView (Chrome 83+ era). On very old devices the
   `onPageStarted` fallback runs slightly later, so the very first frames of the
