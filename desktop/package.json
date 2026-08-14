@@ -12,9 +12,9 @@
     "prestart:electron": "cd .. && npm run build:extension",
     "start:electron": "electron .",
     "dist": "npm run dist:mac",
-    "dist:mac": "cd .. && npm run build:extension && cd desktop && electron-builder --mac",
-    "dist:dmg": "cd .. && npm run build:extension && cd desktop && electron-builder --mac dmg",
-    "dist:win": "cd .. && npm run build:extension && cd desktop && electron-builder --win"
+    "dist:mac": "cd .. && npm run build:extension && cd desktop && electron-builder --mac --publish never",
+    "dist:dmg": "cd .. && npm run build:extension && cd desktop && electron-builder --mac dmg --publish never",
+    "dist:win": "cd .. && npm run build:extension && cd desktop && electron-builder --win --publish never"
   },
   "build": {
     "appId": "com.advoid.desktop",

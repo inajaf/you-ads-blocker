@@ -26,6 +26,15 @@ describe('AdVoid desktop cross-platform packaging', () => {
     assert.match(desktopPackage.scripts['dist:win'], /cd \.\. && npm run build:extension/)
   })
 
+  it('never auto-publishes from the build scripts (the workflow uploads manually)', () => {
+    // electron-builder would try to publish (and need GH_TOKEN) during
+    // `electron-builder --win/--mac` because the github publish provider is
+    // configured; the release feed is uploaded separately in the workflow, so
+    // the build itself must stay publish-free.
+    assert.match(desktopPackage.scripts['dist:mac'], /--publish never/)
+    assert.match(desktopPackage.scripts['dist:win'], /--publish never/)
+  })
+
   it('builds Intel and Apple Silicon DMGs with the shared Electron app', () => {
     const macTarget = desktopPackage.build.mac.target[0]
     assert.equal(macTarget.target, 'dmg')
