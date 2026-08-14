@@ -2,9 +2,13 @@ package com.advoid.app
 
 import android.annotation.SuppressLint
 import android.content.res.Configuration
+import android.content.res.ColorStateList
 import android.content.Intent
 import android.net.Uri
 import android.graphics.*
+import android.graphics.drawable.Drawable
+import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.RippleDrawable
 import android.os.Bundle
 import android.os.SystemClock
 import android.util.Base64
@@ -226,21 +230,21 @@ class MainActivity : Activity() {
     }
 
     /**
-     * Google Play requires a privacy policy reachable from the app. Add a small,
-     * unobtrusive "Privacy policy" entry that opens the public policy URL in the
-     * system browser (it lives outside the WebView, so ad-blocking rules never
-     * interfere and the user leaves the app to read it). Kept deliberately
-     * minimal — no full settings UI. It floats over the WebView (same overlay
-     * host as the refresh indicator) so it never pushes the video layout.
+     * Google Play requires a privacy policy reachable from the app. Show a
+     * polished, tappable pill (shield icon + label on a rounded translucent
+     * card) that opens the public policy URL in the system browser. It lives
+     * outside the WebView so ad-blocking never interferes and the user leaves
+     * the app to read it. It floats over the WebView (same overlay host as the
+     * refresh indicator) so it never pushes the video layout.
      */
     private fun addPrivacyPolicyAffordance(host: ViewGroup) {
-        val chip = TextView(this).apply {
-            text = "Privacy policy"
-            textSize = 12f
-            setTextColor(green)
-            setBackgroundResource(android.R.drawable.screen_background_dark)
-            setPadding(dp(12), dp(8), dp(12), dp(8))
+        val pill = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(16), dp(10), dp(18), dp(10))
+            background = privacyPillBackground()
             isClickable = true
+            isFocusable = true
             contentDescription = "Open privacy policy"
             setOnClickListener {
                 val url = PRIVACY_POLICY_URL
@@ -255,14 +259,57 @@ class MainActivity : Activity() {
                 }
             }
         }
+
+        val icon = ImageView(this).apply {
+            setImageResource(android.R.drawable.ic_lock_lock)
+            imageTintList = ColorStateList.valueOf(green)
+            contentDescription = null
+        }
+        pill.addView(icon, LinearLayout.LayoutParams(dp(16), dp(16)))
+
+        val label = TextView(this).apply {
+            text = "Privacy policy"
+            textSize = 13f
+            setTextColor(Color.WHITE)
+            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            setPadding(dp(8), 0, 0, 0)
+        }
+        pill.addView(label, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT))
+
         val params = FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.WRAP_CONTENT,
             FrameLayout.LayoutParams.WRAP_CONTENT
         ).apply {
             gravity = Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM
-            bottomMargin = dp(56)
+            bottomMargin = dp(44)
         }
-        host.addView(chip, params)
+        host.addView(pill, params)
+    }
+
+    /**
+     * Rounded translucent pill background with a subtle border and a press
+     * ripple, so the privacy affordance reads as a proper floating action
+     * instead of a bare text label.
+     */
+    private fun privacyPillBackground(): Drawable {
+        val content = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = dp(22).toFloat()
+            setColor(Color.parseColor("#E6161619"))
+            setStroke(dp(1), Color.parseColor("#2EFFFFFF"))
+        }
+        val mask = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = dp(22).toFloat()
+            setColor(Color.BLACK)
+        }
+        return RippleDrawable(
+            ColorStateList.valueOf(Color.parseColor("#33FFFFFF")),
+            content,
+            mask,
+        )
     }
 
     private fun injectPageScripts(view: WebView?) {
