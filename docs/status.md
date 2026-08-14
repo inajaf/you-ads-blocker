@@ -1,5 +1,32 @@
 # Project status
 
+## 2026-08-14 — AdVoid Android Play-prep (branch fm/you-ads-play-release-prep)
+
+Readied `android/AdVoid` for its first Google Play upload:
+- **Managed versioning.** `versionCode`/`versionName` now come from the tracked
+  `android/AdVoid/version.properties` (currently `1` / `1.0`), the single source
+  of truth for bumps. `app/build.gradle.kts` reads it and fails clearly if it's
+  missing or malformed.
+- **Fail-closed release signing.** `assembleRelease`/`bundleRelease` now FAIL
+  with "Refusing to build an unsigned release" when the gitignored
+  `keystore.properties` (or the keystore it points to) is absent, instead of
+  silently emitting an unsigned artifact. `assembleDebug` and
+  `testDebugUnitTest` are unaffected and need no keystore.
+- **In-app privacy policy link.** A minimal floating "Privacy policy" chip opens
+  the public policy in the system browser. The URL is a clearly-marked
+  placeholder (`https://your-site.example/privacy`, TODO(captain)) in
+  `PrivacyPolicy.kt`; `isValidPrivacyPolicyUrl` refuses to open the placeholder
+  until it's replaced. Unit-tested in `PrivacyPolicyTest.kt`.
+
+Verified:
+- `cd android/AdVoid && ./gradlew testDebugUnitTest assembleRelease bundleRelease`
+  — BUILD SUCCESSFUL with the keystore present; release APK signs (CN=AdVoid)
+  and reports `versionCode='1' versionName='1.0'`; `PrivacyPolicyTest` 5/5.
+- With `keystore.properties` removed, `assembleRelease` fails fast with the
+  clear error; `assembleDebug` + `testDebugUnitTest` still succeed.
+Remaining (for the captain / later PR): replace the placeholder privacy URL with
+the real hosted policy before the Play upload.
+
 ## 2026-08-12 — Desktop apps auto-update from the GitHub release feed (branch fm/you-ads-desktop-auto-update)
 
 Packaged macOS/Windows builds now self-update via `electron-updater` (^6.8.9):

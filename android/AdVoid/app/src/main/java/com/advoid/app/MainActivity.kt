@@ -2,6 +2,8 @@ package com.advoid.app
 
 import android.annotation.SuppressLint
 import android.content.res.Configuration
+import android.content.Intent
+import android.net.Uri
 import android.graphics.*
 import android.os.Bundle
 import android.os.SystemClock
@@ -218,7 +220,49 @@ class MainActivity : Activity() {
         rootLayout.addView(webContainer, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
 
+        addPrivacyPolicyAffordance(webContainer)
+
         setContentView(rootLayout)
+    }
+
+    /**
+     * Google Play requires a privacy policy reachable from the app. Add a small,
+     * unobtrusive "Privacy policy" entry that opens the public policy URL in the
+     * system browser (it lives outside the WebView, so ad-blocking rules never
+     * interfere and the user leaves the app to read it). Kept deliberately
+     * minimal — no full settings UI. It floats over the WebView (same overlay
+     * host as the refresh indicator) so it never pushes the video layout.
+     */
+    private fun addPrivacyPolicyAffordance(host: ViewGroup) {
+        val chip = TextView(this).apply {
+            text = "Privacy policy"
+            textSize = 12f
+            setTextColor(green)
+            setBackgroundResource(android.R.drawable.screen_background_dark)
+            setPadding(dp(12), dp(8), dp(12), dp(8))
+            isClickable = true
+            contentDescription = "Open privacy policy"
+            setOnClickListener {
+                val url = PRIVACY_POLICY_URL
+                if (!isValidPrivacyPolicyUrl(url)) {
+                    Log.e(TAG, "privacy policy URL is still the placeholder; refusing to open it")
+                    return@setOnClickListener
+                }
+                try {
+                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                } catch (e: Exception) {
+                    Log.e(TAG, "open privacy policy failed: ${e.message}", e)
+                }
+            }
+        }
+        val params = FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT
+        ).apply {
+            gravity = Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM
+            bottomMargin = dp(56)
+        }
+        host.addView(chip, params)
     }
 
     private fun injectPageScripts(view: WebView?) {
