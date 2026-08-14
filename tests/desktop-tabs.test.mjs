@@ -72,6 +72,44 @@ describe('AdVoid desktop multi-tab wiring', () => {
     assert.match(mainSource, /loadURL\(tab\.url\)\.catch/)
   })
 
+  it('lets Electron own the window fullscreen transition for HTML fullscreen', () => {
+    // Explicit setFullScreen() inside enter/leave-html-full-screen races the
+    // built-in transition (Electron 43 auto-fullscreens on request), which can
+    // hang the renderer's requestFullscreen() and leave the video stuck small.
+    assert.match(mainSource, /enter-html-full-screen[\s\S]{0,500}htmlFullscreenTabId = tabId[\s\S]{0,200}layoutViews\(\)/)
+    assert.doesNotMatch(
+      mainSource,
+      /enter-html-full-screen[\s\S]{0,400}setFullScreen\(true\)/,
+    )
+    assert.doesNotMatch(
+      mainSource,
+      /leave-html-full-screen[\s\S]{0,400}setFullScreen\(false\)/,
+    )
+  })
+
+  it('hides the live chat and fills the viewport when YouTube fullscreens the document', () => {
+    const css = fs.readFileSync(new URL('../extension/content.css', import.meta.url), 'utf8')
+    // YouTube fullscreens <html> on watch pages, keeping the player+chat watch
+    // layout; collapse the chat/panel column and force the video to fill.
+    assert.match(css, /html:fullscreen #chat-container/)
+    assert.match(css, /html:fullscreen ytd-live-chat-frame/)
+    assert.match(css, /html:fullscreen #panels-full-bleed-container[\s\S]*display: none !important/)
+    assert.match(css, /html:fullscreen \.html5-video-container[\s\S]*height: 100% !important/)
+    assert.match(css, /html:fullscreen video\.html5-main-video[\s\S]*object-fit: contain/)
+  })
+
+  it('injects a fullscreen retry guard so early fullscreen clicks cannot hang', () => {
+    const guard = fs.readFileSync(
+      new URL('../extension/fullscreen-guard.js', import.meta.url),
+      'utf8',
+    )
+    assert.match(preloadSource, /extension', 'fullscreen-guard\.js'/)
+    assert.match(guard, /Element\.prototype\.requestFullscreen/)
+    assert.match(guard, /setTimeout/)
+    assert.match(guard, /document\.documentElement/)
+    assert.match(guard, /window\.top !== window\.self/)
+  })
+
   it('scrolls overflowing tabs and keeps the active tab visible', () => {
     assert.match(tabStripHtml, /#tabs[\s\S]*overflow-x:\s*auto/)
     assert.match(tabStripSource, /scrollIntoView/)

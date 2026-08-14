@@ -36,6 +36,10 @@ async function executeProjectScript(segments, label) {
 async function initializePage() {
   const logoUrl = readProjectImageDataUrl(NOIRVA_LOGO_PATH)
   await executeProjectScript(['adblock', 'inject.js'], 'adblock/inject.js')
+  await executeProjectScript(
+    ['extension', 'fullscreen-guard.js'],
+    'extension/fullscreen-guard.js',
+  )
 
   webFrame.insertCSS(readProjectFile('extension', 'content.css'))
 
