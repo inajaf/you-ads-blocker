@@ -33,5 +33,10 @@
             android:name=".PlaybackService"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
+
+        <!-- Google Cast options provider (Chromecast / TVs). -->
+        <meta-data
+            android:name="com.google.android.gms.cast.framework.OPTIONS_PROVIDER_CLASS_NAME"
+            android:value="com.advoid.app.CastOptionsProvider" />
     </application>
 </manifest>

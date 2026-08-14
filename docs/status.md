@@ -19,15 +19,19 @@ another device — was investigated and found infeasible, see below):
   `__advoidBackgrounded` flag ensures a real foreground pause is never replayed).
   Verified in the emulator: after HOME the process stays alive (PID present) and
   the video keeps playing unmuted (`paused=false`, currentTime advancing).
-- **Cast to another device — NOT implemented (infeasible in a WebView).**
-  A "Go live" pill was briefly added then removed. Investigation confirmed the
-  YouTube "Cast / Watch on TV" affordance is absent from m.youtube.com in the
-  WebView (`chrome.cast`, `cast.framework` and `navigator.presentation` are all
-  unavailable), and `youtube.com/pair`/`youtube.com/tv` now redirect to help.
-  Native Google Cast (play-services-cast) cannot play YouTube's DRM'd streams on
-  the default receiver, and YouTube's receiver app only accepts YouTube's own
-  senders — so a working cast button is not possible from this wrapper without a
-  large native Cast + stream-extraction effort (and a real device to verify).
+- **Cast to another device — infrastructure added, playback blocked by YouTube.**
+  Integrated the Google Cast SDK (`play-services-cast-framework` +
+  `androidx.appcompat`): a `CastOptionsProvider`, a `MediaRouteButton` cast
+  button next to the privacy pill (via a `ContextThemeWrapper`, since the app
+  uses a native Material theme), and a `CAST_URL_SCRIPT` that reports the
+  video's direct stream URL to a `SessionManagerListener` which loads it on a
+  Chromecast. Verified in the emulator: the cast button renders and the app no
+  longer crashes. Remaining blocker: modern YouTube serves every format with a
+  `signatureCipher` (encrypted `s`), never a plain `url`/manifest — so there is
+  nothing to cast without implementing YouTube's signature-deciphering
+  algorithm (the youtube-dl problem), and there's no Chromecast here to verify
+  the device handshake anyway. The cast UI/SDK is committed as the scaffolding;
+  the deciphering is a separate, fragile feature.
 
 Manifest gains `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MEDIA_PLAYBACK`,
 `POST_NOTIFICATIONS`, `WAKE_LOCK` and the service registration. `npm test`
