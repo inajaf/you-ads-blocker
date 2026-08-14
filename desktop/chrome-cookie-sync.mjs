@@ -138,6 +138,17 @@ function createCdpClient(webSocketUrl, WebSocketImpl) {
   })
 }
 
+function authCookieSnapshot(cookies) {
+  return cookies
+    .filter(
+      (cookie) =>
+        AUTH_COOKIE_NAMES.has(cookie.name) && isTrustedCookieDomain(cookie.domain),
+    )
+    .map((cookie) => [cookie.name, cookie.domain, cookie.value, cookie.expires].join('|'))
+    .sort()
+    .join('\n')
+}
+
 export async function waitForChromeAuthentication({
   port,
   timeoutMs = 5 * 60_000,
@@ -151,9 +162,22 @@ export async function waitForChromeAuthentication({
   const client = await createCdpClient(webSocketUrl, WebSocketImpl)
   const deadline = Date.now() + timeoutMs
   try {
+    // A Chrome profile that was signed in previously is NOT proof of a usable
+    // session: Google rotates the auth tokens on every request, so a snapshot
+    // of those cookies copied into Electron is already stale and leaves the app
+    // logged out. Only complete when the auth cookies CHANGE from the launch
+    // baseline — i.e. the user actually signed in (or a live re-validation
+    // rotated the tokens). This keeps the sign-in window visible instead of
+    // auto-closing it on a dead session.
+    let baseline = null
     while (Date.now() < deadline) {
       const { cookies = [] } = await client.call('Storage.getCookies')
-      if (hasYouTubeAuthentication(cookies)) return cookies
+      const snapshot = authCookieSnapshot(cookies)
+      if (baseline === null) {
+        baseline = snapshot
+      } else if (snapshot !== baseline && snapshot !== '') {
+        return cookies
+      }
       await delay(750)
     }
   } finally {

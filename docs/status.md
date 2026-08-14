@@ -26,6 +26,20 @@ handoff imports the session; clicking it runs the full flow
 `npm run build`, `npx oxlint` (0 errors) green. Branch is separate from the
 pushed fullscreen-fix branch and is not pushed yet.
 
+Follow-up fix in the same branch — **stale Chrome session auto-completed the
+handoff without showing a sign-in window.** `waitForChromeAuthentication`
+previously returned as soon as *any* auth-named cookie existed in the private
+Chrome profile, so a previously signed-in profile imported a stale cookie
+snapshot (Google rotates auth tokens, so a copied session is rejected) — the
+app showed "Signed in" while YouTube stayed `loggedOut`, and Chrome opened then
+closed in ~1s with no visible sign-in window. It now snapshots the auth cookies
+at launch and completes only when that snapshot *changes* (a genuine sign-in or
+a live re-validation that rotates the tokens). Verified live via CDP: with a
+fresh profile, clicking Sign in opens the Google `ServiceLogin` window and keeps
+it open; with an already-authenticated profile, Chrome re-validates and the app
+imports a fresh session so YouTube shows the avatar and `loggedOut: false`.
+`npm test` 195/195, oxlint 0/0.
+
 ## 2026-08-14 — Desktop fullscreen: chat/ad no longer break video (branch fm/you-ads-desktop-fullscreen-chat-ad)
 
 Fixed fullscreen on the Windows/macOS desktop app when a live chat or ad is
