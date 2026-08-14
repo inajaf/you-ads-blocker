@@ -161,7 +161,7 @@ export function Landing() {
         <div className="nv-hero-inner">
           <div className="nv-badge nv-mono" data-reveal>
             <span className="nv-badge-dot" />
-            v1.0.0 · {DOWNLOAD_PLATFORMS.map((p) => p.name).join(' & ')}
+            v1.4 · {DOWNLOAD_PLATFORMS.map((p) => p.name).join(' & ')}
           </div>
           <h1 className="nv-hero-title nv-display" data-reveal>
             Ad-free YouTube,
