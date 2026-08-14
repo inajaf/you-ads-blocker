@@ -1,6 +1,9 @@
 package com.advoid.app
 
 import android.annotation.SuppressLint
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.content.res.ColorStateList
 import android.content.Intent
@@ -9,6 +12,7 @@ import android.graphics.*
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
+import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
 import android.util.Base64
@@ -34,6 +38,11 @@ class MainActivity : Activity() {
     private var customView: View? = null
     private var customViewCallback: WebChromeClient.CustomViewCallback? = null
     private var originalSystemUiVisibility = 0
+
+    // Background playback: whether the Activity is currently visible. Used to
+    // keep the foreground service alive while backgrounded even if Chromium
+    // momentarily pauses the media element.
+    private var activityVisible = false
 
     private val green = Color.parseColor("#5FCA6B")
     private val darkBg = Color.parseColor("#0F0F0F")
@@ -76,6 +85,16 @@ class MainActivity : Activity() {
                         applyPlaybackUiState(
                             playbackUiCoordinator.onVideoPlaybackChanged(playing)
                         )
+                        // Keep audio alive when the app is collapsed: start the
+                        // foreground media service while a video plays. Only stop
+                        // it when the user pauses in the FOREGROUND — a background
+                        // pause (Chromium hides the page) must not tear down the
+                        // service, or the process dies and audio can never resume.
+                        if (playing) {
+                            startPlaybackService()
+                        } else if (activityVisible) {
+                            stopPlaybackService()
+                        }
                     }
                 }
                 @JavascriptInterface
@@ -230,53 +249,38 @@ class MainActivity : Activity() {
     }
 
     /**
-     * Google Play requires a privacy policy reachable from the app. Show a
-     * polished, tappable pill (shield icon + label on a rounded translucent
-     * card) that opens the public policy URL in the system browser. It lives
-     * outside the WebView so ad-blocking never interferes and the user leaves
-     * the app to read it. It floats over the WebView (same overlay host as the
-     * refresh indicator) so it never pushes the video layout.
+     * Google Play requires a privacy policy reachable from the app, and users
+     * expect a way to broadcast. Show two polished pills — "Go live" and
+     * "Privacy policy" — as one floating row over the WebView (same overlay
+     * host as the refresh indicator) so they never push the video layout. Both
+     * open in the system browser, outside the ad-blocked WebView.
      */
     private fun addPrivacyPolicyAffordance(host: ViewGroup) {
-        val pill = LinearLayout(this).apply {
+        val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(16), dp(10), dp(18), dp(10))
-            background = privacyPillBackground()
-            isClickable = true
-            isFocusable = true
-            contentDescription = "Open privacy policy"
-            setOnClickListener {
-                val url = PRIVACY_POLICY_URL
-                if (!isValidPrivacyPolicyUrl(url)) {
+        }
+
+        row.addView(createPill(
+            iconRes = android.R.drawable.ic_menu_camera,
+            label = "Go live",
+            contentDescription = "Go live on YouTube",
+            onClick = { openInBrowser(BROADCAST_URL, "broadcast") },
+        ))
+        row.addView(View(this), LinearLayout.LayoutParams(dp(10), 1))
+
+        row.addView(createPill(
+            iconRes = android.R.drawable.ic_lock_lock,
+            label = "Privacy policy",
+            contentDescription = "Open privacy policy",
+            onClick = {
+                if (isValidPrivacyPolicyUrl(PRIVACY_POLICY_URL)) {
+                    openInBrowser(PRIVACY_POLICY_URL, "privacy policy")
+                } else {
                     Log.e(TAG, "privacy policy URL is still the placeholder; refusing to open it")
-                    return@setOnClickListener
                 }
-                try {
-                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                } catch (e: Exception) {
-                    Log.e(TAG, "open privacy policy failed: ${e.message}", e)
-                }
-            }
-        }
-
-        val icon = ImageView(this).apply {
-            setImageResource(android.R.drawable.ic_lock_lock)
-            imageTintList = ColorStateList.valueOf(green)
-            contentDescription = null
-        }
-        pill.addView(icon, LinearLayout.LayoutParams(dp(16), dp(16)))
-
-        val label = TextView(this).apply {
-            text = "Privacy policy"
-            textSize = 13f
-            setTextColor(Color.WHITE)
-            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-            setPadding(dp(8), 0, 0, 0)
-        }
-        pill.addView(label, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT))
+            },
+        ))
 
         val params = FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.WRAP_CONTENT,
@@ -285,13 +289,60 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM
             bottomMargin = dp(44)
         }
-        host.addView(pill, params)
+        host.addView(row, params)
+    }
+
+    private fun createPill(
+        iconRes: Int,
+        label: String,
+        contentDescription: String,
+        onClick: () -> Unit,
+    ): View {
+        val description = contentDescription
+        val pill = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(14), dp(10), dp(16), dp(10))
+            background = privacyPillBackground()
+            isClickable = true
+            isFocusable = true
+            this.contentDescription = description
+            setOnClickListener { onClick() }
+        }
+
+        val icon = ImageView(this).apply {
+            setImageResource(iconRes)
+            imageTintList = ColorStateList.valueOf(green)
+            this.contentDescription = null
+        }
+        pill.addView(icon, LinearLayout.LayoutParams(dp(16), dp(16)))
+
+        val text = TextView(this).apply {
+            this.text = label
+            textSize = 13f
+            setTextColor(Color.WHITE)
+            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            setPadding(dp(8), 0, 0, 0)
+        }
+        pill.addView(text, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT))
+
+        return pill
+    }
+
+    private fun openInBrowser(url: String, what: String) {
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        } catch (e: Exception) {
+            Log.e(TAG, "open $what failed: ${e.message}", e)
+        }
     }
 
     /**
      * Rounded translucent pill background with a subtle border and a press
-     * ripple, so the privacy affordance reads as a proper floating action
-     * instead of a bare text label.
+     * ripple, so the affordances read as proper floating actions instead of
+     * bare text labels.
      */
     private fun privacyPillBackground(): Drawable {
         val content = GradientDrawable().apply {
@@ -314,10 +365,12 @@ class MainActivity : Activity() {
 
     private fun injectPageScripts(view: WebView?) {
         view?.evaluateJavascript(STYLE_SCRIPT, null)
+        view?.evaluateJavascript(BACKGROUND_PLAYBACK_SCRIPT, null)
         view?.evaluateJavascript(FULLSCREEN_SETTINGS_SCRIPT, null)
         view?.evaluateJavascript(videoWatchScript, null)
         view?.evaluateJavascript(SHORTS_SEEK_SCRIPT, null)
         view?.evaluateJavascript(PULL_REFRESH_SCRIPT, null)
+        view?.evaluateJavascript(LIVE_CHAT_SCRIPT, null)
         // Keep the Shorts marker class + reel-entry tracking current on SPA navs.
         view?.evaluateJavascript("window._advoidTrackNav && window._advoidTrackNav();", null)
     }
@@ -342,6 +395,19 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun startPlaybackService() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
+        }
+        PlaybackService.start(this)
+    }
+
+    private fun stopPlaybackService() {
+        PlaybackService.stop(this)
+    }
+
     @Suppress("DEPRECATION", "MissingSuperCall")
     override fun onBackPressed() {
         when {
@@ -353,6 +419,8 @@ class MainActivity : Activity() {
 
     override fun onStart() {
         super.onStart()
+        activityVisible = true
+        webView.evaluateJavascript("window.__advoidBackgrounded = false;", null)
         applyPlaybackUiState(
             playbackUiCoordinator.onActivityVisibilityChanged(true)
         )
@@ -367,6 +435,11 @@ class MainActivity : Activity() {
     }
 
     override fun onStop() {
+        activityVisible = false
+        // Tell the page it is backgrounded so the background-playback script can
+        // resume a video Chromium pauses for the hidden page (a real foreground
+        // pause is never replayed).
+        webView.evaluateJavascript("window.__advoidBackgrounded = true;", null)
         applyPlaybackUiState(
             playbackUiCoordinator.onActivityVisibilityChanged(false)
         )
@@ -380,6 +453,10 @@ class MainActivity : Activity() {
         android.webkit.CookieManager.getInstance().flush()
         (webView.parent as? ViewGroup)?.removeView(webView)
         webView.destroy()
+        // Only stop background playback when the user actually closes the app;
+        // a system-initiated destroy (memory pressure) should let the foreground
+        // service keep the audio alive.
+        if (isFinishing) stopPlaybackService()
         super.onDestroy()
     }
 
@@ -431,6 +508,10 @@ class MainActivity : Activity() {
 
     companion object {
         private const val TAG = "AdVoid"
+
+        // YouTube Studio live dashboard is the broadcast/Go-live entry point.
+        // It handles sign-in itself, so the affordance works signed in or out.
+        internal const val BROADCAST_URL = "https://studio.youtube.com"
 
         /**
          * Element to fullscreen for rotation auto-fullscreen. Must be the
@@ -1041,6 +1122,166 @@ class MainActivity : Activity() {
                 document.addEventListener('touchcancel', function() {
                     reset(false);
                 }, { passive: true, capture: true });
+            })();
+        """
+
+        /**
+         * Keeps YouTube's player from self-pausing when the WebView is
+         * backgrounded. YouTube keys off document.visibilityState / .hidden /
+         * hasFocus, so pin those to "visible" and let the foreground
+         * PlaybackService keep the audio track alive.
+         */
+        private const val BACKGROUND_PLAYBACK_SCRIPT = """
+            (function() {
+                if (window._advoidBgPlayback) return;
+                window._advoidBgPlayback = true;
+                try {
+                    Object.defineProperty(document, 'visibilityState', {
+                        configurable: true, get: function() { return 'visible'; }
+                    });
+                    Object.defineProperty(document, 'hidden', {
+                        configurable: true, get: function() { return false; }
+                    });
+                    if (typeof document.hasFocus === 'function') {
+                        document.hasFocus = function() { return true; };
+                    }
+                } catch (e) { /* ignore */ }
+
+                // Chromium still pauses a <video> when the page goes hidden at
+                // the C++ level (no JS pause() call), which the visibility shim
+                // above cannot prevent. When the app is backgrounded, re-start
+                // the video so audio keeps playing; a real foreground pause is
+                // never replayed because the native side clears the background
+                // flag on resume.
+                var wasPlaying = false;
+                function playingVideo() {
+                    return document.querySelector('.html5-video-player video') ||
+                        document.querySelector('video');
+                }
+                function resume() {
+                    var v = playingVideo();
+                    if (v && v.paused && wasPlaying) {
+                        var p = v.play();
+                        if (p && p.catch) p.catch(function() {});
+                    }
+                }
+                document.addEventListener('playing', function() { wasPlaying = true; }, true);
+                document.addEventListener('pause', function() {
+                    if (!window.__advoidBackgrounded) { wasPlaying = false; return; }
+                    if (wasPlaying) setTimeout(resume, 150);
+                }, true);
+                setInterval(function() {
+                    if (window.__advoidBackgrounded && wasPlaying) resume();
+                }, 2000);
+            })();
+        """
+
+        /**
+         * Live streams on m.youtube.com don't render a chat panel, so inject a
+         * "Live chat" affordance and a bottom-sheet iframe pointing at YouTube's
+         * public live_chat embed. Re-evaluated on every SPA navigation.
+         */
+        private const val LIVE_CHAT_SCRIPT = """
+            (function() {
+                var SETUP = !!window._advoidLiveChatSetup;
+
+                function teardown() {
+                    var btn = document.getElementById('advoid-live-chat-btn');
+                    var panel = document.getElementById('advoid-live-chat-panel');
+                    if (btn) btn.remove();
+                    if (panel) panel.remove();
+                }
+
+                function isLiveNow() {
+                    var pr = window.ytInitialPlayerResponse;
+                    return !!(pr && pr.videoDetails &&
+                        (pr.videoDetails.isLive || pr.videoDetails.isLiveContent));
+                }
+
+                function ensureChatUi(videoId) {
+                    var btn = document.createElement('button');
+                    btn.id = 'advoid-live-chat-btn';
+                    btn.type = 'button';
+                    btn.setAttribute('aria-label', 'Open live chat');
+                    btn.textContent = 'Live chat';
+                    document.body.appendChild(btn);
+                    btn.addEventListener('click', function() { togglePanel(videoId); });
+
+                    if (!SETUP) {
+                        SETUP = window._advoidLiveChatSetup = true;
+                        injectChatStyles();
+                    }
+                }
+
+                function togglePanel(videoId) {
+                    var existing = document.getElementById('advoid-live-chat-panel');
+                    if (existing) { existing.remove(); return; }
+                    var panel = document.createElement('div');
+                    panel.id = 'advoid-live-chat-panel';
+
+                    var header = document.createElement('div');
+                    header.className = 'advoid-live-chat-header';
+                    var title = document.createElement('span');
+                    title.textContent = 'Live chat';
+                    var close = document.createElement('button');
+                    close.type = 'button';
+                    close.textContent = '\u00D7';
+                    close.setAttribute('aria-label', 'Close live chat');
+                    close.addEventListener('click', function() { panel.remove(); });
+                    header.appendChild(title);
+                    header.appendChild(close);
+
+                    var iframe = document.createElement('iframe');
+                    iframe.src = 'https://www.youtube.com/live_chat?v=' +
+                        encodeURIComponent(videoId) + '&embed_domain=m.youtube.com';
+                    iframe.setAttribute('allow', 'autoplay');
+
+                    panel.appendChild(header);
+                    panel.appendChild(iframe);
+                    document.body.appendChild(panel);
+                }
+
+                function injectChatStyles() {
+                    var style = document.createElement('style');
+                    style.id = 'advoid-live-chat-style';
+                    style.textContent = [
+                        '#advoid-live-chat-btn {',
+                        '  position: fixed; right: 12px; bottom: 96px; z-index: 2147483000;',
+                        '  padding: 10px 14px; border: 1px solid rgba(255,255,255,0.18);',
+                        '  border-radius: 22px; background: rgba(22,22,25,0.94); color: #fff;',
+                        '  font: 500 13px sans-serif; box-shadow: 0 6px 20px rgba(0,0,0,0.4);',
+                        '}',
+                        '#advoid-live-chat-panel {',
+                        '  position: fixed; left: 0; right: 0; bottom: 0; height: 55%;',
+                        '  z-index: 2147483001; background: #121215;',
+                        '  border-top: 1px solid rgba(255,255,255,0.12);',
+                        '  display: flex; flex-direction: column;',
+                        '}',
+                        '.advoid-live-chat-header {',
+                        '  display: flex; align-items: center; justify-content: space-between;',
+                        '  padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.12);',
+                        '  color: #fff; font: 600 15px sans-serif; flex: 0 0 auto;',
+                        '}',
+                        '.advoid-live-chat-header button {',
+                        '  border: none; background: transparent; color: #ccc; font-size: 26px;',
+                        '  line-height: 1; padding: 0 8px;',
+                        '}',
+                        '#advoid-live-chat-panel iframe {',
+                        '  flex: 1; border: none; width: 100%; background: #fff;',
+                        '}'
+                    ].join(' ');
+                    (document.head || document.documentElement).appendChild(style);
+                }
+
+                window._advoidSyncLiveChat = function() {
+                    teardown();
+                    var isWatch = location.pathname.indexOf('/watch') === 0;
+                    var videoId = new URLSearchParams(location.search).get('v');
+                    if (!isWatch || !videoId || !isLiveNow()) return;
+                    ensureChatUi(videoId);
+                };
+
+                window._advoidSyncLiveChat();
             })();
         """
 

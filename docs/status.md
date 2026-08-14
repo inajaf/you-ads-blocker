@@ -1,5 +1,31 @@
 # Project status
 
+## 2026-08-15 — Android: live chat, background audio, broadcast (branch fm/android-live-chat-bg-broadcast)
+
+Three mobile-web gaps closed in the AdVoid Android app:
+
+- **Live chat.** m.youtube.com renders no chat panel on live streams, so a new
+  injected `LIVE_CHAT_SCRIPT` adds a "Live chat" floating button on live watch
+  pages (detected via `ytInitialPlayerResponse.videoDetails.isLive`); tapping it
+  opens a bottom-sheet iframe to YouTube's public
+  `https://www.youtube.com/live_chat?v=…&embed_domain=m.youtube.com`. Verified in
+  the emulator: button appears on a live stream and the panel loads chat.
+- **Background playback.** A new `PlaybackService` (foreground `mediaPlayback`
+  service) with a partial wake lock, audio focus and an ongoing notification
+  keeps the process alive when the app is collapsed; `BACKGROUND_PLAYBACK_SCRIPT`
+  pins `document.visibilityState`/`hidden`/`hasFocus` to visible and re-starts a
+  video that Chromium pauses at the C++ level for the hidden page (a native
+  `__advoidBackgrounded` flag ensures a real foreground pause is never replayed).
+  Verified in the emulator: after HOME the process stays alive (PID present) and
+  the video keeps playing unmuted (`paused=false`, currentTime advancing).
+- **Broadcast / Go live.** A second native pill "Go live" next to the privacy
+  pill opens YouTube Studio (`https://studio.youtube.com`) in the system
+  browser, so a broadcast entry point is always visible (signed in or out).
+
+Manifest gains `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MEDIA_PLAYBACK`,
+`POST_NOTIFICATIONS`, `WAKE_LOCK` and the service registration. `npm test`
+199/199 and `./gradlew testDebugUnitTest` BUILD SUCCESSFUL.
+
 ## 2026-08-15 — Android: polished privacy-policy pill (Play prep, branch fm/android-play-store-prep)
 
 Redesigned the in-app "Privacy policy" affordance in `MainActivity.kt` from a
