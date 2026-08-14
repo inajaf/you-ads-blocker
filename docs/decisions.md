@@ -4,6 +4,43 @@
 Reason: ...
 Alternatives: ... -->
 
+## 2026-08-14 — AdVoid Android Play-prep: managed versioning, fail-closed signing, in-app privacy link
+Reason: prepare `android/AdVoid` for its first Google Play upload without letting
+an unsigned artifact or a mis-versioned build ever ship.
+Approach (three independent changes):
+- **Managed versioning.** `versionCode`/`versionName` moved out of
+  `app/build.gradle.kts` into the tracked `android/AdVoid/version.properties`,
+  which is now the single source of truth (`VERSION_CODE=1`, `VERSION_NAME=1.0`
+  for the first upload). The build reads them at config time and fails with a
+  clear error if the file/keys are missing or `VERSION_CODE` is not an integer.
+  Future bumps are a one-line edit in `version.properties`, whose header comment
+  documents the Play rule (versionCode must strictly increase per upload).
+- **Fail-closed release signing.** Previously a missing gitignored
+  `keystore.properties` silently produced an UNSIGNED release APK/AAB. Now a
+  `gradle.taskGraph.whenReady` guard fails `assembleRelease`/`bundleRelease`
+  with an explicit "Refusing to build an unsigned release" error whenever the
+  keystore file or any of KEYSTORE_FILE/KEYSTORE_PASSWORD/KEY_ALIAS/KEY_PASSWORD
+  is absent. The guard is task-graph-scoped, so `assembleDebug` and
+  `testDebugUnitTest` are completely unaffected and need no keystore. The
+  gitignored `keystore.properties` contract is preserved — secrets never enter
+  source control.
+- **In-app privacy policy link.** Google Play requires a privacy policy
+  reachable from the app. Added a minimal floating "Privacy policy" chip (over
+  the WebView, sharing the refresh-indicator overlay host) that opens the policy
+  in the system browser. The URL constant lives in
+  `app/src/main/java/com/advoid/app/PrivacyPolicy.kt` and is a clearly-marked
+  placeholder (`https://your-site.example/privacy`, TODO(captain)) until the
+  real policy is hosted. A pure, unit-tested `isValidPrivacyPolicyUrl` guard
+  refuses to open the placeholder so no user is ever sent to a fake policy;
+  `PrivacyPolicyTest.kt` locks this down.
+Alternatives: (a) keep versioning in build.gradle.kts and just comment it —
+versionCode is exactly the value most often mis-bumped at release time, so a
+single tracked properties file is safer than editing Groovy DSL; (b) fail the
+whole configuration when the keystore is missing (throwing inside the `release`
+buildType) — rejected because that would also break `assembleDebug` and
+`testDebugUnitTest`, which must keep building without secrets; the task-graph
+guard fails only actual release-packaging tasks.
+
 ## 2026-08-12 — Packaged macOS/Windows apps auto-update from the GitHub release feed
 Reason: desktop builds were shipped as static Downloads that never updated,
 forcing users to re-download installers manually. The app is already distributed

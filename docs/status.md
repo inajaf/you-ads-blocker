@@ -1,5 +1,32 @@
 # Project status
 
+## 2026-08-14 — AdVoid Android Play-prep (branch fm/you-ads-play-release-prep)
+
+Readied `android/AdVoid` for its first Google Play upload:
+- **Managed versioning.** `versionCode`/`versionName` now come from the tracked
+  `android/AdVoid/version.properties` (currently `1` / `1.0`), the single source
+  of truth for bumps. `app/build.gradle.kts` reads it and fails clearly if it's
+  missing or malformed.
+- **Fail-closed release signing.** `assembleRelease`/`bundleRelease` now FAIL
+  with "Refusing to build an unsigned release" when the gitignored
+  `keystore.properties` (or the keystore it points to) is absent, instead of
+  silently emitting an unsigned artifact. `assembleDebug` and
+  `testDebugUnitTest` are unaffected and need no keystore.
+- **In-app privacy policy link.** A minimal floating "Privacy policy" chip opens
+  the public policy in the system browser. The URL is a clearly-marked
+  placeholder (`https://your-site.example/privacy`, TODO(captain)) in
+  `PrivacyPolicy.kt`; `isValidPrivacyPolicyUrl` refuses to open the placeholder
+  until it's replaced. Unit-tested in `PrivacyPolicyTest.kt`.
+
+Verified:
+- `cd android/AdVoid && ./gradlew testDebugUnitTest assembleRelease bundleRelease`
+  — BUILD SUCCESSFUL with the keystore present; release APK signs (CN=AdVoid)
+  and reports `versionCode='1' versionName='1.0'`; `PrivacyPolicyTest` 5/5.
+- With `keystore.properties` removed, `assembleRelease` fails fast with the
+  clear error; `assembleDebug` + `testDebugUnitTest` still succeed.
+Remaining (for the captain / later PR): replace the placeholder privacy URL with
+the real hosted policy before the Play upload.
+
 ## 2026-08-12 — Desktop apps auto-update from the GitHub release feed (branch fm/you-ads-desktop-auto-update)
 
 Packaged macOS/Windows builds now self-update via `electron-updater` (^6.8.9):
@@ -429,14 +456,18 @@ Done:
   `KEYSTORE_PASSWORD` / `KEY_ALIAS` / `KEY_PASSWORD`, gitignored.
 - `app/build.gradle.kts`: reads `keystore.properties`, applies a
   `signingConfigs["release"]` to the `release` build type **only when the
-  keystore file actually exists** — so a fresh checkout or CI without the
-  secret configured still builds (unsigned) instead of hard-failing.
+  keystore file actually exists**; the `release` build no longer silently
+  falls back to unsigned — since the Play-prep change above,
+  `assembleRelease`/`bundleRelease` now FAIL closed when the keystore is
+  absent (see the 2026-08-14 entry at the top of this file).
 - Also disabled `lintVitalAnalyzeRelease` (`lint { checkReleaseBuilds =
   false; abortOnError = false }` — same fix the abandoned branch had
-  independently arrived at): AGP 8.7.3's lint tooling fails outright under
+  independently arrived at, and still intentionally left in place after the
+  Play-prep change): AGP 8.7.3's lint tooling fails outright under
   this machine's JDK 26 (Homebrew, newer than AGP 8.7.3 supports for that
   specific check); this is a packaging build, not a lint gate, so skipping
-  it here is appropriate.
+  it here is appropriate. This workaround was intentionally left unchanged by
+  the Play-prep change (see `docs/decisions.md` 2026-08-14).
 - Added `.gitignore` entries repo-wide for `*.keystore`/`*.jks` plus the
   specific `keystore.properties`/`local.properties` paths, and untracked
   `android/AdVoid/local.properties` (was previously tracked by mistake —
