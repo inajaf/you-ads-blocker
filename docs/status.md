@@ -1,5 +1,22 @@
 # Project status
 
+## 2026-08-15 — Android: polished privacy-policy pill (Play prep, branch fm/android-play-store-prep)
+
+Redesigned the in-app "Privacy policy" affordance in `MainActivity.kt` from a
+bare green text chip into a rounded translucent pill — a green lock icon plus a
+medium-weight white label, subtle white border, and a press ripple
+(`privacyPillBackground`). It still floats bottom-center over the WebView and
+opens `PRIVACY_POLICY_URL` in the system browser, gated by the same
+`isValidPrivacyPolicyUrl` guard. Verified in the emulator via `uiautomator`:
+the pill renders as a LinearLayout with an ImageView + "Privacy policy" TextView
+(364×99px), no crash in logcat. `npm test` 199/199 and
+`./gradlew testDebugUnitTest` BUILD SUCCESSFUL.
+
+Remaining before the Play upload (captain): replace the placeholder
+`PRIVACY_POLICY_URL` (`https://your-site.example/privacy`) in `PrivacyPolicy.kt`
+with the real hosted policy — no real URL exists in the repo yet, and the guard
+correctly refuses to open the placeholder until it is replaced.
+
 ## 2026-08-15 — Android: loading spinner no longer strands over a playing video
 
 Ran the AdVoid Android app (`com.advoid.app.debug`) in the Pixel 8 Pro emulator
