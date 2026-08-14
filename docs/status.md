@@ -1,8 +1,9 @@
 # Project status
 
-## 2026-08-15 — Android: live chat, background audio, broadcast (branch fm/android-live-chat-bg-broadcast)
+## 2026-08-15 — Android: live chat, background audio (branch fm/android-live-chat-bg-broadcast)
 
-Three mobile-web gaps closed in the AdVoid Android app:
+Two mobile-web gaps closed in the AdVoid Android app (a third idea — casting to
+another device — was investigated and found infeasible, see below):
 
 - **Live chat.** m.youtube.com renders no chat panel on live streams, so a new
   injected `LIVE_CHAT_SCRIPT` adds a "Live chat" floating button on live watch
@@ -18,9 +19,15 @@ Three mobile-web gaps closed in the AdVoid Android app:
   `__advoidBackgrounded` flag ensures a real foreground pause is never replayed).
   Verified in the emulator: after HOME the process stays alive (PID present) and
   the video keeps playing unmuted (`paused=false`, currentTime advancing).
-- **Broadcast / Go live.** A second native pill "Go live" next to the privacy
-  pill opens YouTube Studio (`https://studio.youtube.com`) in the system
-  browser, so a broadcast entry point is always visible (signed in or out).
+- **Cast to another device — NOT implemented (infeasible in a WebView).**
+  A "Go live" pill was briefly added then removed. Investigation confirmed the
+  YouTube "Cast / Watch on TV" affordance is absent from m.youtube.com in the
+  WebView (`chrome.cast`, `cast.framework` and `navigator.presentation` are all
+  unavailable), and `youtube.com/pair`/`youtube.com/tv` now redirect to help.
+  Native Google Cast (play-services-cast) cannot play YouTube's DRM'd streams on
+  the default receiver, and YouTube's receiver app only accepts YouTube's own
+  senders — so a working cast button is not possible from this wrapper without a
+  large native Cast + stream-extraction effort (and a real device to verify).
 
 Manifest gains `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MEDIA_PLAYBACK`,
 `POST_NOTIFICATIONS`, `WAKE_LOCK` and the service registration. `npm test`

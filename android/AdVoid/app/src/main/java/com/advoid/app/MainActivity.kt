@@ -249,25 +249,16 @@ class MainActivity : Activity() {
     }
 
     /**
-     * Google Play requires a privacy policy reachable from the app, and users
-     * expect a way to broadcast. Show two polished pills — "Go live" and
-     * "Privacy policy" — as one floating row over the WebView (same overlay
-     * host as the refresh indicator) so they never push the video layout. Both
-     * open in the system browser, outside the ad-blocked WebView.
+     * Google Play requires a privacy policy reachable from the app. Show a
+     * polished, tappable pill (lock icon + label) that opens the public policy
+     * URL in the system browser. It floats over the WebView (same overlay host
+     * as the refresh indicator) so it never pushes the video layout.
      */
     private fun addPrivacyPolicyAffordance(host: ViewGroup) {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-
-        row.addView(createPill(
-            iconRes = android.R.drawable.ic_menu_camera,
-            label = "Go live",
-            contentDescription = "Go live on YouTube",
-            onClick = { openInBrowser(BROADCAST_URL, "broadcast") },
-        ))
-        row.addView(View(this), LinearLayout.LayoutParams(dp(10), 1))
 
         row.addView(createPill(
             iconRes = android.R.drawable.ic_lock_lock,
@@ -508,10 +499,6 @@ class MainActivity : Activity() {
 
     companion object {
         private const val TAG = "AdVoid"
-
-        // YouTube Studio live dashboard is the broadcast/Go-live entry point.
-        // It handles sign-in itself, so the affordance works signed in or out.
-        internal const val BROADCAST_URL = "https://studio.youtube.com"
 
         /**
          * Element to fullscreen for rotation auto-fullscreen. Must be the
