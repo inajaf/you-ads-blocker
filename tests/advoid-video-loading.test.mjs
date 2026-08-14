@@ -156,8 +156,14 @@ class FakeDocument {
 }
 
 class FakeMutationObserver {
+  constructor(callback) {
+    this.callback = callback
+  }
   observe() {}
   disconnect() {}
+  invoke() {
+    this.callback()
+  }
 }
 
 function makeEnv(pathname = '/watch') {
@@ -165,11 +171,19 @@ function makeEnv(pathname = '/watch') {
   const location = { pathname }
   const player = new FakeElement('div')
   player.classList.add('html5-video-player')
+  const createdObservers = []
+  const CreatedMutationObserver = class extends FakeMutationObserver {
+    constructor(callback) {
+      super(callback)
+      createdObservers.push(this)
+    }
+  }
   const sandbox = {
     document,
     location,
-    MutationObserver: FakeMutationObserver,
+    MutationObserver: CreatedMutationObserver,
     setTimeout,
+    setInterval: () => 0,
     console,
   }
   sandbox.window = sandbox
@@ -189,6 +203,7 @@ function makeEnv(pathname = '/watch') {
     },
     sync: () => vm.runInContext('window._advoidSyncVideoState();', context),
     setup: () => vm.runInContext(WATCH_SCRIPT, context),
+    observers: createdObservers,
   }
 }
 
@@ -326,6 +341,30 @@ describe('AdVoid loading overlay (VIDEO_WATCH_SCRIPT)', () => {
     video.currentTime = 12.25
     video.fire('timeupdate')
     assert.equal(env.player.classList.contains('advoid-loading'), false)
+  })
+
+  it('clears a stuck overlay when a DOM mutation reconciles the video state', () => {
+    const env = makeEnv()
+    const video = env.addVideo({ readyState: 0 })
+    env.setup()
+    assert.equal(env.player.classList.contains('advoid-loading'), true)
+
+    // The video becomes ready and plays WITHOUT firing the media events that
+    // normally clear the overlay (the race that used to leave the spinner
+    // running over a playing video). The MutationObserver now re-runs
+    // refreshAllLoading, so the next DOM change reconciles it.
+    video.readyState = 4
+    video.paused = false
+    env.observers[0].invoke()
+    assert.equal(env.player.classList.contains('advoid-loading'), false)
+  })
+
+  it('installs a periodic reconcile so a missed event can never strand the spinner', () => {
+    assert.match(WATCH_SCRIPT, /setInterval\(refreshAllLoading, 1000\)/)
+    assert.match(
+      WATCH_SCRIPT,
+      /new MutationObserver\(function\(\) \{[\s\S]*?refreshAllLoading\(\);[\s\S]*?reportPlaybackState\(false\);/,
+    )
   })
 })
 

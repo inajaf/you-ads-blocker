@@ -788,9 +788,16 @@ class MainActivity : Activity() {
                 window._advoidSyncVideoState();
                 var observer = new MutationObserver(function() {
                     setupVideoListeners();
+                    refreshAllLoading();
                     reportPlaybackState(false);
                 });
                 observer.observe(document.documentElement, { childList: true, subtree: true });
+
+                // Safety net: reconcile the overlay with the real video state on
+                // a short interval. A media event can be missed when YouTube
+                // swaps the <video> element mid-load, which would otherwise leave
+                // the spinner running over a playing video.
+                setInterval(refreshAllLoading, 1000);
             })();
         """
 

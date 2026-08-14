@@ -1,5 +1,28 @@
 # Project status
 
+## 2026-08-15 — Android: loading spinner no longer strands over a playing video
+
+Ran the AdVoid Android app (`com.advoid.app.debug`) in the Pixel 8 Pro emulator
+and reproduced the intermittent bug where the AdVoid loading overlay (logo +
+orbit spinner) stayed visible while the video was already playing (`readyState`
+4, `currentTime` advancing). The overlay is cleared by media events
+(`playing`/`timeupdate`), but those can be missed when YouTube swaps the
+`<video>` element mid-load, so a `waiting`/`loadstart` added `.advoid-loading`
+and nothing ever removed it.
+
+Fix in `android/AdVoid/.../MainActivity.kt` (`VIDEO_WATCH_SCRIPT_TEMPLATE`):
+- the `MutationObserver` callback now also runs `refreshAllLoading()`, so any DOM
+  change reconciles the overlay with the real video `readyState`;
+- a `setInterval(refreshAllLoading, 1000)` safety net guarantees a missed event
+  can never strand the spinner for more than ~1s.
+
+Verified live via the WebView DevTools protocol: forced a playing video into the
+stuck state (added `.advoid-loading` to a readyState-4 playing video) and the
+class was cleared within 2s; a 25s sample showed 0 consecutive stuck seconds.
+No crashes in logcat. `tests/advoid-video-loading.test.mjs` gained two regression
+tests (MutationObserver reconcile + periodic reconcile source guard); full
+`npm test` 199/199, `./gradlew testDebugUnitTest` BUILD SUCCESSFUL.
+
 ## 2026-08-14 — Desktop Sign in option always available (branch fm/you-ads-desktop-signin-fix)
 
 The YouTube header's own "Sign in" control is unreliable in the Electron app:
