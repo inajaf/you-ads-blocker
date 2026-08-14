@@ -1,6 +1,9 @@
 package com.advoid.app
 
 import android.annotation.SuppressLint
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.content.res.ColorStateList
 import android.content.Intent
@@ -9,6 +12,7 @@ import android.graphics.*
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
+import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
 import android.util.Base64
@@ -21,6 +25,15 @@ import android.view.WindowManager
 import android.webkit.*
 import android.widget.*
 import android.app.Activity
+import androidx.mediarouter.app.MediaRouteButton
+import com.google.android.gms.cast.MediaInfo
+import com.google.android.gms.cast.MediaMetadata
+import com.google.android.gms.cast.framework.CastButtonFactory
+import com.google.android.gms.cast.framework.CastContext
+import com.google.android.gms.cast.framework.CastSession
+import com.google.android.gms.cast.framework.Session
+import com.google.android.gms.cast.framework.SessionManager
+import com.google.android.gms.cast.framework.SessionManagerListener
 
 class MainActivity : Activity() {
     private lateinit var rootLayout: LinearLayout
@@ -34,6 +47,17 @@ class MainActivity : Activity() {
     private var customView: View? = null
     private var customViewCallback: WebChromeClient.CustomViewCallback? = null
     private var originalSystemUiVisibility = 0
+
+    // Google Cast: the direct stream URL the page reports (progressive format),
+    // cast to the selected device when a session starts.
+    private var currentCastUrl: String? = null
+    private var sessionManager: SessionManager? = null
+
+    // Track whether a video was playing when the app was backgrounded, so
+    // onResume can recover a media element Chromium left wedged after hiding
+    // the page (play() resolves but the video stays paused).
+    private var videoPlaying = false
+    private var playingAtBackground = false
 
     private val green = Color.parseColor("#5FCA6B")
     private val darkBg = Color.parseColor("#0F0F0F")
@@ -73,9 +97,19 @@ class MainActivity : Activity() {
                 @JavascriptInterface
                 fun onPlaybackStateChanged(playing: Boolean) {
                     runOnUiThread {
+                        videoPlaying = playing
                         applyPlaybackUiState(
                             playbackUiCoordinator.onVideoPlaybackChanged(playing)
                         )
+                        // Start/stop the foreground media service with playback so
+                        // the app stays alive while audio is active in the foreground.
+                        if (playing) startPlaybackService() else stopPlaybackService()
+                    }
+                }
+                @JavascriptInterface
+                fun onCastUrl(url: String) {
+                    runOnUiThread {
+                        currentCastUrl = url.takeIf { it.startsWith("https://") }
                     }
                 }
                 @JavascriptInterface
@@ -224,59 +258,40 @@ class MainActivity : Activity() {
         rootLayout.addView(webContainer, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
 
+        // Best-effort Google Cast; initialize before building the cast button.
+        setupCast()
+
         addPrivacyPolicyAffordance(webContainer)
 
         setContentView(rootLayout)
     }
 
     /**
-     * Google Play requires a privacy policy reachable from the app. Show a
-     * polished, tappable pill (shield icon + label on a rounded translucent
-     * card) that opens the public policy URL in the system browser. It lives
-     * outside the WebView so ad-blocking never interferes and the user leaves
-     * the app to read it. It floats over the WebView (same overlay host as the
-     * refresh indicator) so it never pushes the video layout.
+     * Bottom floating affordances: a Google Cast button (casts the current video
+     * to a Chromecast/TV when one is available) and the privacy-policy pill.
+     * Both float over the WebView so they never push the video layout.
      */
     private fun addPrivacyPolicyAffordance(host: ViewGroup) {
-        val pill = LinearLayout(this).apply {
+        val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(16), dp(10), dp(18), dp(10))
-            background = privacyPillBackground()
-            isClickable = true
-            isFocusable = true
-            contentDescription = "Open privacy policy"
-            setOnClickListener {
-                val url = PRIVACY_POLICY_URL
-                if (!isValidPrivacyPolicyUrl(url)) {
+        }
+
+        row.addView(createCastButton())
+        row.addView(View(this), LinearLayout.LayoutParams(dp(10), 1))
+
+        row.addView(createPill(
+            iconRes = android.R.drawable.ic_lock_lock,
+            label = "Privacy policy",
+            contentDescription = "Open privacy policy",
+            onClick = {
+                if (isValidPrivacyPolicyUrl(PRIVACY_POLICY_URL)) {
+                    openInBrowser(PRIVACY_POLICY_URL, "privacy policy")
+                } else {
                     Log.e(TAG, "privacy policy URL is still the placeholder; refusing to open it")
-                    return@setOnClickListener
                 }
-                try {
-                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                } catch (e: Exception) {
-                    Log.e(TAG, "open privacy policy failed: ${e.message}", e)
-                }
-            }
-        }
-
-        val icon = ImageView(this).apply {
-            setImageResource(android.R.drawable.ic_lock_lock)
-            imageTintList = ColorStateList.valueOf(green)
-            contentDescription = null
-        }
-        pill.addView(icon, LinearLayout.LayoutParams(dp(16), dp(16)))
-
-        val label = TextView(this).apply {
-            text = "Privacy policy"
-            textSize = 13f
-            setTextColor(Color.WHITE)
-            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-            setPadding(dp(8), 0, 0, 0)
-        }
-        pill.addView(label, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT))
+            },
+        ))
 
         val params = FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.WRAP_CONTENT,
@@ -285,13 +300,78 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM
             bottomMargin = dp(44)
         }
-        host.addView(pill, params)
+        host.addView(row, params)
+    }
+
+    /**
+     * A compact circular Cast button matching the pill styling. It opens the
+     * system Cast device picker; if no device is on the network it is a no-op.
+     */
+    private fun createCastButton(): View {
+        // MediaRouteButton is an AppCompat widget; the app uses a native
+        // Material theme, so give the button an AppCompat context wrapper.
+        val castContext = android.view.ContextThemeWrapper(
+            this, androidx.appcompat.R.style.Theme_AppCompat_NoActionBar)
+        val button = MediaRouteButton(castContext).apply {
+            background = privacyPillBackground()
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+            contentDescription = "Cast to device"
+        }
+        CastButtonFactory.setUpMediaRouteButton(this, button)
+        return button
+    }
+
+    private fun createPill(
+        iconRes: Int,
+        label: String,
+        contentDescription: String,
+        onClick: () -> Unit,
+    ): View {
+        val description = contentDescription
+        val pill = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(14), dp(10), dp(16), dp(10))
+            background = privacyPillBackground()
+            isClickable = true
+            isFocusable = true
+            this.contentDescription = description
+            setOnClickListener { onClick() }
+        }
+
+        val icon = ImageView(this).apply {
+            setImageResource(iconRes)
+            imageTintList = ColorStateList.valueOf(green)
+            this.contentDescription = null
+        }
+        pill.addView(icon, LinearLayout.LayoutParams(dp(16), dp(16)))
+
+        val text = TextView(this).apply {
+            this.text = label
+            textSize = 13f
+            setTextColor(Color.WHITE)
+            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            setPadding(dp(8), 0, 0, 0)
+        }
+        pill.addView(text, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT))
+
+        return pill
+    }
+
+    private fun openInBrowser(url: String, what: String) {
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        } catch (e: Exception) {
+            Log.e(TAG, "open $what failed: ${e.message}", e)
+        }
     }
 
     /**
      * Rounded translucent pill background with a subtle border and a press
-     * ripple, so the privacy affordance reads as a proper floating action
-     * instead of a bare text label.
+     * ripple, so the affordances read as proper floating actions instead of
+     * bare text labels.
      */
     private fun privacyPillBackground(): Drawable {
         val content = GradientDrawable().apply {
@@ -314,10 +394,13 @@ class MainActivity : Activity() {
 
     private fun injectPageScripts(view: WebView?) {
         view?.evaluateJavascript(STYLE_SCRIPT, null)
+        view?.evaluateJavascript(BACKGROUND_PLAYBACK_SCRIPT, null)
         view?.evaluateJavascript(FULLSCREEN_SETTINGS_SCRIPT, null)
         view?.evaluateJavascript(videoWatchScript, null)
         view?.evaluateJavascript(SHORTS_SEEK_SCRIPT, null)
         view?.evaluateJavascript(PULL_REFRESH_SCRIPT, null)
+        view?.evaluateJavascript(LIVE_CHAT_SCRIPT, null)
+        view?.evaluateJavascript(CAST_URL_SCRIPT, null)
         // Keep the Shorts marker class + reel-entry tracking current on SPA navs.
         view?.evaluateJavascript("window._advoidTrackNav && window._advoidTrackNav();", null)
     }
@@ -342,6 +425,57 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun startPlaybackService() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
+        }
+        PlaybackService.start(this)
+    }
+
+    private fun stopPlaybackService() {
+        PlaybackService.stop(this)
+    }
+
+    private fun setupCast() {
+        try {
+            val castContext = CastContext.getSharedInstance(this)
+            sessionManager = castContext.sessionManager
+            sessionManager?.addSessionManagerListener(sessionManagerListener)
+        } catch (e: Exception) {
+            // Cast is best-effort: without Google Play Services (or on a device
+            // without Cast), the button simply does nothing instead of crashing.
+            Log.e(TAG, "Google Cast unavailable: ${e.message}", e)
+        }
+    }
+
+    private val sessionManagerListener = object : SessionManagerListener<Session> {
+        override fun onSessionStarted(session: Session, sessionId: String) {
+            val castSession = session as? CastSession ?: return
+            val url = currentCastUrl ?: return
+            val client = castSession.remoteMediaClient ?: return
+            val mediaInfo = MediaInfo.Builder(url)
+                .setStreamType(MediaInfo.STREAM_TYPE_BUFFERED)
+                .setContentType("video/mp4")
+                .setMetadata(MediaMetadata(MediaMetadata.MEDIA_TYPE_MOVIE))
+                .build()
+            try {
+                client.load(mediaInfo)
+            } catch (e: Exception) {
+                Log.e(TAG, "cast load failed: ${e.message}", e)
+            }
+        }
+        override fun onSessionEnded(session: Session, error: Int) {}
+        override fun onSessionEnding(session: Session) {}
+        override fun onSessionResumeFailed(session: Session, error: Int) {}
+        override fun onSessionResumed(session: Session, wasSuspended: Boolean) {}
+        override fun onSessionResuming(session: Session, sessionId: String) {}
+        override fun onSessionStartFailed(session: Session, error: Int) {}
+        override fun onSessionStarting(session: Session) {}
+        override fun onSessionSuspended(session: Session, reason: Int) {}
+    }
+
     @Suppress("DEPRECATION", "MissingSuperCall")
     override fun onBackPressed() {
         when {
@@ -364,9 +498,17 @@ class MainActivity : Activity() {
             "window._advoidSyncVideoState && window._advoidSyncVideoState();",
             null,
         )
+        // Recover a video that was playing when the app was backgrounded:
+        // Chromium hides the page and can leave the media element wedged so a
+        // normal play() no longer sticks. Resume it, or reload if still stuck.
+        if (playingAtBackground) {
+            playingAtBackground = false
+            webView.evaluateJavascript(RECOVER_STUCK_SCRIPT, null)
+        }
     }
 
     override fun onStop() {
+        playingAtBackground = videoPlaying
         applyPlaybackUiState(
             playbackUiCoordinator.onActivityVisibilityChanged(false)
         )
@@ -380,6 +522,12 @@ class MainActivity : Activity() {
         android.webkit.CookieManager.getInstance().flush()
         (webView.parent as? ViewGroup)?.removeView(webView)
         webView.destroy()
+        sessionManager?.removeSessionManagerListener(sessionManagerListener)
+        sessionManager = null
+        // Only stop background playback when the user actually closes the app;
+        // a system-initiated destroy (memory pressure) should let the foreground
+        // service keep the audio alive.
+        if (isFinishing) stopPlaybackService()
         super.onDestroy()
     }
 
@@ -1041,6 +1189,197 @@ class MainActivity : Activity() {
                 document.addEventListener('touchcancel', function() {
                     reset(false);
                 }, { passive: true, capture: true });
+            })();
+        """
+
+        /**
+         * Keeps YouTube's player from self-pausing when the WebView is
+         * backgrounded. YouTube keys off document.visibilityState / .hidden /
+         * hasFocus, so pin those to "visible" and let the foreground
+         * PlaybackService keep the audio track alive.
+         */
+        private const val BACKGROUND_PLAYBACK_SCRIPT = """
+            (function() {
+                if (window._advoidBgPlayback) return;
+                window._advoidBgPlayback = true;
+                // Keep YouTube's player from self-pausing when the WebView is
+                // backgrounded: it keys off document.visibilityState / .hidden /
+                // hasFocus, so pin those to "visible". (Chromium may still
+                // suspend the media pipeline at the C++ level; this only stops
+                // YouTube's own visibilitychange pause from also firing.)
+                try {
+                    Object.defineProperty(document, 'visibilityState', {
+                        configurable: true, get: function() { return 'visible'; }
+                    });
+                    Object.defineProperty(document, 'hidden', {
+                        configurable: true, get: function() { return false; }
+                    });
+                    if (typeof document.hasFocus === 'function') {
+                        document.hasFocus = function() { return true; };
+                    }
+                } catch (e) { /* ignore */ }
+            })();
+        """
+
+        /**
+         * Runs when the app returns to the foreground after a video was playing
+         * in the background. Chromium's hidden-page suspension can wedge the
+         * media element so play() resolves but playback never resumes; try a
+         * normal resume, and if it is still paused a moment later, reload the
+         * page so YouTube rebuilds a working player.
+         */
+        private const val RECOVER_STUCK_SCRIPT = """
+            (function() {
+                var v = document.querySelector('.html5-video-player video') ||
+                    document.querySelector('video');
+                if (!v || !v.paused || v.ended) return;
+                var p = v.play();
+                if (p && p.catch) p.catch(function() {});
+                setTimeout(function() {
+                    var v2 = document.querySelector('.html5-video-player video') ||
+                        document.querySelector('video');
+                    if (v2 && v2.paused && !v2.ended) {
+                        location.reload();
+                    }
+                }, 600);
+            })();
+        """
+
+        /**
+         * Live streams on m.youtube.com don't render a chat panel, so inject a
+         * "Live chat" affordance and a bottom-sheet iframe pointing at YouTube's
+         * public live_chat embed. Re-evaluated on every SPA navigation.
+         */
+        private const val LIVE_CHAT_SCRIPT = """
+            (function() {
+                var SETUP = !!window._advoidLiveChatSetup;
+
+                function teardown() {
+                    var btn = document.getElementById('advoid-live-chat-btn');
+                    var panel = document.getElementById('advoid-live-chat-panel');
+                    if (btn) btn.remove();
+                    if (panel) panel.remove();
+                }
+
+                function isLiveNow() {
+                    var pr = window.ytInitialPlayerResponse;
+                    return !!(pr && pr.videoDetails &&
+                        (pr.videoDetails.isLive || pr.videoDetails.isLiveContent));
+                }
+
+                function ensureChatUi(videoId) {
+                    var btn = document.createElement('button');
+                    btn.id = 'advoid-live-chat-btn';
+                    btn.type = 'button';
+                    btn.setAttribute('aria-label', 'Open live chat');
+                    btn.textContent = 'Live chat';
+                    document.body.appendChild(btn);
+                    btn.addEventListener('click', function() { togglePanel(videoId); });
+
+                    if (!SETUP) {
+                        SETUP = window._advoidLiveChatSetup = true;
+                        injectChatStyles();
+                    }
+                }
+
+                function togglePanel(videoId) {
+                    var existing = document.getElementById('advoid-live-chat-panel');
+                    if (existing) { existing.remove(); return; }
+                    var panel = document.createElement('div');
+                    panel.id = 'advoid-live-chat-panel';
+
+                    var header = document.createElement('div');
+                    header.className = 'advoid-live-chat-header';
+                    var title = document.createElement('span');
+                    title.textContent = 'Live chat';
+                    var close = document.createElement('button');
+                    close.type = 'button';
+                    close.textContent = '\u00D7';
+                    close.setAttribute('aria-label', 'Close live chat');
+                    close.addEventListener('click', function() { panel.remove(); });
+                    header.appendChild(title);
+                    header.appendChild(close);
+
+                    var iframe = document.createElement('iframe');
+                    iframe.src = 'https://www.youtube.com/live_chat?v=' +
+                        encodeURIComponent(videoId) + '&embed_domain=m.youtube.com';
+                    iframe.setAttribute('allow', 'autoplay');
+
+                    panel.appendChild(header);
+                    panel.appendChild(iframe);
+                    document.body.appendChild(panel);
+                }
+
+                function injectChatStyles() {
+                    var style = document.createElement('style');
+                    style.id = 'advoid-live-chat-style';
+                    style.textContent = [
+                        '#advoid-live-chat-btn {',
+                        '  position: fixed; right: 12px; bottom: 96px; z-index: 2147483000;',
+                        '  padding: 10px 14px; border: 1px solid rgba(255,255,255,0.18);',
+                        '  border-radius: 22px; background: rgba(22,22,25,0.94); color: #fff;',
+                        '  font: 500 13px sans-serif; box-shadow: 0 6px 20px rgba(0,0,0,0.4);',
+                        '}',
+                        '#advoid-live-chat-panel {',
+                        '  position: fixed; left: 0; right: 0; bottom: 0; height: 55%;',
+                        '  z-index: 2147483001; background: #121215;',
+                        '  border-top: 1px solid rgba(255,255,255,0.12);',
+                        '  display: flex; flex-direction: column;',
+                        '}',
+                        '.advoid-live-chat-header {',
+                        '  display: flex; align-items: center; justify-content: space-between;',
+                        '  padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.12);',
+                        '  color: #fff; font: 600 15px sans-serif; flex: 0 0 auto;',
+                        '}',
+                        '.advoid-live-chat-header button {',
+                        '  border: none; background: transparent; color: #ccc; font-size: 26px;',
+                        '  line-height: 1; padding: 0 8px;',
+                        '}',
+                        '#advoid-live-chat-panel iframe {',
+                        '  flex: 1; border: none; width: 100%; background: #fff;',
+                        '}'
+                    ].join(' ');
+                    (document.head || document.documentElement).appendChild(style);
+                }
+
+                window._advoidSyncLiveChat = function() {
+                    teardown();
+                    var isWatch = location.pathname.indexOf('/watch') === 0;
+                    var videoId = new URLSearchParams(location.search).get('v');
+                    if (!isWatch || !videoId || !isLiveNow()) return;
+                    ensureChatUi(videoId);
+                };
+
+                window._advoidSyncLiveChat();
+            })();
+        """
+
+        /**
+         * Reports the current video's best castable direct stream URL to native
+         * (progressive MP4 formats only — YouTube's DRM'd adaptive/HLS manifests
+         * won't play on the default Cast receiver). Re-run on every navigation.
+         */
+        private const val CAST_URL_SCRIPT = """
+            (function() {
+                var pickUrl = function(formats) {
+                    if (!formats || !formats.length) return null;
+                    var byItag = {};
+                    for (var i = 0; i < formats.length; i++) {
+                        var f = formats[i];
+                        if (f && f.url) byItag[f.itag] = f.url;
+                    }
+                    return byItag[22] || byItag[18] || byItag[137] ||
+                        byItag[136] || byItag[134] ||
+                        (formats.find(function(f) { return f && f.url; }) || {}).url || null;
+                };
+                var pr = window.ytInitialPlayerResponse;
+                var url = pr && pr.streamingData
+                    ? (pickUrl(pr.streamingData.formats) ||
+                       pickUrl(pr.streamingData.adaptiveFormats))
+                    : null;
+                if (url && window.AdVoidBridge) {
+                    AdVoidBridge.onCastUrl(url);
+                }
             })();
         """
 
