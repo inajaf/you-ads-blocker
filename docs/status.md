@@ -1,5 +1,46 @@
 # Project status
 
+## 2026-08-14 — Desktop fullscreen: chat/ad no longer break video (branch fm/you-ads-desktop-fullscreen-chat-ad)
+
+Fixed fullscreen on the Windows/macOS desktop app when a live chat or ad is
+present — the video now truly fills the screen instead of being squeezed beside
+a visible chat panel or stuck at its windowed size.
+
+- **Root cause 1 (chat).** YouTube fullscreens the `<html>` *document* (not the
+  player) on watch pages, so the watch layout — player + live-chat panel —
+  stayed on screen: the video covered only ~72% with the chat on the right, and
+  the existing `:has()` rules never matched because the fullscreen element is
+  the document root. Added `html:fullscreen` rules in `extension/content.css`
+  that collapse `#chat-container`/`#panels-full-bleed-container` and force the
+  video element to fill the viewport (`object-fit: contain`), so fullscreen is
+  full screen on chat videos and live streams.
+- **Root cause 2 (flaky/stuck).** `desktop/main.js` called `setFullScreen()`
+  inside the `enter/leave-html-full-screen` handlers, racing Electron 43's
+  built-in window fullscreen for HTML requests. The renderer's
+  `requestFullscreen()` sometimes hung with no fullscreenchange, leaving the
+  window in OS fullscreen, the tab strip visible, and the video stuck at its
+  windowed size. Removed the manual calls — Electron owns the transition; the
+  app only tracks the tab-strip visibility.
+- **Root cause 3 (early clicks).** Clicking fullscreen before the player was
+  ready either hung the request or was ignored entirely. New
+  `extension/fullscreen-guard.js` (injected by `desktop/preload.js`) retries a
+  `requestFullscreen()` that doesn't settle in 1.5s and watches
+  `.ytp-fullscreen-button` clicks, re-issuing the document fullscreen request
+  if no fullscreen state appears within 2s (retries run inside the click's
+  transient-activation window).
+
+Verified live via CDP against the running app on YouTube watch pages (lofi
+radio, Al Jazeera live stream with chat, regular videos): after the fix,
+fullscreen engages 8/8 including early-click cases, player+video both measure
+2134×1200 (100% of the 2134×1200 screen) with the chat hidden (0×0), and exit
+restores the 1189×728 window. Full suite `npm test` 191/191, `npm run build`,
+`npx oxlint` (0 errors) green.
+
+Remaining: `electron-updater` is still missing from `desktop/node_modules`
+(optional dep; auto-update logs "disabled" in dev) — run `npm install` inside
+`desktop/` to pick it up. Dev helper `scripts/cdp-eval.mjs` added for driving
+the running app via CDP (used for the QA above).
+
 ## 2026-08-14 — AdVoid Android Play-prep (branch fm/you-ads-play-release-prep)
 
 Readied `android/AdVoid` for its first Google Play upload:

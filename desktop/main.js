@@ -429,17 +429,15 @@ function attachTabListeners(contents, tabId) {
     if (isMainFrame && tabModel.setUrl(tabId, url)) syncTabStrip()
   })
   contents.on('enter-html-full-screen', () => {
+    // Electron 43 already switches the window to fullscreen for an HTML
+    // fullscreen request; only track it so the tab strip hides. Calling
+    // setFullScreen() here races the built-in transition and can hang the
+    // renderer's requestFullscreen(), leaving the video stuck at windowed size.
     htmlFullscreenTabId = tabId
-    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isFullScreen()) {
-      mainWindow.setFullScreen(true)
-    }
     layoutViews()
   })
   contents.on('leave-html-full-screen', () => {
     if (htmlFullscreenTabId === tabId) htmlFullscreenTabId = null
-    if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isFullScreen()) {
-      mainWindow.setFullScreen(false)
-    }
     layoutViews()
   })
 

@@ -880,6 +880,34 @@ iframe#chatframe:fullscreen,
   max-height: 100vh !important;
 }
 
+/* YouTube fullscreens the <html> document (not the player) on watch pages, so
+   the watch layout — player + live-chat panel — stays on screen in fullscreen:
+   the video only fills ~72% of the screen with the chat on the right. Collapse
+   the chat/panel column and force the video element to fill the viewport so
+   fullscreen really is full screen. Scoped to html:fullscreen so windowed and
+   player-fullscreen layouts are untouched. */
+html:fullscreen #chat-container,
+html:fullscreen ytd-live-chat-frame,
+html:fullscreen #chatframe,
+html:fullscreen #chat,
+html:fullscreen #panels-full-bleed-container {
+  display: none !important;
+}
+
+html:fullscreen .html5-video-container {
+  height: 100% !important;
+}
+
+html:fullscreen video.html5-main-video,
+html:fullscreen .video-stream {
+  position: absolute !important;
+  left: 0 !important;
+  top: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain;
+}
+
 @media (prefers-reduced-motion: reduce) {
   #tube-desktop-back,
   #tube-desktop-help,
