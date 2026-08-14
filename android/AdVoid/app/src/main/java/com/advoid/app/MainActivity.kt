@@ -48,15 +48,16 @@ class MainActivity : Activity() {
     private var customViewCallback: WebChromeClient.CustomViewCallback? = null
     private var originalSystemUiVisibility = 0
 
-    // Background playback: whether the Activity is currently visible. Used to
-    // keep the foreground service alive while backgrounded even if Chromium
-    // momentarily pauses the media element.
-    private var activityVisible = false
-
     // Google Cast: the direct stream URL the page reports (progressive format),
     // cast to the selected device when a session starts.
     private var currentCastUrl: String? = null
     private var sessionManager: SessionManager? = null
+
+    // Track whether a video was playing when the app was backgrounded, so
+    // onResume can recover a media element Chromium left wedged after hiding
+    // the page (play() resolves but the video stays paused).
+    private var videoPlaying = false
+    private var playingAtBackground = false
 
     private val green = Color.parseColor("#5FCA6B")
     private val darkBg = Color.parseColor("#0F0F0F")
@@ -96,19 +97,13 @@ class MainActivity : Activity() {
                 @JavascriptInterface
                 fun onPlaybackStateChanged(playing: Boolean) {
                     runOnUiThread {
+                        videoPlaying = playing
                         applyPlaybackUiState(
                             playbackUiCoordinator.onVideoPlaybackChanged(playing)
                         )
-                        // Keep audio alive when the app is collapsed: start the
-                        // foreground media service while a video plays. Only stop
-                        // it when the user pauses in the FOREGROUND — a background
-                        // pause (Chromium hides the page) must not tear down the
-                        // service, or the process dies and audio can never resume.
-                        if (playing) {
-                            startPlaybackService()
-                        } else if (activityVisible) {
-                            stopPlaybackService()
-                        }
+                        // Start/stop the foreground media service with playback so
+                        // the app stays alive while audio is active in the foreground.
+                        if (playing) startPlaybackService() else stopPlaybackService()
                     }
                 }
                 @JavascriptInterface
@@ -492,8 +487,6 @@ class MainActivity : Activity() {
 
     override fun onStart() {
         super.onStart()
-        activityVisible = true
-        webView.evaluateJavascript("window.__advoidBackgrounded = false;", null)
         applyPlaybackUiState(
             playbackUiCoordinator.onActivityVisibilityChanged(true)
         )
@@ -505,14 +498,17 @@ class MainActivity : Activity() {
             "window._advoidSyncVideoState && window._advoidSyncVideoState();",
             null,
         )
+        // Recover a video that was playing when the app was backgrounded:
+        // Chromium hides the page and can leave the media element wedged so a
+        // normal play() no longer sticks. Resume it, or reload if still stuck.
+        if (playingAtBackground) {
+            playingAtBackground = false
+            webView.evaluateJavascript(RECOVER_STUCK_SCRIPT, null)
+        }
     }
 
     override fun onStop() {
-        activityVisible = false
-        // Tell the page it is backgrounded so the background-playback script can
-        // resume a video Chromium pauses for the hidden page (a real foreground
-        // pause is never replayed).
-        webView.evaluateJavascript("window.__advoidBackgrounded = true;", null)
+        playingAtBackground = videoPlaying
         applyPlaybackUiState(
             playbackUiCoordinator.onActivityVisibilityChanged(false)
         )
@@ -1206,6 +1202,11 @@ class MainActivity : Activity() {
             (function() {
                 if (window._advoidBgPlayback) return;
                 window._advoidBgPlayback = true;
+                // Keep YouTube's player from self-pausing when the WebView is
+                // backgrounded: it keys off document.visibilityState / .hidden /
+                // hasFocus, so pin those to "visible". (Chromium may still
+                // suspend the media pipeline at the C++ level; this only stops
+                // YouTube's own visibilitychange pause from also firing.)
                 try {
                     Object.defineProperty(document, 'visibilityState', {
                         configurable: true, get: function() { return 'visible'; }
@@ -1217,33 +1218,30 @@ class MainActivity : Activity() {
                         document.hasFocus = function() { return true; };
                     }
                 } catch (e) { /* ignore */ }
+            })();
+        """
 
-                // Chromium still pauses a <video> when the page goes hidden at
-                // the C++ level (no JS pause() call), which the visibility shim
-                // above cannot prevent. When the app is backgrounded, re-start
-                // the video so audio keeps playing; a real foreground pause is
-                // never replayed because the native side clears the background
-                // flag on resume.
-                var wasPlaying = false;
-                function playingVideo() {
-                    return document.querySelector('.html5-video-player video') ||
+        /**
+         * Runs when the app returns to the foreground after a video was playing
+         * in the background. Chromium's hidden-page suspension can wedge the
+         * media element so play() resolves but playback never resumes; try a
+         * normal resume, and if it is still paused a moment later, reload the
+         * page so YouTube rebuilds a working player.
+         */
+        private const val RECOVER_STUCK_SCRIPT = """
+            (function() {
+                var v = document.querySelector('.html5-video-player video') ||
+                    document.querySelector('video');
+                if (!v || !v.paused || v.ended) return;
+                var p = v.play();
+                if (p && p.catch) p.catch(function() {});
+                setTimeout(function() {
+                    var v2 = document.querySelector('.html5-video-player video') ||
                         document.querySelector('video');
-                }
-                function resume() {
-                    var v = playingVideo();
-                    if (v && v.paused && wasPlaying) {
-                        var p = v.play();
-                        if (p && p.catch) p.catch(function() {});
+                    if (v2 && v2.paused && !v2.ended) {
+                        location.reload();
                     }
-                }
-                document.addEventListener('playing', function() { wasPlaying = true; }, true);
-                document.addEventListener('pause', function() {
-                    if (!window.__advoidBackgrounded) { wasPlaying = false; return; }
-                    if (wasPlaying) setTimeout(resume, 150);
-                }, true);
-                setInterval(function() {
-                    if (window.__advoidBackgrounded && wasPlaying) resume();
-                }, 2000);
+                }, 600);
             })();
         """
 

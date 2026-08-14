@@ -11,14 +11,16 @@ another device — was investigated and found infeasible, see below):
   opens a bottom-sheet iframe to YouTube's public
   `https://www.youtube.com/live_chat?v=…&embed_domain=m.youtube.com`. Verified in
   the emulator: button appears on a live stream and the panel loads chat.
-- **Background playback.** A new `PlaybackService` (foreground `mediaPlayback`
+- **Background playback.** A `PlaybackService` (foreground `mediaPlayback`
   service) with a partial wake lock, audio focus and an ongoing notification
-  keeps the process alive when the app is collapsed; `BACKGROUND_PLAYBACK_SCRIPT`
-  pins `document.visibilityState`/`hidden`/`hasFocus` to visible and re-starts a
-  video that Chromium pauses at the C++ level for the hidden page (a native
-  `__advoidBackgrounded` flag ensures a real foreground pause is never replayed).
-  Verified in the emulator: after HOME the process stays alive (PID present) and
-  the video keeps playing unmuted (`paused=false`, currentTime advancing).
+  keeps the process alive when the app is collapsed. True background AUDIO is
+  not achievable: Chromium suspends the media pipeline when the WebView page is
+  hidden, and no JS override can resume it (`play()` resolves but currentTime
+  stops and audio is silent). So the app pauses cleanly on collapse and a
+  `RECOVER_STUCK_SCRIPT` un-wedges the media element on return (tries `play()`,
+  then reloads the page if it is still paused) — fixing the earlier bug where
+  the video would not play again after returning. Verified in the emulator:
+  collapse pauses the video; returning auto-recovers it to a playing state.
 - **Cast to another device — infrastructure added, playback blocked by YouTube.**
   Integrated the Google Cast SDK (`play-services-cast-framework` +
   `androidx.appcompat`): a `CastOptionsProvider`, a `MediaRouteButton` cast
