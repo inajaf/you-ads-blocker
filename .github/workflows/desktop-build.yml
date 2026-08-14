@@ -79,6 +79,7 @@ jobs:
       - name: Publish update feed to GitHub release (Windows)
         if: ${{ github.event_name == 'workflow_dispatch' && matrix.os == 'windows-latest' }}
         working-directory: desktop
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

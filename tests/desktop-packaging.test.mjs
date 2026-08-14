@@ -55,4 +55,14 @@ describe('AdVoid desktop cross-platform packaging', () => {
     assert.doesNotMatch(workflow, /tags:/)
     assert.match(workflow, /gh release upload/)
   })
+
+  it('runs the Windows publish step in bash so its script syntax is valid', () => {
+    // The publish `run:` blocks are bash (set -euo pipefail, line continuations),
+    // but GitHub runs Windows steps in PowerShell by default. Force bash there.
+    const windowsPublish = workflow.slice(
+      workflow.indexOf('Publish update feed to GitHub release (Windows)'),
+      workflow.indexOf('Upload installer', workflow.indexOf('Publish update feed to GitHub release (Windows)')),
+    )
+    assert.match(windowsPublish, /shell:\s*bash/)
+  })
 })
