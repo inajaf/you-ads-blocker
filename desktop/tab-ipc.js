@@ -10,6 +10,7 @@ const TAB_STRIP_CHANNELS = {
   closeTab: 'advoid:tab-close',
   setState: 'advoid:tabs-updated',
   getState: 'advoid:tabs-get-state',
+  signIn: 'advoid:sign-in',
 }
 
 const TAB_OPEN_CHANNEL = 'advoid:open-video-tab'

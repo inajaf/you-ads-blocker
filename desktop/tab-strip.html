@@ -166,6 +166,38 @@
         color: var(--tab-text);
       }
 
+      #sign-in {
+        flex: 0 0 auto;
+        align-self: center;
+        height: 26px;
+        padding: 0 10px;
+        border: 1px solid var(--strip-border);
+        border-radius: 7px;
+        background: var(--tab-bg);
+        color: var(--tab-text);
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 1;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+
+      #sign-in:hover {
+        background: var(--tab-hover-bg);
+        color: var(--tab-active-text);
+        border-color: var(--dim);
+      }
+
+      #sign-in.signed-in {
+        color: var(--dim);
+        cursor: pointer;
+      }
+
+      #sign-in.signed-in:hover {
+        color: var(--tab-text);
+        border-color: var(--dim);
+      }
+
       @keyframes spin {
         to {
           transform: rotate(360deg);
@@ -176,6 +208,7 @@
   <body>
     <div id="strip" role="tablist" aria-label="Open tabs">
       <div id="tabs"></div>
+      <button id="sign-in" title="Sign in with Google (opens the AdVoid Chrome window)">Sign in</button>
       <button id="new-tab" title="New tab (Cmd/Ctrl+T)" aria-label="New tab">+</button>
     </div>
     <script src="tab-strip.js"></script>

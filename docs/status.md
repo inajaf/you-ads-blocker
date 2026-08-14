@@ -1,5 +1,31 @@
 # Project status
 
+## 2026-08-14 — Desktop Sign in option always available (branch fm/you-ads-desktop-signin-fix)
+
+The YouTube header's own "Sign in" control is unreliable in the Electron app:
+YouTube sometimes serves a header with an empty topbar buttons region (verified
+server-side — a plain fetch of youtube.com returns `topbarButtons: []` for the
+same UA, and the client-side render also stalls), so there was often no way to
+start sign-in from the app. Added a dedicated **"Sign in" button to the AdVoid
+tab strip**:
+
+- `desktop/tab-ipc.js` + `tab-strip-preload.js`: new `advoid:sign-in` channel and
+  `window.advoidTabs.signIn()`.
+- `desktop/tab-strip.html` + `tab-strip.js`: a "Sign in" / "Signed in" button at
+  the right of the strip; label and class flip from the strip state.
+- `desktop/main.js`: `getSignedInState()` reads the default session's cookies and
+  reuses `hasYouTubeAuthentication()` from `chrome-cookie-sync.mjs`; the strip
+  state now carries `signedIn`, and the `signIn` IPC handler calls the existing
+  `openSupportedChromeSignIn()` Chrome-for-Testing handoff (same path as
+  clicking YouTube's own button). The strip refreshes its state after a handoff.
+
+Verified live via CDP: button renders at the right of the strip; shows
+"Sign in" when signed out, flips to "Signed in" (class `signed-in`) after the
+handoff imports the session; clicking it runs the full flow
+(`signed-in session imported into 1 app tabs`). Full suite `npm test` 192/192,
+`npm run build`, `npx oxlint` (0 errors) green. Branch is separate from the
+pushed fullscreen-fix branch and is not pushed yet.
+
 ## 2026-08-14 — Desktop fullscreen: chat/ad no longer break video (branch fm/you-ads-desktop-fullscreen-chat-ad)
 
 Fixed fullscreen on the Windows/macOS desktop app when a live chat or ad is

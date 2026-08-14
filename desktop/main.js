@@ -189,6 +189,7 @@ async function openSupportedChromeSignIn() {
     mainWindow?.show()
     mainWindow?.focus()
     chromeHandoffStarted = false
+    void syncTabStrip()
     console.log(`[AdVoid] signed-in session imported into ${viewsByTabId.size} app tabs`)
   } catch (error) {
     if (chrome?.exitCode === null) chrome.kill()
@@ -201,9 +202,22 @@ async function openSupportedChromeSignIn() {
 
 // --- Tab state + chrome ----------------------------------------------------
 
-function buildTabStripState() {
+async function getSignedInState() {
+  try {
+    const { hasYouTubeAuthentication } = await import('./chrome-cookie-sync.mjs')
+    const cookies = await session.defaultSession.cookies.get({})
+    return hasYouTubeAuthentication(cookies)
+  } catch {
+    // Cookie reads must never break the strip; treat an error as signed out.
+    return false
+  }
+}
+
+async function buildTabStripState() {
+  const signedIn = await getSignedInState()
   return {
     activeId: tabModel.activeId,
+    signedIn,
     tabs: tabModel.getTabs().map((tab) => ({
       id: tab.id,
       title: tab.title,
@@ -214,9 +228,12 @@ function buildTabStripState() {
   }
 }
 
-function syncTabStrip() {
+async function syncTabStrip() {
   if (!stripContents || stripContents.isDestroyed()) return
-  stripContents.send(TAB_STRIP_CHANNELS.setState, buildTabStripState())
+  const state = await buildTabStripState()
+  if (stripContents && !stripContents.isDestroyed()) {
+    stripContents.send(TAB_STRIP_CHANNELS.setState, state)
+  }
 }
 
 function layoutViews() {
@@ -461,6 +478,12 @@ function installIpcHandlers() {
     if (Number.isInteger(id)) closeTab(id)
   })
   ipcMain.on(TAB_STRIP_CHANNELS.newTab, () => openNewTab(HOME_URL, { forceNew: true }))
+  // Tab-strip "Sign in" button: the YouTube header's own sign-in control is
+  // unreliable in Electron (YouTube sometimes serves a header without it), so
+  // the app exposes its own entry point into the same Chrome handoff.
+  ipcMain.on(TAB_STRIP_CHANNELS.signIn, () => {
+    void openSupportedChromeSignIn()
+  })
 
   // Sent by the isolated preload click interceptor when an
   // explicit new-tab gesture (Cmd/Ctrl+click, middle-click) hits a video link.

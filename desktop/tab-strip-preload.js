@@ -25,4 +25,7 @@ contextBridge.exposeInMainWorld('advoidTabs', {
   newTab() {
     ipcRenderer.send(TAB_STRIP_CHANNELS.newTab)
   },
+  signIn() {
+    ipcRenderer.send(TAB_STRIP_CHANNELS.signIn)
+  },
 })

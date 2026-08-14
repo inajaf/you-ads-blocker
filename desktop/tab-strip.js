@@ -66,6 +66,16 @@ function renderStrip(container, state) {
   }
 }
 
+function updateSignInButton(button, signedIn) {
+  if (!button) return
+  const signed = Boolean(signedIn)
+  button.textContent = signed ? 'Signed in' : 'Sign in'
+  button.classList.toggle('signed-in', signed)
+  button.title = signed
+    ? 'Signed in — click to open the AdVoid Chrome window and switch or refresh your account'
+    : 'Sign in with Google (opens the AdVoid Chrome window)'
+}
+
 function init() {
   const platform = new URLSearchParams(window.location.search).get('platform')
   if (platform === 'darwin' || platform === 'win32' || platform === 'linux') {
@@ -74,15 +84,23 @@ function init() {
 
   const tabs = document.getElementById('tabs')
   const newTab = document.getElementById('new-tab')
+  const signIn = document.getElementById('sign-in')
   if (!window.advoidTabs || !tabs || !newTab) return
 
-  window.advoidTabs.onState((state) => renderStrip(tabs, state))
+  window.advoidTabs.onState((state) => {
+    renderStrip(tabs, state)
+    updateSignInButton(signIn, state?.signedIn)
+  })
   window.advoidTabs.getState().then((state) => {
-    if (state) renderStrip(tabs, state)
+    if (state) {
+      renderStrip(tabs, state)
+      updateSignInButton(signIn, state.signedIn)
+    }
   }).catch((error) => {
     console.error('Failed to load initial tab state:', error)
   })
   newTab.addEventListener('click', () => window.advoidTabs.newTab())
+  signIn.addEventListener('click', () => window.advoidTabs.signIn())
 }
 
 document.addEventListener('DOMContentLoaded', init)

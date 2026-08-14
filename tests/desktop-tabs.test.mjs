@@ -44,6 +44,16 @@ describe('AdVoid desktop multi-tab wiring', () => {
     assert.match(ipcSource, /advoid:open-video-tab/)
   })
 
+  it('exposes a tab-strip Sign in button wired to the Chrome sign-in handoff', () => {
+    assert.match(ipcSource, /advoid:sign-in/)
+    assert.match(tabStripPreloadSource, /signIn\(\) \{[\s\S]*ipcRenderer\.send\(TAB_STRIP_CHANNELS\.signIn\)/)
+    assert.match(tabStripHtml, /id="sign-in"/)
+    assert.match(tabStripSource, /window\.advoidTabs\.signIn\(\)/)
+    assert.match(mainSource, /TAB_STRIP_CHANNELS\.signIn[\s\S]*openSupportedChromeSignIn\(\)/)
+    assert.match(mainSource, /async function getSignedInState\(\)[\s\S]*hasYouTubeAuthentication/)
+    assert.match(tabStripSource, /signedIn/)
+  })
+
   it('shares one session so blocklisting and sign-in apply to every tab', () => {
     assert.match(mainSource, /registerNetworkBlocking\(session\.defaultSession\)/)
   })
