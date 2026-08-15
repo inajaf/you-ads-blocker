@@ -25,15 +25,6 @@ import android.view.WindowManager
 import android.webkit.*
 import android.widget.*
 import android.app.Activity
-import androidx.mediarouter.app.MediaRouteButton
-import com.google.android.gms.cast.MediaInfo
-import com.google.android.gms.cast.MediaMetadata
-import com.google.android.gms.cast.framework.CastButtonFactory
-import com.google.android.gms.cast.framework.CastContext
-import com.google.android.gms.cast.framework.CastSession
-import com.google.android.gms.cast.framework.Session
-import com.google.android.gms.cast.framework.SessionManager
-import com.google.android.gms.cast.framework.SessionManagerListener
 
 class MainActivity : Activity() {
     private lateinit var rootLayout: LinearLayout
@@ -47,11 +38,6 @@ class MainActivity : Activity() {
     private var customView: View? = null
     private var customViewCallback: WebChromeClient.CustomViewCallback? = null
     private var originalSystemUiVisibility = 0
-
-    // Google Cast: the direct stream URL the page reports (progressive format),
-    // cast to the selected device when a session starts.
-    private var currentCastUrl: String? = null
-    private var sessionManager: SessionManager? = null
 
     // Track whether a video was playing when the app was backgrounded, so
     // onResume can recover a media element Chromium left wedged after hiding
@@ -104,12 +90,6 @@ class MainActivity : Activity() {
                         // Start/stop the foreground media service with playback so
                         // the app stays alive while audio is active in the foreground.
                         if (playing) startPlaybackService() else stopPlaybackService()
-                    }
-                }
-                @JavascriptInterface
-                fun onCastUrl(url: String) {
-                    runOnUiThread {
-                        currentCastUrl = url.takeIf { it.startsWith("https://") }
                     }
                 }
                 @JavascriptInterface
@@ -258,9 +238,6 @@ class MainActivity : Activity() {
         rootLayout.addView(webContainer, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
 
-        // Best-effort Google Cast; initialize before building the cast button.
-        setupCast()
-
         addPrivacyPolicyAffordance(webContainer)
 
         setContentView(rootLayout)
@@ -276,9 +253,6 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-
-        row.addView(createCastButton())
-        row.addView(View(this), LinearLayout.LayoutParams(dp(10), 1))
 
         row.addView(createPill(
             iconRes = android.R.drawable.ic_lock_lock,
@@ -301,24 +275,6 @@ class MainActivity : Activity() {
             bottomMargin = dp(44)
         }
         host.addView(row, params)
-    }
-
-    /**
-     * A compact circular Cast button matching the pill styling. It opens the
-     * system Cast device picker; if no device is on the network it is a no-op.
-     */
-    private fun createCastButton(): View {
-        // MediaRouteButton is an AppCompat widget; the app uses a native
-        // Material theme, so give the button an AppCompat context wrapper.
-        val castContext = android.view.ContextThemeWrapper(
-            this, androidx.appcompat.R.style.Theme_AppCompat_NoActionBar)
-        val button = MediaRouteButton(castContext).apply {
-            background = privacyPillBackground()
-            setPadding(dp(12), dp(10), dp(12), dp(10))
-            contentDescription = "Cast to device"
-        }
-        CastButtonFactory.setUpMediaRouteButton(this, button)
-        return button
     }
 
     private fun createPill(
@@ -400,7 +356,6 @@ class MainActivity : Activity() {
         view?.evaluateJavascript(SHORTS_SEEK_SCRIPT, null)
         view?.evaluateJavascript(PULL_REFRESH_SCRIPT, null)
         view?.evaluateJavascript(LIVE_CHAT_SCRIPT, null)
-        view?.evaluateJavascript(CAST_URL_SCRIPT, null)
         // Keep the Shorts marker class + reel-entry tracking current on SPA navs.
         view?.evaluateJavascript("window._advoidTrackNav && window._advoidTrackNav();", null)
     }
@@ -436,44 +391,6 @@ class MainActivity : Activity() {
 
     private fun stopPlaybackService() {
         PlaybackService.stop(this)
-    }
-
-    private fun setupCast() {
-        try {
-            val castContext = CastContext.getSharedInstance(this)
-            sessionManager = castContext.sessionManager
-            sessionManager?.addSessionManagerListener(sessionManagerListener)
-        } catch (e: Exception) {
-            // Cast is best-effort: without Google Play Services (or on a device
-            // without Cast), the button simply does nothing instead of crashing.
-            Log.e(TAG, "Google Cast unavailable: ${e.message}", e)
-        }
-    }
-
-    private val sessionManagerListener = object : SessionManagerListener<Session> {
-        override fun onSessionStarted(session: Session, sessionId: String) {
-            val castSession = session as? CastSession ?: return
-            val url = currentCastUrl ?: return
-            val client = castSession.remoteMediaClient ?: return
-            val mediaInfo = MediaInfo.Builder(url)
-                .setStreamType(MediaInfo.STREAM_TYPE_BUFFERED)
-                .setContentType("video/mp4")
-                .setMetadata(MediaMetadata(MediaMetadata.MEDIA_TYPE_MOVIE))
-                .build()
-            try {
-                client.load(mediaInfo)
-            } catch (e: Exception) {
-                Log.e(TAG, "cast load failed: ${e.message}", e)
-            }
-        }
-        override fun onSessionEnded(session: Session, error: Int) {}
-        override fun onSessionEnding(session: Session) {}
-        override fun onSessionResumeFailed(session: Session, error: Int) {}
-        override fun onSessionResumed(session: Session, wasSuspended: Boolean) {}
-        override fun onSessionResuming(session: Session, sessionId: String) {}
-        override fun onSessionStartFailed(session: Session, error: Int) {}
-        override fun onSessionStarting(session: Session) {}
-        override fun onSessionSuspended(session: Session, reason: Int) {}
     }
 
     @Suppress("DEPRECATION", "MissingSuperCall")
@@ -522,8 +439,6 @@ class MainActivity : Activity() {
         android.webkit.CookieManager.getInstance().flush()
         (webView.parent as? ViewGroup)?.removeView(webView)
         webView.destroy()
-        sessionManager?.removeSessionManagerListener(sessionManagerListener)
-        sessionManager = null
         // Only stop background playback when the user actually closes the app;
         // a system-initiated destroy (memory pressure) should let the foreground
         // service keep the audio alive.
@@ -1254,6 +1169,38 @@ class MainActivity : Activity() {
             (function() {
                 var SETUP = !!window._advoidLiveChatSetup;
 
+                // ytInitialPlayerResponse is only set on full page loads and goes
+                // stale after SPA navigation, so track the CURRENT video's live
+                // status from the player-response fetch instead (and re-sync the
+                // chat affordance whenever it changes).
+                var currentIsLive = false;
+                function applyLive(videoDetails) {
+                    var live = !!(videoDetails &&
+                        (videoDetails.isLive || videoDetails.isLiveContent));
+                    if (live === currentIsLive) return;
+                    currentIsLive = live;
+                    if (window._advoidSyncLiveChat) window._advoidSyncLiveChat();
+                }
+                function trackResponse(data) {
+                    try {
+                        applyLive(data && (data.videoDetails ||
+                            (data.response && data.response.videoDetails)));
+                    } catch (e) { /* ignore */ }
+                }
+                var nativeFetch = window.fetch;
+                window.fetch = function() {
+                    var res = nativeFetch.apply(this, arguments);
+                    var url = typeof arguments[0] === 'string' ? arguments[0] :
+                        (arguments[0] && arguments[0].url) || '';
+                    if (/youtubei\/v1\/player|get_video_info|player\?/.test(url)) {
+                        try {
+                            var clone = res.clone();
+                            clone.json().then(trackResponse).catch(function() {});
+                        } catch (e) { /* ignore */ }
+                    }
+                    return res;
+                };
+
                 function teardown() {
                     var btn = document.getElementById('advoid-live-chat-btn');
                     var panel = document.getElementById('advoid-live-chat-panel');
@@ -1262,6 +1209,7 @@ class MainActivity : Activity() {
                 }
 
                 function isLiveNow() {
+                    if (currentIsLive) return true;
                     var pr = window.ytInitialPlayerResponse;
                     return !!(pr && pr.videoDetails &&
                         (pr.videoDetails.isLive || pr.videoDetails.isLiveContent));
@@ -1351,35 +1299,6 @@ class MainActivity : Activity() {
                 };
 
                 window._advoidSyncLiveChat();
-            })();
-        """
-
-        /**
-         * Reports the current video's best castable direct stream URL to native
-         * (progressive MP4 formats only — YouTube's DRM'd adaptive/HLS manifests
-         * won't play on the default Cast receiver). Re-run on every navigation.
-         */
-        private const val CAST_URL_SCRIPT = """
-            (function() {
-                var pickUrl = function(formats) {
-                    if (!formats || !formats.length) return null;
-                    var byItag = {};
-                    for (var i = 0; i < formats.length; i++) {
-                        var f = formats[i];
-                        if (f && f.url) byItag[f.itag] = f.url;
-                    }
-                    return byItag[22] || byItag[18] || byItag[137] ||
-                        byItag[136] || byItag[134] ||
-                        (formats.find(function(f) { return f && f.url; }) || {}).url || null;
-                };
-                var pr = window.ytInitialPlayerResponse;
-                var url = pr && pr.streamingData
-                    ? (pickUrl(pr.streamingData.formats) ||
-                       pickUrl(pr.streamingData.adaptiveFormats))
-                    : null;
-                if (url && window.AdVoidBridge) {
-                    AdVoidBridge.onCastUrl(url);
-                }
             })();
         """
 
