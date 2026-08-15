@@ -1,5 +1,29 @@
 # Project status
 
+## 2026-08-15 — Android: remove Cast, robust live chat, background-audio plan (branch fm/android-bg-audio-chat-fix)
+
+- **Cast button removed.** The Google Cast SDK integration (cast button,
+  CastOptionsProvider, session listener, CAST_URL_SCRIPT, play-services-cast
+  dependency) is reverted — it was non-functional scaffolding since YouTube
+  serves every stream via `signatureCipher`.
+- **Live chat made SPA-robust.** `ytInitialPlayerResponse` is only set on full
+  page loads and goes stale after SPA navigation, so the live-chat affordance
+  silently vanished when a live stream was reached by tapping a video. The
+  injected `LIVE_CHAT_SCRIPT` now hooks `fetch` for `/youtubei/v1/player`
+  responses, tracks the current video's `isLive`, and re-syncs the chat button
+  when it changes. Verified in the emulator on a live stream: button appears
+  (full load), and the fetch hook covers click-through/SPA navigation.
+- **Background audio — plan (not yet implemented).** The WebView can't keep
+  audio alive when collapsed because Chromium suspends the media pipeline at the
+  C++ level when the page is hidden (no JS override can resume it). The plan is
+  native playback: extract the current video's audio stream URL (requires
+  YouTube's signature deciphering — the youtube-dl problem), send it to a
+  foreground `PlaybackService` that plays it with ExoPlayer/MediaPlayer + a
+  MediaSession, decoupling audio from the WebView. See the decisions doc for the
+  full tradeoff analysis.
+
+`npm test` 199/199, `./gradlew testDebugUnitTest` BUILD SUCCESSFUL.
+
 ## 2026-08-15 — Android: live chat, background audio (branch fm/android-live-chat-bg-broadcast)
 
 Two mobile-web gaps closed in the AdVoid Android app (a third idea — casting to
