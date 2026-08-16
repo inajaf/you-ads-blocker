@@ -244,9 +244,8 @@ class MainActivity : Activity() {
     }
 
     /**
-     * Bottom floating affordances: a Google Cast button (casts the current video
-     * to a Chromecast/TV when one is available) and the privacy-policy pill.
-     * Both float over the WebView so they never push the video layout.
+     * Bottom floating affordances: a privacy-policy pill.
+     * Floats over the WebView so it never pushes the video layout.
      */
     private fun addPrivacyPolicyAffordance(host: ViewGroup) {
         val row = LinearLayout(this).apply {
@@ -1187,16 +1186,28 @@ class MainActivity : Activity() {
                             (data.response && data.response.videoDetails)));
                     } catch (e) { /* ignore */ }
                 }
+                // Hook fetch to capture player response (youtubei/v1/player) which
+                // contains the CURRENT video's live status. Use text() instead of
+                // json() on a clone to avoid stream consumption issues.
                 var nativeFetch = window.fetch;
                 window.fetch = function() {
                     var res = nativeFetch.apply(this, arguments);
                     var url = typeof arguments[0] === 'string' ? arguments[0] :
                         (arguments[0] && arguments[0].url) || '';
                     if (/youtubei\/v1\/player|get_video_info|player\?/.test(url)) {
-                        try {
-                            var clone = res.clone();
-                            clone.json().then(trackResponse).catch(function() {});
-                        } catch (e) { /* ignore */ }
+                        // Use text() on the original response to avoid stream cloning issues.
+                        // The original response stream is still available since we don't
+                        // consume it here; we just read it as text alongside the original
+                        // consumer (YouTube's player).
+                        var textPromise = res.clone().text().then(function(text) {
+                            try {
+                                var data = JSON.parse(text);
+                                trackResponse(data);
+                            } catch (e) { /* ignore */ }
+                        });
+                        // Ensure the promise is tracked so we don't lose it
+                        if (window._advoidFetchPromises === undefined) window._advoidFetchPromises = [];
+                        window._advoidFetchPromises.push(textPromise);
                     }
                     return res;
                 };
