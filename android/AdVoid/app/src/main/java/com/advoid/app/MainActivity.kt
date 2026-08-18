@@ -1171,13 +1171,27 @@ class MainActivity : Activity() {
                 // ytInitialPlayerResponse is only set on full page loads and goes
                 // stale after SPA navigation, so track the CURRENT video's live
                 // status from the player-response fetch instead (and re-sync the
-                // chat affordance whenever it changes).
-                var currentIsLive = false;
+                // chat affordance whenever it changes). The flag is cached on
+                // window together with the video id it belongs to, so a stale
+                // flag from a previous video can never leak onto the next one
+                // (and the once-installed fetch hook keeps agreeing with the
+                // current SPA closure).
+                var shared = window._advoidLiveChatShared ||
+                    (window._advoidLiveChatShared = { live: false, videoId: null });
+
+                function currentVideoId() {
+                    var m = location.pathname.match(/^\/watch/);
+                    if (!m) return null;
+                    return new URLSearchParams(location.search).get('v') || null;
+                }
+
                 function applyLive(videoDetails) {
+                    var vid = videoDetails && (videoDetails.videoId || null);
                     var live = !!(videoDetails &&
                         (videoDetails.isLive || videoDetails.isLiveContent));
-                    if (live === currentIsLive) return;
-                    currentIsLive = live;
+                    if (shared.videoId === vid && shared.live === live) return;
+                    shared.videoId = vid;
+                    shared.live = live;
                     if (window._advoidSyncLiveChat) window._advoidSyncLiveChat();
                 }
                 function trackResponse(data) {
@@ -1229,10 +1243,20 @@ class MainActivity : Activity() {
                 }
 
                 function isLiveNow() {
-                    if (currentIsLive) return true;
+                    // Trust the fetch-tracked status only when it belongs to the
+                    // video currently on screen.
+                    var vid = currentVideoId();
+                    if (shared.videoId && shared.videoId === vid) return shared.live;
+                    // Fall back to ytInitialPlayerResponse, but ONLY when it
+                    // belongs to the current video: after SPA navigation the
+                    // global still holds the PREVIOUS page's response, and a
+                    // previous live video would otherwise keep the button shown
+                    // on a now non-live (or different) video.
                     var pr = window.ytInitialPlayerResponse;
-                    return !!(pr && pr.videoDetails &&
-                        (pr.videoDetails.isLive || pr.videoDetails.isLiveContent));
+                    if (!pr || !pr.videoDetails) return false;
+                    var prVid = pr.videoDetails.videoId;
+                    if (vid && prVid && prVid !== vid) return false;
+                    return !!(pr.videoDetails.isLive || pr.videoDetails.isLiveContent);
                 }
 
                 function ensureChatUi(videoId) {
@@ -1313,7 +1337,7 @@ class MainActivity : Activity() {
                 window._advoidSyncLiveChat = function() {
                     teardown();
                     var isWatch = location.pathname.indexOf('/watch') === 0;
-                    var videoId = new URLSearchParams(location.search).get('v');
+                    var videoId = currentVideoId();
                     if (!isWatch || !videoId || !isLiveNow()) return;
                     ensureChatUi(videoId);
                 };
