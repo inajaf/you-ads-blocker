@@ -61,6 +61,10 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Expose the WebView to chrome://inspect on every build (debug and
+        // release) so QA can verify page state without a debug-only socket.
+        WebView.setWebContentsDebuggingEnabled(true)
+
         adBlocker = AdBlocker(this)
         adBlocker.loadAssets()
 
