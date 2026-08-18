@@ -1171,13 +1171,27 @@ class MainActivity : Activity() {
                 // ytInitialPlayerResponse is only set on full page loads and goes
                 // stale after SPA navigation, so track the CURRENT video's live
                 // status from the player-response fetch instead (and re-sync the
-                // chat affordance whenever it changes).
-                var currentIsLive = false;
+                // chat affordance whenever it changes). The flag is cached on
+                // window together with the video id it belongs to, so a stale
+                // flag from a previous video can never leak onto the next one
+                // (and the once-installed fetch hook keeps agreeing with the
+                // current SPA closure).
+                var shared = window._advoidLiveChatShared ||
+                    (window._advoidLiveChatShared = { live: false, videoId: null });
+
+                function currentVideoId() {
+                    var m = location.pathname.match(/^\/watch/);
+                    if (!m) return null;
+                    return new URLSearchParams(location.search).get('v') || null;
+                }
+
                 function applyLive(videoDetails) {
+                    var vid = videoDetails && (videoDetails.videoId || null);
                     var live = !!(videoDetails &&
                         (videoDetails.isLive || videoDetails.isLiveContent));
-                    if (live === currentIsLive) return;
-                    currentIsLive = live;
+                    if (shared.videoId === vid && shared.live === live) return;
+                    shared.videoId = vid;
+                    shared.live = live;
                     if (window._advoidSyncLiveChat) window._advoidSyncLiveChat();
                 }
                 function trackResponse(data) {
@@ -1186,31 +1200,40 @@ class MainActivity : Activity() {
                             (data.response && data.response.videoDetails)));
                     } catch (e) { /* ignore */ }
                 }
-                // Hook fetch to capture player response (youtubei/v1/player) which
-                // contains the CURRENT video's live status. Use text() instead of
-                // json() on a clone to avoid stream consumption issues.
-                var nativeFetch = window.fetch;
-                window.fetch = function() {
-                    var res = nativeFetch.apply(this, arguments);
-                    var url = typeof arguments[0] === 'string' ? arguments[0] :
-                        (arguments[0] && arguments[0].url) || '';
-                    if (/youtubei\/v1\/player|get_video_info|player\?/.test(url)) {
-                        // Use text() on the original response to avoid stream cloning issues.
-                        // The original response stream is still available since we don't
-                        // consume it here; we just read it as text alongside the original
-                        // consumer (YouTube's player).
-                        var textPromise = res.clone().text().then(function(text) {
-                            try {
-                                var data = JSON.parse(text);
-                                trackResponse(data);
-                            } catch (e) { /* ignore */ }
-                        });
-                        // Ensure the promise is tracked so we don't lose it
-                        if (window._advoidFetchPromises === undefined) window._advoidFetchPromises = [];
-                        window._advoidFetchPromises.push(textPromise);
-                    }
-                    return res;
-                };
+                // Hook fetch ONCE to capture the player response (youtubei/v1/player)
+                // which contains the CURRENT video's live status. fetch() returns a
+                // Promise<Response>, so the body must be read from the RESOLVED
+                // response — and the hook must never break the original fetch: an
+                // uncaught throw inside window.fetch kills YouTube's player
+                // bootstrap (the video never loads). The once-guard also stops SPA
+                // re-injection from wrapping fetch recursively.
+                if (!window._advoidLiveChatFetchHook) {
+                    window._advoidLiveChatFetchHook = true;
+                    var nativeFetch = window.fetch;
+                    window.fetch = function() {
+                        var res = nativeFetch.apply(this, arguments);
+                        try {
+                            var url = typeof arguments[0] === 'string' ? arguments[0] :
+                                (arguments[0] && arguments[0].url) || '';
+                            if (/youtubei\/v1\/player|get_video_info|player\?/.test(url)) {
+                                res.then(function(response) {
+                                    if (!response || typeof response.clone !== 'function') return;
+                                    var textPromise = response.clone().text().then(function(text) {
+                                        try {
+                                            trackResponse(JSON.parse(text));
+                                        } catch (e) { /* ignore */ }
+                                    });
+                                    // Ensure the promise is tracked so we don't lose it
+                                    if (window._advoidFetchPromises === undefined) {
+                                        window._advoidFetchPromises = [];
+                                    }
+                                    window._advoidFetchPromises.push(textPromise);
+                                }).catch(function() { /* ignore */ });
+                            }
+                        } catch (e) { /* never break the original fetch */ }
+                        return res;
+                    };
+                }
 
                 function teardown() {
                     var btn = document.getElementById('advoid-live-chat-btn');
@@ -1220,10 +1243,20 @@ class MainActivity : Activity() {
                 }
 
                 function isLiveNow() {
-                    if (currentIsLive) return true;
+                    // Trust the fetch-tracked status only when it belongs to the
+                    // video currently on screen.
+                    var vid = currentVideoId();
+                    if (shared.videoId && shared.videoId === vid) return shared.live;
+                    // Fall back to ytInitialPlayerResponse, but ONLY when it
+                    // belongs to the current video: after SPA navigation the
+                    // global still holds the PREVIOUS page's response, and a
+                    // previous live video would otherwise keep the button shown
+                    // on a now non-live (or different) video.
                     var pr = window.ytInitialPlayerResponse;
-                    return !!(pr && pr.videoDetails &&
-                        (pr.videoDetails.isLive || pr.videoDetails.isLiveContent));
+                    if (!pr || !pr.videoDetails) return false;
+                    var prVid = pr.videoDetails.videoId;
+                    if (vid && prVid && prVid !== vid) return false;
+                    return !!(pr.videoDetails.isLive || pr.videoDetails.isLiveContent);
                 }
 
                 function ensureChatUi(videoId) {
@@ -1304,7 +1337,7 @@ class MainActivity : Activity() {
                 window._advoidSyncLiveChat = function() {
                     teardown();
                     var isWatch = location.pathname.indexOf('/watch') === 0;
-                    var videoId = new URLSearchParams(location.search).get('v');
+                    var videoId = currentVideoId();
                     if (!isWatch || !videoId || !isLiveNow()) return;
                     ensureChatUi(videoId);
                 };
