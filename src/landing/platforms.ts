@@ -50,7 +50,7 @@ export const PLATFORMS: readonly Platform[] = [
     kind: 'download',
     name: 'Android',
     icon: 'android',
-    spec: 'APK · 13MB · Android 8.0+',
+    spec: 'APK · 11MB · Android 8.0+',
     href: `${RELEASES_LATEST}/app-release.apk`,
     ctaLabel: 'Download for Android',
     downloadLabel: 'Download APK',
