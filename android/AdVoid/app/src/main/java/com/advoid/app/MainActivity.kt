@@ -1186,31 +1186,40 @@ class MainActivity : Activity() {
                             (data.response && data.response.videoDetails)));
                     } catch (e) { /* ignore */ }
                 }
-                // Hook fetch to capture player response (youtubei/v1/player) which
-                // contains the CURRENT video's live status. Use text() instead of
-                // json() on a clone to avoid stream consumption issues.
-                var nativeFetch = window.fetch;
-                window.fetch = function() {
-                    var res = nativeFetch.apply(this, arguments);
-                    var url = typeof arguments[0] === 'string' ? arguments[0] :
-                        (arguments[0] && arguments[0].url) || '';
-                    if (/youtubei\/v1\/player|get_video_info|player\?/.test(url)) {
-                        // Use text() on the original response to avoid stream cloning issues.
-                        // The original response stream is still available since we don't
-                        // consume it here; we just read it as text alongside the original
-                        // consumer (YouTube's player).
-                        var textPromise = res.clone().text().then(function(text) {
-                            try {
-                                var data = JSON.parse(text);
-                                trackResponse(data);
-                            } catch (e) { /* ignore */ }
-                        });
-                        // Ensure the promise is tracked so we don't lose it
-                        if (window._advoidFetchPromises === undefined) window._advoidFetchPromises = [];
-                        window._advoidFetchPromises.push(textPromise);
-                    }
-                    return res;
-                };
+                // Hook fetch ONCE to capture the player response (youtubei/v1/player)
+                // which contains the CURRENT video's live status. fetch() returns a
+                // Promise<Response>, so the body must be read from the RESOLVED
+                // response — and the hook must never break the original fetch: an
+                // uncaught throw inside window.fetch kills YouTube's player
+                // bootstrap (the video never loads). The once-guard also stops SPA
+                // re-injection from wrapping fetch recursively.
+                if (!window._advoidLiveChatFetchHook) {
+                    window._advoidLiveChatFetchHook = true;
+                    var nativeFetch = window.fetch;
+                    window.fetch = function() {
+                        var res = nativeFetch.apply(this, arguments);
+                        try {
+                            var url = typeof arguments[0] === 'string' ? arguments[0] :
+                                (arguments[0] && arguments[0].url) || '';
+                            if (/youtubei\/v1\/player|get_video_info|player\?/.test(url)) {
+                                res.then(function(response) {
+                                    if (!response || typeof response.clone !== 'function') return;
+                                    var textPromise = response.clone().text().then(function(text) {
+                                        try {
+                                            trackResponse(JSON.parse(text));
+                                        } catch (e) { /* ignore */ }
+                                    });
+                                    // Ensure the promise is tracked so we don't lose it
+                                    if (window._advoidFetchPromises === undefined) {
+                                        window._advoidFetchPromises = [];
+                                    }
+                                    window._advoidFetchPromises.push(textPromise);
+                                }).catch(function() { /* ignore */ });
+                            }
+                        } catch (e) { /* never break the original fetch */ }
+                        return res;
+                    };
+                }
 
                 function teardown() {
                     var btn = document.getElementById('advoid-live-chat-btn');
