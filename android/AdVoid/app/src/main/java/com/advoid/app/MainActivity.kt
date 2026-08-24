@@ -1088,27 +1088,72 @@ class MainActivity : Activity() {
                 // (and the once-installed fetch hook keeps agreeing with the
                 // current SPA closure).
                 var shared = window._advoidLiveChatShared ||
-                    (window._advoidLiveChatShared = { live: false, videoId: null });
+                    (window._advoidLiveChatShared = {
+                        live: false, videoId: null, routeKey: null
+                    });
 
-                function currentVideoId() {
-                    var m = location.pathname.match(/^\/watch/);
-                    if (!m) return null;
-                    return new URLSearchParams(location.search).get('v') || null;
+                function currentRouteKey() {
+                    return location.pathname + location.search;
                 }
 
-                function applyLive(videoDetails) {
+                // A fetch-tracked response belongs only to the route that was
+                // current when it arrived. Clear old SPA state before resolving
+                // a new route so chat can never point at the previous stream.
+                if (shared.routeKey !== currentRouteKey()) {
+                    shared.live = false;
+                    shared.videoId = null;
+                    shared.routeKey = currentRouteKey();
+                }
+
+                function currentVideoId() {
+                    if (/^\/watch/.test(location.pathname)) {
+                        return new URLSearchParams(location.search).get('v') || null;
+                    }
+                    // Channel live links keep their friendly /@channel/live URL
+                    // instead of redirecting to /watch?v=... in the mobile app.
+                    // On that route the current id is available only in the
+                    // matching player response.
+                    if (/\/live\/?$/.test(location.pathname)) {
+                        if (shared.routeKey === currentRouteKey() && shared.videoId) {
+                            return shared.videoId;
+                        }
+                        var pr = window.ytInitialPlayerResponse;
+                        return pr && pr.videoDetails && pr.videoDetails.videoId || null;
+                    }
+                    return null;
+                }
+
+                function liveStateFromResponse(data) {
+                    var root = data && (data.response || data);
+                    var videoDetails = root && root.videoDetails;
+                    var liveDetails = root && root.microformat &&
+                        root.microformat.playerMicroformatRenderer &&
+                        root.microformat.playerMicroformatRenderer.liveBroadcastDetails;
+                    return {
+                        videoDetails: videoDetails,
+                        live: !!(videoDetails && videoDetails.isLive === true) ||
+                            !!(liveDetails && liveDetails.isLiveNow === true)
+                    };
+                }
+
+                function applyLive(data, responseRouteKey) {
+                    var state = liveStateFromResponse(data);
+                    var videoDetails = state.videoDetails;
                     var vid = videoDetails && (videoDetails.videoId || null);
-                    var live = !!(videoDetails &&
-                        (videoDetails.isLive || videoDetails.isLiveContent));
+                    var live = state.live;
                     if (shared.videoId === vid && shared.live === live) return;
                     shared.videoId = vid;
                     shared.live = live;
+                    shared.routeKey = responseRouteKey;
                     if (window._advoidSyncLiveChat) window._advoidSyncLiveChat();
                 }
-                function trackResponse(data) {
+                function trackResponse(data, responseRouteKey) {
                     try {
-                        applyLive(data && (data.videoDetails ||
-                            (data.response && data.response.videoDetails)));
+                        // A player request may resolve after an SPA transition.
+                        // Never let a late response from the previous route
+                        // overwrite the current stream's id/live state.
+                        if (responseRouteKey !== currentRouteKey()) return;
+                        applyLive(data, responseRouteKey);
                     } catch (e) { /* ignore */ }
                 }
                 // Hook fetch ONCE to capture the player response (youtubei/v1/player)
@@ -1127,11 +1172,12 @@ class MainActivity : Activity() {
                             var url = typeof arguments[0] === 'string' ? arguments[0] :
                                 (arguments[0] && arguments[0].url) || '';
                             if (/youtubei\/v1\/player|get_video_info|player\?/.test(url)) {
+                                var requestRouteKey = currentRouteKey();
                                 res.then(function(response) {
                                     if (!response || typeof response.clone !== 'function') return;
                                     var textPromise = response.clone().text().then(function(text) {
                                         try {
-                                            trackResponse(JSON.parse(text));
+                                            trackResponse(JSON.parse(text), requestRouteKey);
                                         } catch (e) { /* ignore */ }
                                     });
                                     // Ensure the promise is tracked so we don't lose it
@@ -1167,7 +1213,7 @@ class MainActivity : Activity() {
                     if (!pr || !pr.videoDetails) return false;
                     var prVid = pr.videoDetails.videoId;
                     if (vid && prVid && prVid !== vid) return false;
-                    return !!(pr.videoDetails.isLive || pr.videoDetails.isLiveContent);
+                    return liveStateFromResponse(pr).live;
                 }
 
                 function ensureChatUi(videoId) {
@@ -1247,9 +1293,10 @@ class MainActivity : Activity() {
 
                 window._advoidSyncLiveChat = function() {
                     teardown();
-                    var isWatch = location.pathname.indexOf('/watch') === 0;
+                    var isLivePage = location.pathname.indexOf('/watch') === 0 ||
+                        /\/live\/?$/.test(location.pathname);
                     var videoId = currentVideoId();
-                    if (!isWatch || !videoId || !isLiveNow()) return;
+                    if (!isLivePage || !videoId || !isLiveNow()) return;
                     ensureChatUi(videoId);
                 };
 

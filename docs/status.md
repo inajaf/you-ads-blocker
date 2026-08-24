@@ -1,5 +1,28 @@
 # Project status
 
+## 2026-08-25 — Android: live chat works on channel `/live` URLs
+
+- Fixed the missing `Live chat` button when YouTube keeps an active stream on
+  a friendly channel URL such as `/@SkyNews/live` instead of redirecting to
+  `/watch?v=...`. The injector now reads the current video id from the matching
+  player response on channel live routes. Fetch-tracked live state is scoped to
+  the current route, so an SPA transition cannot reuse the previous stream's id
+  or chat; delayed player responses are discarded when their request route no
+  longer matches the visible route.
+- Current-live detection now requires `videoDetails.isLive` or
+  `liveBroadcastDetails.isLiveNow`. Historical `isLiveContent=true` alone no
+  longer shows chat on a completed stream.
+- Added Node regression coverage for active channel `/live`, active `/watch`,
+  completed-live recordings, and an SPA `/live` transition where the initial
+  player response is stale and the current id arrives through the fetch hook.
+  A fifth case covers an old route's delayed fetch resolving after navigation.
+
+Runtime verification on the API 37 `Pixel_9` emulator: the active Sky News
+`/@SkyNews/live` stream showed the button and opened the real YouTube chat
+iframe with messages; a completed LiveNOW FOX recording with
+`isLiveContent=true`/`isLiveNow=false` correctly showed no button. Updated APK
+installed successfully; no crash was observed.
+
 ## 2026-08-25 — Android: background playback removed (branch codex/remove-android-background-sound)
 
 - Removed the non-functional background-audio experiment from the active
