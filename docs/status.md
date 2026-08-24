@@ -1,5 +1,36 @@
 # Project status
 
+## 2026-08-25 — Android: background playback removed (branch codex/remove-android-background-sound)
+
+- Removed the non-functional background-audio experiment from the active
+  `android/AdVoid` client. The app no longer starts `PlaybackService`, requests
+  foreground-service/notification/wake-lock permissions, holds audio focus, or
+  posts an ongoing playback notification.
+- Removed the injected page-visibility override and the resume-time
+  play/reload recovery. When AdVoid is backgrounded, YouTube/WebView now owns
+  the normal pause/suspension behavior; the app does not try to keep loading or
+  playing media behind the visible activity.
+- Kept foreground playback UI coordination, live chat, player fixes, and
+  always-on WebView debugging unchanged.
+
+Validated on the fresh `origin/main` baseline:
+
+- `npm test` — 201/201 passed; `npm run build` passed.
+- `./gradlew testDebugUnitTest assembleDebug` — BUILD SUCCESSFUL; the debug
+  APK is version `1.4.2-debug` (code 4).
+- Installed with `adb install -r` on the API 37 `Pixel_9` emulator, preserving
+  debug-app data. Hands-on/CDP verification confirmed a playing YouTube video
+  becomes paused with the real document state `hidden` after Home; no AdVoid
+  foreground playback service or notification exists; returning leaves the
+  video paused and the app usable, with no crash/SecurityException in logcat.
+- Independent code review found no actionable issues. `git diff --check` and
+  targeted oxlint passed.
+
+Known tooling issue: `./gradlew lintDebug` still fails inside AGP 8.7.3's lint
+worker under the installed JDK 26 (`AndroidLintWorkAction > 26.0.1`), before
+reporting code findings. This is the pre-existing toolchain incompatibility,
+not a passing lint result.
+
 ## 2026-08-15 — Android: remove Cast, robust live chat, background-audio plan (branch fm/android-bg-audio-chat-fix)
 
 - **Cast button removed.** The Google Cast SDK integration (cast button,

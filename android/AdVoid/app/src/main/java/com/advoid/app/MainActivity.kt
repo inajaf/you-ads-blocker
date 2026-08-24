@@ -1,9 +1,6 @@
 package com.advoid.app
 
 import android.annotation.SuppressLint
-import android.Manifest
-import android.content.Context
-import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.content.res.ColorStateList
 import android.content.Intent
@@ -12,7 +9,6 @@ import android.graphics.*
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
-import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
 import android.util.Base64
@@ -38,12 +34,6 @@ class MainActivity : Activity() {
     private var customView: View? = null
     private var customViewCallback: WebChromeClient.CustomViewCallback? = null
     private var originalSystemUiVisibility = 0
-
-    // Track whether a video was playing when the app was backgrounded, so
-    // onResume can recover a media element Chromium left wedged after hiding
-    // the page (play() resolves but the video stays paused).
-    private var videoPlaying = false
-    private var playingAtBackground = false
 
     private val green = Color.parseColor("#5FCA6B")
     private val darkBg = Color.parseColor("#0F0F0F")
@@ -87,13 +77,9 @@ class MainActivity : Activity() {
                 @JavascriptInterface
                 fun onPlaybackStateChanged(playing: Boolean) {
                     runOnUiThread {
-                        videoPlaying = playing
                         applyPlaybackUiState(
                             playbackUiCoordinator.onVideoPlaybackChanged(playing)
                         )
-                        // Start/stop the foreground media service with playback so
-                        // the app stays alive while audio is active in the foreground.
-                        if (playing) startPlaybackService() else stopPlaybackService()
                     }
                 }
                 @JavascriptInterface
@@ -353,7 +339,6 @@ class MainActivity : Activity() {
 
     private fun injectPageScripts(view: WebView?) {
         view?.evaluateJavascript(STYLE_SCRIPT, null)
-        view?.evaluateJavascript(BACKGROUND_PLAYBACK_SCRIPT, null)
         view?.evaluateJavascript(FULLSCREEN_SETTINGS_SCRIPT, null)
         view?.evaluateJavascript(videoWatchScript, null)
         view?.evaluateJavascript(SHORTS_SEEK_SCRIPT, null)
@@ -383,19 +368,6 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun startPlaybackService() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        ) {
-            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
-        }
-        PlaybackService.start(this)
-    }
-
-    private fun stopPlaybackService() {
-        PlaybackService.stop(this)
-    }
-
     @Suppress("DEPRECATION", "MissingSuperCall")
     override fun onBackPressed() {
         when {
@@ -418,17 +390,9 @@ class MainActivity : Activity() {
             "window._advoidSyncVideoState && window._advoidSyncVideoState();",
             null,
         )
-        // Recover a video that was playing when the app was backgrounded:
-        // Chromium hides the page and can leave the media element wedged so a
-        // normal play() no longer sticks. Resume it, or reload if still stuck.
-        if (playingAtBackground) {
-            playingAtBackground = false
-            webView.evaluateJavascript(RECOVER_STUCK_SCRIPT, null)
-        }
     }
 
     override fun onStop() {
-        playingAtBackground = videoPlaying
         applyPlaybackUiState(
             playbackUiCoordinator.onActivityVisibilityChanged(false)
         )
@@ -442,10 +406,6 @@ class MainActivity : Activity() {
         android.webkit.CookieManager.getInstance().flush()
         (webView.parent as? ViewGroup)?.removeView(webView)
         webView.destroy()
-        // Only stop background playback when the user actually closes the app;
-        // a system-initiated destroy (memory pressure) should let the foreground
-        // service keep the audio alive.
-        if (isFinishing) stopPlaybackService()
         super.onDestroy()
     }
 
@@ -1107,59 +1067,6 @@ class MainActivity : Activity() {
                 document.addEventListener('touchcancel', function() {
                     reset(false);
                 }, { passive: true, capture: true });
-            })();
-        """
-
-        /**
-         * Keeps YouTube's player from self-pausing when the WebView is
-         * backgrounded. YouTube keys off document.visibilityState / .hidden /
-         * hasFocus, so pin those to "visible" and let the foreground
-         * PlaybackService keep the audio track alive.
-         */
-        private const val BACKGROUND_PLAYBACK_SCRIPT = """
-            (function() {
-                if (window._advoidBgPlayback) return;
-                window._advoidBgPlayback = true;
-                // Keep YouTube's player from self-pausing when the WebView is
-                // backgrounded: it keys off document.visibilityState / .hidden /
-                // hasFocus, so pin those to "visible". (Chromium may still
-                // suspend the media pipeline at the C++ level; this only stops
-                // YouTube's own visibilitychange pause from also firing.)
-                try {
-                    Object.defineProperty(document, 'visibilityState', {
-                        configurable: true, get: function() { return 'visible'; }
-                    });
-                    Object.defineProperty(document, 'hidden', {
-                        configurable: true, get: function() { return false; }
-                    });
-                    if (typeof document.hasFocus === 'function') {
-                        document.hasFocus = function() { return true; };
-                    }
-                } catch (e) { /* ignore */ }
-            })();
-        """
-
-        /**
-         * Runs when the app returns to the foreground after a video was playing
-         * in the background. Chromium's hidden-page suspension can wedge the
-         * media element so play() resolves but playback never resumes; try a
-         * normal resume, and if it is still paused a moment later, reload the
-         * page so YouTube rebuilds a working player.
-         */
-        private const val RECOVER_STUCK_SCRIPT = """
-            (function() {
-                var v = document.querySelector('.html5-video-player video') ||
-                    document.querySelector('video');
-                if (!v || !v.paused || v.ended) return;
-                var p = v.play();
-                if (p && p.catch) p.catch(function() {});
-                setTimeout(function() {
-                    var v2 = document.querySelector('.html5-video-player video') ||
-                        document.querySelector('video');
-                    if (v2 && v2.paused && !v2.ended) {
-                        location.reload();
-                    }
-                }, 600);
             })();
         """
 
