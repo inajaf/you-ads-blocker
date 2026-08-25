@@ -28,14 +28,13 @@ Approach (three independent changes):
   reachable from the app. A floating "Privacy policy" pill (over the WebView,
   sharing the refresh-indicator overlay host) opens the policy in the system
   browser. The URL constant lives in
-  `app/src/main/java/com/advoid/app/PrivacyPolicy.kt` and is a clearly-marked
-  placeholder (`https://your-site.example/privacy`, TODO(captain)) until the
-  real policy is hosted. A pure, unit-tested `isValidPrivacyPolicyUrl` guard
-  refuses to open the placeholder so no user is ever sent to a fake policy;
-  `PrivacyPolicyTest.kt` locks this down. The affordance was later redesigned
-  from a bare text chip into a rounded translucent pill (lock icon + medium
-  label + press ripple) so it reads as a proper control — see
-  `MainActivity.addPrivacyPolicyAffordance` / `privacyPillBackground`.
+  `app/src/main/java/com/advoid/app/PrivacyPolicy.kt`. A pure, unit-tested
+  `isValidPrivacyPolicyUrl` guard refuses unsafe or placeholder URLs. The
+  hosting decision and current URL are recorded in the 2026-08-25 decision
+  below. The affordance was later redesigned from a bare text chip into a
+  rounded translucent pill (lock icon + medium label + press ripple) so it
+  reads as a proper control — see `MainActivity.addPrivacyPolicyAffordance` /
+  `privacyPillBackground`.
 Alternatives: (a) keep versioning in build.gradle.kts and just comment it —
 versionCode is exactly the value most often mis-bumped at release time, so a
 single tracked properties file is safer than editing Groovy DSL; (b) fail the
@@ -352,6 +351,7 @@ pause/suspension is the least surprising temporary behavior. Reintroducing
 background audio requires a native media pipeline with a reliable supported
 stream source and proper MediaSession controls, not lifecycle spoofing around
 the WebView.
+
 ## 2026-08-25 — Google Play privacy policy will ship with the public landing bundle
 
 AdVoid's Android privacy-policy link will use the stable GitHub Pages URL
