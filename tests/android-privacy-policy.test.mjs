@@ -20,9 +20,20 @@ test('Android links to the standalone GitHub Pages privacy policy', () => {
 })
 
 test('privacy policy describes current WebView data handling', () => {
-  assert.match(policyHtml, /does not operate analytics, advertising, telemetry/)
-  assert.match(policyHtml, /WebView may store cookies, site data, cache/)
+  assert.match(
+    policyHtml,
+    /no developer-operated backend, account database, analytics, telemetry, or advertising SDK/,
+  )
+  assert.match(
+    policyHtml,
+    /developer does not collect, receive, retain, sell, or share user data through AdVoid/,
+  )
+  assert.match(policyHtml, /AdVoid app preferences stay on your device/)
+  assert.match(policyHtml, /WebView may also store cookies, site data, cache/)
+  assert.match(policyHtml, /clearing AdVoid's storage or uninstalling the app/)
+  assert.match(policyHtml, /connects directly to YouTube and Google/)
   assert.match(policyHtml, /Google Privacy Policy/)
   assert.match(policyHtml, /not directed to children under 13/)
   assert.match(policyHtml, /GitHub issue tracker/)
+  assert.doesNotMatch(policyHtml, /email will be listed here/)
 })
