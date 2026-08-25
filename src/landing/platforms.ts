@@ -33,6 +33,11 @@ export interface DownloadPlatform extends PlatformCommon {
   /** Default (undetected-visitor) highlight style for this entry. */
   primary: boolean
   note?: string
+  additionalDownloads?: readonly {
+    href: string
+    label: string
+    note: string
+  }[]
 }
 
 export interface SourcePlatform extends PlatformCommon {
@@ -55,6 +60,14 @@ export const PLATFORMS: readonly Platform[] = [
     ctaLabel: 'Download for Android',
     downloadLabel: 'Download APK',
     primary: true,
+    note: 'Latest signed release for phones and tablets',
+    additionalDownloads: [
+      {
+        href: `${RELEASES_LATEST}/app-release.aab`,
+        label: 'Download AAB',
+        note: 'Signed Google Play bundle',
+      },
+    ],
   },
   {
     id: 'macos',

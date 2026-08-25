@@ -1,5 +1,14 @@
 # Project status
 
+## 2026-08-25 — Landing exposes both Android release files
+
+- Kept the primary Android CTA pointed at the latest signed
+  `app-release.apk` for direct device installation.
+- Added the signed `app-release.aab` as a clearly labelled secondary Google
+  Play bundle download on the Android card. Both links use the stable
+  `releases/latest/download/<filename>` convention, so future Android releases
+  appear on the landing page without another version-specific edit.
+
 ## 2026-08-25 — Android: live chat survives real SPA request ordering (v1.4.4)
 
 - Fixed the released live-chat regression where YouTube starts the next

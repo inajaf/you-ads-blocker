@@ -46,7 +46,24 @@ test('PLATFORMS download entries use the "latest release" URL convention', () =>
       /^https:\/\/github\.com\/inajaf\/you-ads-blocker\/releases\/latest\/download\/[^/]+$/,
       `${platform.id} href should point at releases/latest/download`,
     )
+    for (const download of platform.additionalDownloads ?? []) {
+      assert.match(
+        download.href,
+        /^https:\/\/github\.com\/inajaf\/you-ads-blocker\/releases\/latest\/download\/[^/]+$/,
+        `${platform.id} additional download should point at releases/latest/download`,
+      )
+    }
   }
+})
+
+test('Android landing card exposes both signed release files', () => {
+  const android = DOWNLOAD_PLATFORMS.find((platform) => platform.id === 'android')
+  assert.ok(android)
+  assert.equal(android.href.endsWith('/app-release.apk'), true)
+  assert.deepEqual(
+    android.additionalDownloads?.map((download) => download.href.split('/').at(-1)),
+    ['app-release.aab'],
+  )
 })
 
 test('isDownloadPlatform separates real downloads from source-only entries', () => {
