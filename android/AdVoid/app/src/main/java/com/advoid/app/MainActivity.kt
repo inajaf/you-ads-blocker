@@ -251,7 +251,7 @@ class MainActivity : Activity() {
                 if (isValidPrivacyPolicyUrl(PRIVACY_POLICY_URL)) {
                     openInBrowser(PRIVACY_POLICY_URL, "privacy policy")
                 } else {
-                    Log.e(TAG, "privacy policy URL is still the placeholder; refusing to open it")
+                    Log.e(TAG, "privacy policy URL is invalid or unavailable; refusing to open it")
                 }
             },
         ))

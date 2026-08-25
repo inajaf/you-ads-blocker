@@ -7,10 +7,9 @@ YouTube in a clean standalone window. Ad blocking, back-button navigation, Googl
 Download the latest `AdVoid-*-arm64.dmg` from [Releases](https://github.com/inajaf/you-ads-blocker/releases).
 
 > **Cutting a release?** The landing page (`src/landing/platforms.ts`) links
-> directly to `releases/latest/download/<filename>` for each asset (currently
-> `app-release.apk` and `AdVoid-1.0.0-arm64.dmg`). Keep these exact filenames
-> stable across versions — don't embed the new version number in an asset
-> name — or the landing page's download links will 404. See
+> directly to `releases/latest/download/<filename>` for each asset. Keep the
+> filenames declared there stable across versions — don't embed a new version
+> number in an asset name — or the landing page's download links will 404. See
 > `docs/decisions.md` (2026-07-21).
 
 ### Bypass Gatekeeper

@@ -275,8 +275,9 @@ Approach: every download href in `src/landing/platforms.ts` now uses GitHub's
 — which always resolves to whatever release is currently tagged latest, so a
 version bump alone no longer breaks the link.
 **Constraint this places on future releases: asset filenames must stay stable
-across versions (e.g. always `app-release.apk` / `AdVoid-1.0.0-arm64.dmg`,
-never a version-numbered rename like `AdVoid-1.1.0-arm64.dmg`).** The landing
+across versions (e.g. always `app-release.apk` / `app-release.aab` /
+`AdVoid-1.0.0-arm64.dmg`, never a version-numbered rename like
+`AdVoid-1.1.0-arm64.dmg`).** The landing
 page links to these exact filenames; renaming an asset on a future release
 404s the site regardless of the `latest` convention. Whoever cuts the next
 release must keep the filenames unchanged (or update
