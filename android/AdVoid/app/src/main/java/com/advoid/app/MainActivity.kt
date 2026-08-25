@@ -1,9 +1,6 @@
 package com.advoid.app
 
 import android.annotation.SuppressLint
-import android.Manifest
-import android.content.Context
-import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.content.res.ColorStateList
 import android.content.Intent
@@ -12,7 +9,6 @@ import android.graphics.*
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
-import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
 import android.util.Base64
@@ -38,12 +34,6 @@ class MainActivity : Activity() {
     private var customView: View? = null
     private var customViewCallback: WebChromeClient.CustomViewCallback? = null
     private var originalSystemUiVisibility = 0
-
-    // Track whether a video was playing when the app was backgrounded, so
-    // onResume can recover a media element Chromium left wedged after hiding
-    // the page (play() resolves but the video stays paused).
-    private var videoPlaying = false
-    private var playingAtBackground = false
 
     private val green = Color.parseColor("#5FCA6B")
     private val darkBg = Color.parseColor("#0F0F0F")
@@ -87,13 +77,9 @@ class MainActivity : Activity() {
                 @JavascriptInterface
                 fun onPlaybackStateChanged(playing: Boolean) {
                     runOnUiThread {
-                        videoPlaying = playing
                         applyPlaybackUiState(
                             playbackUiCoordinator.onVideoPlaybackChanged(playing)
                         )
-                        // Start/stop the foreground media service with playback so
-                        // the app stays alive while audio is active in the foreground.
-                        if (playing) startPlaybackService() else stopPlaybackService()
                     }
                 }
                 @JavascriptInterface
@@ -353,7 +339,6 @@ class MainActivity : Activity() {
 
     private fun injectPageScripts(view: WebView?) {
         view?.evaluateJavascript(STYLE_SCRIPT, null)
-        view?.evaluateJavascript(BACKGROUND_PLAYBACK_SCRIPT, null)
         view?.evaluateJavascript(FULLSCREEN_SETTINGS_SCRIPT, null)
         view?.evaluateJavascript(videoWatchScript, null)
         view?.evaluateJavascript(SHORTS_SEEK_SCRIPT, null)
@@ -383,19 +368,6 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun startPlaybackService() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        ) {
-            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
-        }
-        PlaybackService.start(this)
-    }
-
-    private fun stopPlaybackService() {
-        PlaybackService.stop(this)
-    }
-
     @Suppress("DEPRECATION", "MissingSuperCall")
     override fun onBackPressed() {
         when {
@@ -418,17 +390,9 @@ class MainActivity : Activity() {
             "window._advoidSyncVideoState && window._advoidSyncVideoState();",
             null,
         )
-        // Recover a video that was playing when the app was backgrounded:
-        // Chromium hides the page and can leave the media element wedged so a
-        // normal play() no longer sticks. Resume it, or reload if still stuck.
-        if (playingAtBackground) {
-            playingAtBackground = false
-            webView.evaluateJavascript(RECOVER_STUCK_SCRIPT, null)
-        }
     }
 
     override fun onStop() {
-        playingAtBackground = videoPlaying
         applyPlaybackUiState(
             playbackUiCoordinator.onActivityVisibilityChanged(false)
         )
@@ -442,10 +406,6 @@ class MainActivity : Activity() {
         android.webkit.CookieManager.getInstance().flush()
         (webView.parent as? ViewGroup)?.removeView(webView)
         webView.destroy()
-        // Only stop background playback when the user actually closes the app;
-        // a system-initiated destroy (memory pressure) should let the foreground
-        // service keep the audio alive.
-        if (isFinishing) stopPlaybackService()
         super.onDestroy()
     }
 
@@ -792,8 +752,7 @@ class MainActivity : Activity() {
                     return el;
                 }
 
-                function setLoading(video, loading) {
-                    var player = playerOf(video);
+                function setPlayerLoading(player, loading) {
                     if (!player) return;
                     // YouTube reuses player nodes across SPA routes. Never leave
                     // a loading class from /watch attached after navigation to
@@ -807,9 +766,78 @@ class MainActivity : Activity() {
                             createOverlay(player);
                         }
                         player.classList.add('advoid-loading');
+                        monitorVisibleLoading(player);
                     } else {
                         player.classList.remove('advoid-loading');
+                        if (player._advoidLoadingTimer) {
+                            clearTimeout(player._advoidLoadingTimer);
+                            player._advoidLoadingTimer = null;
+                        }
                     }
+                }
+
+                function videosForPlayer(player) {
+                    return player ? Array.prototype.slice.call(player.querySelectorAll('video')) : [];
+                }
+
+                function shouldShowLoading(player) {
+                    if (!player || !isOnWatchPage()) return false;
+
+                    var videos = videosForPlayer(player);
+                    var activeVideos = videos.filter(function(video) {
+                        return !video.paused && !video.ended;
+                    });
+                    var currentVideo = activeVideos[activeVideos.length - 1] ||
+                        videos[videos.length - 1];
+                    if (currentVideo && currentVideo.seeking) return false;
+
+                    // YouTube's own player state is the source of truth. A late
+                    // `waiting`/`loadstart` from a video element that was just
+                    // replaced must not cover a new video that is already
+                    // playing. During a real stall YouTube keeps playing-mode
+                    // but also adds buffering-mode, so buffering wins here.
+                    if (player.classList.contains('buffering-mode')) return true;
+                    if (player.classList.contains('playing-mode')) return false;
+
+                    if (activeVideos.length > 0) return false;
+
+                    // Cold start fallback before YouTube has assigned its mode
+                    // classes: show only when no playable frame exists yet.
+                    return videos.some(function(video) {
+                        return video.readyState < HAVE_CURRENT_DATA && !video.seeking;
+                    });
+                }
+
+                function refreshPlayerLoading(player) {
+                    setPlayerLoading(player, shouldShowLoading(player));
+                }
+
+                function monitorVisibleLoading(player) {
+                    if (!player || player._advoidLoadingTimer) return;
+                    player._advoidLoadingTimer = setTimeout(function checkPlayerMode() {
+                        player._advoidLoadingTimer = null;
+                        if (!player.isConnected ||
+                                !player.classList.contains('advoid-loading')) {
+                            return;
+                        }
+                        if (!shouldShowLoading(player)) {
+                            setPlayerLoading(player, false);
+                            return;
+                        }
+                        monitorVisibleLoading(player);
+                    }, 50);
+                }
+
+                function refreshVideoLoading(video) {
+                    var player = playerOf(video);
+                    refreshPlayerLoading(player);
+                }
+
+                function refreshAfterPlayerStateSettles(video) {
+                    refreshVideoLoading(video);
+                    // YouTube may assign buffering-mode just after dispatching
+                    // the media event. Reconcile once more on the next task.
+                    setTimeout(function() { refreshVideoLoading(video); }, 0);
                 }
 
                 function isAnyVideoPlaying() {
@@ -847,17 +875,29 @@ class MainActivity : Activity() {
 
                         // Media events that signal an in-flight load replace the
                         // grey play button with the AdVoid loading overlay.
-                        video.addEventListener('emptied', function() { setLoading(video, true); });
-                        video.addEventListener('loadstart', function() { setLoading(video, true); });
+                        video.addEventListener('emptied', function() {
+                            refreshAfterPlayerStateSettles(video);
+                        });
+                        video.addEventListener('loadstart', function() {
+                            refreshAfterPlayerStateSettles(video);
+                        });
                         video.addEventListener('waiting', function() {
                             // A stalled seek keeps the current frame on screen;
                             // only genuine buffering gets the overlay.
-                            setLoading(video, !video.seeking);
+                            refreshAfterPlayerStateSettles(video);
                         });
-                        video.addEventListener('loadeddata', function() { setLoading(video, false); });
-                        video.addEventListener('canplay', function() { setLoading(video, false); });
-                        video.addEventListener('playing', function() { setLoading(video, false); });
-                        video.addEventListener('seeking', function() { setLoading(video, false); });
+                        video.addEventListener('loadeddata', function() {
+                            refreshAfterPlayerStateSettles(video);
+                        });
+                        video.addEventListener('canplay', function() {
+                            refreshAfterPlayerStateSettles(video);
+                        });
+                        video.addEventListener('playing', function() {
+                            refreshAfterPlayerStateSettles(video);
+                        });
+                        video.addEventListener('seeking', function() {
+                            setPlayerLoading(playerOf(video), false);
+                        });
                         video._advoidLastMediaTime = Number(video.currentTime);
                         video.addEventListener('timeupdate', function() {
                             var previousTime = video._advoidLastMediaTime;
@@ -865,14 +905,13 @@ class MainActivity : Activity() {
                             video._advoidLastMediaTime = currentTime;
                             if (!video.paused && Number.isFinite(previousTime) &&
                                     Number.isFinite(currentTime) && currentTime > previousTime) {
-                                setLoading(video, false);
+                                refreshVideoLoading(video);
                             }
                         });
 
                         // Fresh element (new video or SPA navigation): not ready
                         // yet means it is loading, so show the overlay now.
-                        setLoading(video, isOnWatchPage() &&
-                            video.readyState < HAVE_CURRENT_DATA && !video.seeking);
+                        refreshVideoLoading(video);
                     });
                 }
 
@@ -887,8 +926,13 @@ class MainActivity : Activity() {
                     // Only the main player video drives the overlay; feed preview
                     // thumbnails (readyState 0) live outside .html5-video-player
                     // and must never trigger it.
+                    var players = [];
                     document.querySelectorAll('.html5-video-player video').forEach(function(video) {
-                        setLoading(video, video.readyState < HAVE_CURRENT_DATA && !video.seeking);
+                        var player = playerOf(video);
+                        if (player && players.indexOf(player) < 0) players.push(player);
+                    });
+                    players.forEach(function(player) {
+                        refreshPlayerLoading(player);
                     });
                 }
 
@@ -1111,59 +1155,6 @@ class MainActivity : Activity() {
         """
 
         /**
-         * Keeps YouTube's player from self-pausing when the WebView is
-         * backgrounded. YouTube keys off document.visibilityState / .hidden /
-         * hasFocus, so pin those to "visible" and let the foreground
-         * PlaybackService keep the audio track alive.
-         */
-        private const val BACKGROUND_PLAYBACK_SCRIPT = """
-            (function() {
-                if (window._advoidBgPlayback) return;
-                window._advoidBgPlayback = true;
-                // Keep YouTube's player from self-pausing when the WebView is
-                // backgrounded: it keys off document.visibilityState / .hidden /
-                // hasFocus, so pin those to "visible". (Chromium may still
-                // suspend the media pipeline at the C++ level; this only stops
-                // YouTube's own visibilitychange pause from also firing.)
-                try {
-                    Object.defineProperty(document, 'visibilityState', {
-                        configurable: true, get: function() { return 'visible'; }
-                    });
-                    Object.defineProperty(document, 'hidden', {
-                        configurable: true, get: function() { return false; }
-                    });
-                    if (typeof document.hasFocus === 'function') {
-                        document.hasFocus = function() { return true; };
-                    }
-                } catch (e) { /* ignore */ }
-            })();
-        """
-
-        /**
-         * Runs when the app returns to the foreground after a video was playing
-         * in the background. Chromium's hidden-page suspension can wedge the
-         * media element so play() resolves but playback never resumes; try a
-         * normal resume, and if it is still paused a moment later, reload the
-         * page so YouTube rebuilds a working player.
-         */
-        private const val RECOVER_STUCK_SCRIPT = """
-            (function() {
-                var v = document.querySelector('.html5-video-player video') ||
-                    document.querySelector('video');
-                if (!v || !v.paused || v.ended) return;
-                var p = v.play();
-                if (p && p.catch) p.catch(function() {});
-                setTimeout(function() {
-                    var v2 = document.querySelector('.html5-video-player video') ||
-                        document.querySelector('video');
-                    if (v2 && v2.paused && !v2.ended) {
-                        location.reload();
-                    }
-                }, 600);
-            })();
-        """
-
-        /**
          * Live streams on m.youtube.com don't render a chat panel, so inject a
          * "Live chat" affordance and a bottom-sheet iframe pointing at YouTube's
          * public live_chat embed. Re-evaluated on every SPA navigation.
@@ -1181,27 +1172,72 @@ class MainActivity : Activity() {
                 // (and the once-installed fetch hook keeps agreeing with the
                 // current SPA closure).
                 var shared = window._advoidLiveChatShared ||
-                    (window._advoidLiveChatShared = { live: false, videoId: null });
+                    (window._advoidLiveChatShared = {
+                        live: false, videoId: null, routeKey: null
+                    });
 
-                function currentVideoId() {
-                    var m = location.pathname.match(/^\/watch/);
-                    if (!m) return null;
-                    return new URLSearchParams(location.search).get('v') || null;
+                function currentRouteKey() {
+                    return location.pathname + location.search;
                 }
 
-                function applyLive(videoDetails) {
+                // A fetch-tracked response belongs only to the route that was
+                // current when it arrived. Clear old SPA state before resolving
+                // a new route so chat can never point at the previous stream.
+                if (shared.routeKey !== currentRouteKey()) {
+                    shared.live = false;
+                    shared.videoId = null;
+                    shared.routeKey = currentRouteKey();
+                }
+
+                function currentVideoId() {
+                    if (/^\/watch/.test(location.pathname)) {
+                        return new URLSearchParams(location.search).get('v') || null;
+                    }
+                    // Channel live links keep their friendly /@channel/live URL
+                    // instead of redirecting to /watch?v=... in the mobile app.
+                    // On that route the current id is available only in the
+                    // matching player response.
+                    if (/\/live\/?$/.test(location.pathname)) {
+                        if (shared.routeKey === currentRouteKey() && shared.videoId) {
+                            return shared.videoId;
+                        }
+                        var pr = window.ytInitialPlayerResponse;
+                        return pr && pr.videoDetails && pr.videoDetails.videoId || null;
+                    }
+                    return null;
+                }
+
+                function liveStateFromResponse(data) {
+                    var root = data && (data.response || data);
+                    var videoDetails = root && root.videoDetails;
+                    var liveDetails = root && root.microformat &&
+                        root.microformat.playerMicroformatRenderer &&
+                        root.microformat.playerMicroformatRenderer.liveBroadcastDetails;
+                    return {
+                        videoDetails: videoDetails,
+                        live: !!(videoDetails && videoDetails.isLive === true) ||
+                            !!(liveDetails && liveDetails.isLiveNow === true)
+                    };
+                }
+
+                function applyLive(data, responseRouteKey) {
+                    var state = liveStateFromResponse(data);
+                    var videoDetails = state.videoDetails;
                     var vid = videoDetails && (videoDetails.videoId || null);
-                    var live = !!(videoDetails &&
-                        (videoDetails.isLive || videoDetails.isLiveContent));
+                    var live = state.live;
                     if (shared.videoId === vid && shared.live === live) return;
                     shared.videoId = vid;
                     shared.live = live;
+                    shared.routeKey = responseRouteKey;
                     if (window._advoidSyncLiveChat) window._advoidSyncLiveChat();
                 }
-                function trackResponse(data) {
+                function trackResponse(data, responseRouteKey) {
                     try {
-                        applyLive(data && (data.videoDetails ||
-                            (data.response && data.response.videoDetails)));
+                        // A player request may resolve after an SPA transition.
+                        // Never let a late response from the previous route
+                        // overwrite the current stream's id/live state.
+                        if (responseRouteKey !== currentRouteKey()) return;
+                        applyLive(data, responseRouteKey);
                     } catch (e) { /* ignore */ }
                 }
                 // Hook fetch ONCE to capture the player response (youtubei/v1/player)
@@ -1220,11 +1256,12 @@ class MainActivity : Activity() {
                             var url = typeof arguments[0] === 'string' ? arguments[0] :
                                 (arguments[0] && arguments[0].url) || '';
                             if (/youtubei\/v1\/player|get_video_info|player\?/.test(url)) {
+                                var requestRouteKey = currentRouteKey();
                                 res.then(function(response) {
                                     if (!response || typeof response.clone !== 'function') return;
                                     var textPromise = response.clone().text().then(function(text) {
                                         try {
-                                            trackResponse(JSON.parse(text));
+                                            trackResponse(JSON.parse(text), requestRouteKey);
                                         } catch (e) { /* ignore */ }
                                     });
                                     // Ensure the promise is tracked so we don't lose it
@@ -1260,7 +1297,7 @@ class MainActivity : Activity() {
                     if (!pr || !pr.videoDetails) return false;
                     var prVid = pr.videoDetails.videoId;
                     if (vid && prVid && prVid !== vid) return false;
-                    return !!(pr.videoDetails.isLive || pr.videoDetails.isLiveContent);
+                    return liveStateFromResponse(pr).live;
                 }
 
                 function ensureChatUi(videoId) {
@@ -1340,9 +1377,10 @@ class MainActivity : Activity() {
 
                 window._advoidSyncLiveChat = function() {
                     teardown();
-                    var isWatch = location.pathname.indexOf('/watch') === 0;
+                    var isLivePage = location.pathname.indexOf('/watch') === 0 ||
+                        /\/live\/?$/.test(location.pathname);
                     var videoId = currentVideoId();
-                    if (!isWatch || !videoId || !isLiveNow()) return;
+                    if (!isLivePage || !videoId || !isLiveNow()) return;
                     ensureChatUi(videoId);
                 };
 

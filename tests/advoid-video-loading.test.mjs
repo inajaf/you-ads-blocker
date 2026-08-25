@@ -67,6 +67,7 @@ class FakeElement {
     this.classList = new FakeClassList()
     this._listeners = new Map()
     this.innerHTML = ''
+    this.isConnected = true
   }
   appendChild(child) {
     child.parentNode = this
@@ -103,17 +104,31 @@ class FakeElement {
     return null
   }
   querySelector(selector) {
-    if (!selector.startsWith('#')) return null
-    const wanted = selector.slice(1)
+    const wantedId = selector.startsWith('#') ? selector.slice(1) : null
+    const wantedTag = wantedId ? null : selector.toUpperCase()
     const walk = (node) => {
       for (const child of node.children) {
-        if (child.id === wanted) return child
+        if ((wantedId && child.id === wantedId) || (wantedTag && child.tagName === wantedTag)) {
+          return child
+        }
         const hit = walk(child)
         if (hit) return hit
       }
       return null
     }
     return walk(this)
+  }
+  querySelectorAll(selector) {
+    const wantedTag = selector.toUpperCase()
+    const matches = []
+    const walk = (node) => {
+      for (const child of node.children) {
+        if (child.tagName === wantedTag) matches.push(child)
+        walk(child)
+      }
+    }
+    walk(this)
+    return matches
   }
 }
 
@@ -159,7 +174,9 @@ class FakeMutationObserver {
   constructor(callback) {
     this.callback = callback
   }
-  observe() {}
+  observe(_target, options) {
+    this.options = options
+  }
   disconnect() {}
   invoke() {
     this.callback()
@@ -172,6 +189,7 @@ function makeEnv(pathname = '/watch') {
   const player = new FakeElement('div')
   player.classList.add('html5-video-player')
   const createdObservers = []
+  const pendingTimers = []
   const CreatedMutationObserver = class extends FakeMutationObserver {
     constructor(callback) {
       super(callback)
@@ -182,7 +200,13 @@ function makeEnv(pathname = '/watch') {
     document,
     location,
     MutationObserver: CreatedMutationObserver,
-    setTimeout,
+    setTimeout: (callback) => {
+      pendingTimers.push(callback)
+      return pendingTimers.length
+    },
+    clearTimeout: (timerId) => {
+      pendingTimers[timerId - 1] = null
+    },
     setInterval: () => 0,
     console,
   }
@@ -203,6 +227,12 @@ function makeEnv(pathname = '/watch') {
     },
     sync: () => vm.runInContext('window._advoidSyncVideoState();', context),
     setup: () => vm.runInContext(WATCH_SCRIPT, context),
+    runNextTimer: () => {
+      let callback
+      while (pendingTimers.length && !callback) callback = pendingTimers.shift()
+      callback?.()
+    },
+    pendingTimerCount: () => pendingTimers.filter(Boolean).length,
     observers: createdObservers,
   }
 }
@@ -238,6 +268,7 @@ describe('AdVoid loading overlay (VIDEO_WATCH_SCRIPT)', () => {
     env.setup()
     assert.equal(env.player.classList.contains('advoid-loading'), true)
 
+    video.readyState = 3
     video.fire('canplay')
     assert.equal(env.player.classList.contains('advoid-loading'), false)
   })
@@ -257,9 +288,11 @@ describe('AdVoid loading overlay (VIDEO_WATCH_SCRIPT)', () => {
     env.setup()
     assert.equal(env.player.classList.contains('advoid-loading'), false)
 
+    video.readyState = 0
     video.fire('emptied')
     assert.equal(env.player.classList.contains('advoid-loading'), true)
 
+    env.player.classList.add('playing-mode')
     video.fire('playing')
     assert.equal(env.player.classList.contains('advoid-loading'), false)
   })
@@ -270,6 +303,7 @@ describe('AdVoid loading overlay (VIDEO_WATCH_SCRIPT)', () => {
     env.setup()
 
     video.seeking = true
+    env.player.classList.add('buffering-mode')
     video.fire('seeking')
     video.fire('waiting')
     assert.equal(env.player.classList.contains('advoid-loading'), false)
@@ -278,6 +312,8 @@ describe('AdVoid loading overlay (VIDEO_WATCH_SCRIPT)', () => {
     video.fire('waiting')
     assert.equal(env.player.classList.contains('advoid-loading'), true)
 
+    env.player.classList.remove('buffering-mode')
+    env.player.classList.add('playing-mode')
     video.fire('playing')
     assert.equal(env.player.classList.contains('advoid-loading'), false)
   })
@@ -332,14 +368,51 @@ describe('AdVoid loading overlay (VIDEO_WATCH_SCRIPT)', () => {
     const video = env.addVideo({ readyState: 3, paused: false, currentTime: 12 })
     env.setup()
 
+    env.player.classList.add('buffering-mode')
     video.fire('waiting')
     assert.equal(env.player.classList.contains('advoid-loading'), true)
 
     video.fire('timeupdate')
     assert.equal(env.player.classList.contains('advoid-loading'), true)
 
+    env.player.classList.remove('buffering-mode')
+    env.player.classList.add('playing-mode')
     video.currentTime = 12.25
     video.fire('timeupdate')
+    assert.equal(env.player.classList.contains('advoid-loading'), false)
+  })
+
+  it('ignores a stale waiting event once YouTube says the player is playing', () => {
+    const env = makeEnv()
+    const video = env.addVideo({ readyState: 0, paused: false, currentTime: 20 })
+    env.player.classList.add('playing-mode')
+    env.setup()
+
+    video.fire('waiting')
+    assert.equal(env.player.classList.contains('advoid-loading'), false)
+  })
+
+  it('does not let a stale replaced video cover the active playing video', () => {
+    const env = makeEnv()
+    const staleVideo = env.addVideo({ readyState: 0, paused: true })
+    env.addVideo({ readyState: 4, paused: false, currentTime: 5 })
+    env.player.classList.add('playing-mode')
+    env.setup()
+
+    staleVideo.fire('loadstart')
+    assert.equal(env.player.classList.contains('advoid-loading'), false)
+  })
+
+  it('uses the newest active video when a replacement is seeking', () => {
+    const env = makeEnv()
+    const staleVideo = env.addVideo({ readyState: 4, paused: false, seeking: false })
+    const currentVideo = env.addVideo({ readyState: 3, paused: false, seeking: true })
+    env.player.classList.add('buffering-mode')
+    env.setup()
+
+    staleVideo.fire('waiting')
+    currentVideo.fire('waiting')
+
     assert.equal(env.player.classList.contains('advoid-loading'), false)
   })
 
@@ -365,6 +438,34 @@ describe('AdVoid loading overlay (VIDEO_WATCH_SCRIPT)', () => {
       WATCH_SCRIPT,
       /new MutationObserver\(function\(\) \{[\s\S]*?refreshAllLoading\(\);[\s\S]*?reportPlaybackState\(false\);/,
     )
+  })
+
+  it('reconciles shortly after YouTube changes its player mode class', () => {
+    const env = makeEnv()
+    env.addVideo({ readyState: 0, paused: false })
+    env.player.classList.add('buffering-mode')
+    env.setup()
+    assert.equal(env.player.classList.contains('advoid-loading'), true)
+
+    env.player.classList.remove('buffering-mode')
+    env.player.classList.add('playing-mode')
+    env.runNextTimer()
+
+    assert.equal(env.player.classList.contains('advoid-loading'), false)
+    assert.match(WATCH_SCRIPT, /setTimeout\(function checkPlayerMode[\s\S]*?}, 50\)/)
+  })
+
+  it('stops monitoring when YouTube detaches a buffering player', () => {
+    const env = makeEnv()
+    env.addVideo({ readyState: 0 })
+    env.player.classList.add('buffering-mode')
+    env.setup()
+    assert.equal(env.pendingTimerCount() > 0, true)
+
+    env.player.isConnected = false
+    env.runNextTimer()
+
+    assert.equal(env.pendingTimerCount(), 0)
   })
 })
 

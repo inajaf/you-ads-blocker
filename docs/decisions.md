@@ -339,3 +339,16 @@ downloads across tags.
 Alternatives: a new `v1.0.1` tag per platform build (rejected — fragments the
 release users download from); code-signing the binary (rejected — no cert
 available, matches the project's existing unsigned-macOS posture).
+
+## 2026-08-25 — Remove Android background playback until it can work end to end
+Decision: remove `PlaybackService`, its foreground-service notification and
+wake-lock permissions, the injected `document.visibilityState` override, and
+the resume-time play/reload recovery from `android/AdVoid`.
+Reason: Android WebView suspends YouTube's media pipeline when the activity is
+backgrounded, so keeping the process alive did not keep audio playing. The
+service therefore consumed resources, requested extra permissions, and showed
+a misleading notification without delivering background sound. Normal WebView
+pause/suspension is the least surprising temporary behavior. Reintroducing
+background audio requires a native media pipeline with a reliable supported
+stream source and proper MediaSession controls, not lifecycle spoofing around
+the WebView.

@@ -1,5 +1,83 @@
 # Project status
 
+## 2026-08-25 — Android v1.4.3 release preparation
+
+- Bumped the active `android/AdVoid` client to `VERSION_NAME=1.4.3` and
+  `VERSION_CODE=5` for the signed Android release containing background-playback
+  removal, robust channel live chat, and the loading-overlay race fix.
+
+## 2026-08-25 — Android: loading overlay follows the real player state
+
+- Fixed the AdVoid loading logo occasionally staying over a video that had
+  already started after an SPA switch. A stale `waiting`/`loadstart` event or a
+  replaced `<video>` can no longer override the current player's state.
+- The overlay now follows YouTube's actual `buffering-mode`; `playing-mode`
+  without buffering hides it, while an active seek remains unobstructed. While
+  visible, a player-local 50 ms check removes it promptly instead of waiting
+  for the one-second safety reconciliation, and stops if the player is detached.
+- Added regression coverage for stale media events, replaced video elements,
+  real buffering, and prompt 50 ms removal when playback starts.
+
+Runtime verification on the API 37 `Pixel_9` emulator: five consecutive real
+YouTube recommendation switches produced real loading samples while buffering
+and zero samples where the AdVoid overlay covered a ready, playing video after
+buffering ended. The final video was playing with `readyState=4` and no loading
+overlay. Updated debug APK installed successfully.
+
+## 2026-08-25 — Android: live chat works on channel `/live` URLs
+
+- Fixed the missing `Live chat` button when YouTube keeps an active stream on
+  a friendly channel URL such as `/@SkyNews/live` instead of redirecting to
+  `/watch?v=...`. The injector now reads the current video id from the matching
+  player response on channel live routes. Fetch-tracked live state is scoped to
+  the current route, so an SPA transition cannot reuse the previous stream's id
+  or chat; delayed player responses are discarded when their request route no
+  longer matches the visible route.
+- Current-live detection now requires `videoDetails.isLive` or
+  `liveBroadcastDetails.isLiveNow`. Historical `isLiveContent=true` alone no
+  longer shows chat on a completed stream.
+- Added Node regression coverage for active channel `/live`, active `/watch`,
+  completed-live recordings, and an SPA `/live` transition where the initial
+  player response is stale and the current id arrives through the fetch hook.
+  A fifth case covers an old route's delayed fetch resolving after navigation.
+
+Runtime verification on the API 37 `Pixel_9` emulator: the active Sky News
+`/@SkyNews/live` stream showed the button and opened the real YouTube chat
+iframe with messages; a completed LiveNOW FOX recording with
+`isLiveContent=true`/`isLiveNow=false` correctly showed no button. Updated APK
+installed successfully; no crash was observed.
+
+## 2026-08-25 — Android: background playback removed (branch codex/remove-android-background-sound)
+
+- Removed the non-functional background-audio experiment from the active
+  `android/AdVoid` client. The app no longer starts `PlaybackService`, requests
+  foreground-service/notification/wake-lock permissions, holds audio focus, or
+  posts an ongoing playback notification.
+- Removed the injected page-visibility override and the resume-time
+  play/reload recovery. When AdVoid is backgrounded, YouTube/WebView now owns
+  the normal pause/suspension behavior; the app does not try to keep loading or
+  playing media behind the visible activity.
+- Kept foreground playback UI coordination, live chat, player fixes, and
+  always-on WebView debugging unchanged.
+
+Validated on the fresh `origin/main` baseline:
+
+- `npm test` — 201/201 passed; `npm run build` passed.
+- `./gradlew testDebugUnitTest assembleDebug` — BUILD SUCCESSFUL; the debug
+  APK is version `1.4.2-debug` (code 4).
+- Installed with `adb install -r` on the API 37 `Pixel_9` emulator, preserving
+  debug-app data. Hands-on/CDP verification confirmed a playing YouTube video
+  becomes paused with the real document state `hidden` after Home; no AdVoid
+  foreground playback service or notification exists; returning leaves the
+  video paused and the app usable, with no crash/SecurityException in logcat.
+- Independent code review found no actionable issues. `git diff --check` and
+  targeted oxlint passed.
+
+Known tooling issue: `./gradlew lintDebug` still fails inside AGP 8.7.3's lint
+worker under the installed JDK 26 (`AndroidLintWorkAction > 26.0.1`), before
+reporting code findings. This is the pre-existing toolchain incompatibility,
+not a passing lint result.
+
 ## 2026-08-15 — Android: remove Cast, robust live chat, background-audio plan (branch fm/android-bg-audio-chat-fix)
 
 - **Cast button removed.** The Google Cast SDK integration (cast button,
