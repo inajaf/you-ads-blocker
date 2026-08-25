@@ -1,5 +1,28 @@
 # Project status
 
+## 2026-08-25 — Android: live chat survives real SPA request ordering (v1.4.4)
+
+- Fixed the released live-chat regression where YouTube starts the next
+  player's request before changing the SPA URL. The response was previously
+  rejected as belonging to the old route even when its `videoId` matched the
+  live video now on screen.
+- Live state now prefers the active YouTube player's `getVideoData()` identity
+  and `isLive` flag. A pre-route response remains pending until its `videoId`
+  matches that real player, genuinely stale responses are discarded, and state
+  is rechecked after YouTube's `yt-navigate-finish` event. Periodic reconciliation
+  is idempotent and does not close an already-open chat panel.
+- Added regressions for stale page globals, pre-route player requests, keeping
+  an open panel mounted, old delayed responses, current `/watch` live streams,
+  channel `/live`, and completed-live recordings.
+- Bumped the Android client to `VERSION_NAME=1.4.4` / `VERSION_CODE=6`.
+
+Runtime verification on the API 37 `Pixel_9` emulator with the rebuilt Android
+client: a real YouTube search-result SPA click opened the active Sky News live
+stream with the chat button; its iframe panel loaded and remained mounted after
+multiple sync intervals. Navigating to a recommended non-live video removed
+chat while playback reached `readyState=4` with no loading overlay; Back returned
+to the live stream and restored chat while video playback continued.
+
 ## 2026-08-25 — Android v1.4.3 release preparation
 
 - Bumped the active `android/AdVoid` client to `VERSION_NAME=1.4.3` and

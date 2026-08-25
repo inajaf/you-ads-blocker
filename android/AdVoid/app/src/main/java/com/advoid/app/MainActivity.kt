@@ -1164,29 +1164,47 @@ class MainActivity : Activity() {
                 var SETUP = !!window._advoidLiveChatSetup;
 
                 // ytInitialPlayerResponse is only set on full page loads and goes
-                // stale after SPA navigation, so track the CURRENT video's live
-                // status from the player-response fetch instead (and re-sync the
-                // chat affordance whenever it changes). The flag is cached on
-                // window together with the video id it belongs to, so a stale
-                // flag from a previous video can never leak onto the next one
-                // (and the once-installed fetch hook keeps agreeing with the
-                // current SPA closure).
+                // stale after SPA navigation. Track player-response fetches as
+                // candidates, but accept live state only when the response id
+                // matches the real movie_player. Cache the accepted id and flag
+                // together so state from a previous video cannot leak forward.
                 var shared = window._advoidLiveChatShared ||
                     (window._advoidLiveChatShared = {
-                        live: false, videoId: null, routeKey: null
+                        live: false, videoId: null, routeKey: null, candidate: null
                     });
 
                 function currentRouteKey() {
                     return location.pathname + location.search;
                 }
 
-                // A fetch-tracked response belongs only to the route that was
-                // current when it arrived. Clear old SPA state before resolving
-                // a new route so chat can never point at the previous stream.
+                // Clear accepted state on a route change. A response for the next
+                // video may arrive before pushState, so carry one candidate until
+                // the new route/player identity can confirm or reject its id.
                 if (shared.routeKey !== currentRouteKey()) {
+                    if (shared.candidate && !shared.candidate.carried &&
+                            shared.candidate.routeKey === shared.routeKey) {
+                        // A cached response for the next video can finish just
+                        // before pushState. Carry it across one route change;
+                        // isLiveNow() still requires its id to match the new URL
+                        // or the real player, so an old video cannot leak.
+                        shared.candidate.carried = true;
+                    } else {
+                        shared.candidate = null;
+                    }
                     shared.live = false;
                     shared.videoId = null;
                     shared.routeKey = currentRouteKey();
+                }
+
+                function currentPlayerData() {
+                    try {
+                        var player = document.getElementById('movie_player') ||
+                            document.querySelector('.html5-video-player');
+                        if (player && typeof player.getVideoData === 'function') {
+                            return player.getVideoData() || null;
+                        }
+                    } catch (e) { /* player is still being replaced */ }
+                    return null;
                 }
 
                 function currentVideoId() {
@@ -1195,9 +1213,13 @@ class MainActivity : Activity() {
                     }
                     // Channel live links keep their friendly /@channel/live URL
                     // instead of redirecting to /watch?v=... in the mobile app.
-                    // On that route the current id is available only in the
-                    // matching player response.
+                    // The live player's API is fresher than page globals during
+                    // SPA navigation and directly identifies what is on screen.
                     if (/\/live\/?$/.test(location.pathname)) {
+                        var playerData = currentPlayerData();
+                        if (playerData && playerData.video_id) {
+                            return playerData.video_id;
+                        }
                         if (shared.routeKey === currentRouteKey() && shared.videoId) {
                             return shared.videoId;
                         }
@@ -1225,18 +1247,27 @@ class MainActivity : Activity() {
                     var videoDetails = state.videoDetails;
                     var vid = videoDetails && (videoDetails.videoId || null);
                     var live = state.live;
+                    var playerData = currentPlayerData();
+                    var playerVideoId = playerData && playerData.video_id || null;
+                    var routeVideoId = /^\/watch/.test(location.pathname) ?
+                        new URLSearchParams(location.search).get('v') : null;
+                    if (!vid || (responseRouteKey !== currentRouteKey() &&
+                            vid !== playerVideoId && vid !== routeVideoId)) return;
+                    shared.candidate = {
+                        videoId: vid,
+                        live: live,
+                        routeKey: currentRouteKey(),
+                        carried: responseRouteKey !== currentRouteKey()
+                    };
+                    if (vid !== playerVideoId) return;
                     if (shared.videoId === vid && shared.live === live) return;
                     shared.videoId = vid;
                     shared.live = live;
-                    shared.routeKey = responseRouteKey;
+                    shared.routeKey = currentRouteKey();
                     if (window._advoidSyncLiveChat) window._advoidSyncLiveChat();
                 }
                 function trackResponse(data, responseRouteKey) {
                     try {
-                        // A player request may resolve after an SPA transition.
-                        // Never let a late response from the previous route
-                        // overwrite the current stream's id/live state.
-                        if (responseRouteKey !== currentRouteKey()) return;
                         applyLive(data, responseRouteKey);
                     } catch (e) { /* ignore */ }
                 }
@@ -1284,9 +1315,23 @@ class MainActivity : Activity() {
                 }
 
                 function isLiveNow() {
-                    // Trust the fetch-tracked status only when it belongs to the
-                    // video currently on screen.
+                    // Promote fetch-tracked state only after the real player id
+                    // confirms that the candidate belongs to the video on screen.
                     var vid = currentVideoId();
+                    var playerData = currentPlayerData();
+                    if (shared.candidate && playerData &&
+                            shared.candidate.videoId === playerData.video_id) {
+                        shared.videoId = shared.candidate.videoId;
+                        shared.live = shared.candidate.live;
+                        shared.routeKey = currentRouteKey();
+                    }
+                    if (playerData && playerData.video_id === vid &&
+                            typeof playerData.isLive === 'boolean') {
+                        return playerData.isLive;
+                    }
+                    if (playerData && playerData.video_id && playerData.video_id !== vid) {
+                        return false;
+                    }
                     if (shared.videoId && shared.videoId === vid) return shared.live;
                     // Fall back to ytInitialPlayerResponse, but ONLY when it
                     // belongs to the current video: after SPA navigation the
@@ -1306,11 +1351,14 @@ class MainActivity : Activity() {
                     btn.type = 'button';
                     btn.setAttribute('aria-label', 'Open live chat');
                     btn.textContent = 'Live chat';
+                    btn._advoidVideoId = videoId;
                     document.body.appendChild(btn);
                     btn.addEventListener('click', function() { togglePanel(videoId); });
 
                     if (!SETUP) {
                         SETUP = window._advoidLiveChatSetup = true;
+                    }
+                    if (!document.getElementById('advoid-live-chat-style')) {
                         injectChatStyles();
                     }
                 }
@@ -1376,15 +1424,28 @@ class MainActivity : Activity() {
                 }
 
                 window._advoidSyncLiveChat = function() {
-                    teardown();
                     var isLivePage = location.pathname.indexOf('/watch') === 0 ||
                         /\/live\/?$/.test(location.pathname);
                     var videoId = currentVideoId();
-                    if (!isLivePage || !videoId || !isLiveNow()) return;
+                    if (!isLivePage || !videoId || !isLiveNow()) {
+                        teardown();
+                        return;
+                    }
+                    var existing = document.getElementById('advoid-live-chat-btn');
+                    if (existing && existing._advoidVideoId === videoId) return;
+                    teardown();
                     ensureChatUi(videoId);
                 };
 
                 window._advoidSyncLiveChat();
+                if (!window._advoidLiveChatMonitor) {
+                    window._advoidLiveChatMonitor = true;
+                    document.addEventListener('yt-navigate-finish', function() {
+                        setTimeout(window._advoidSyncLiveChat, 0);
+                        setTimeout(window._advoidSyncLiveChat, 300);
+                    }, true);
+                    setInterval(window._advoidSyncLiveChat, 1000);
+                }
             })();
         """
 
