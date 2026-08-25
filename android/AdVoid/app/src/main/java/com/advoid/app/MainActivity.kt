@@ -1173,7 +1173,7 @@ class MainActivity : Activity() {
                 // current SPA closure).
                 var shared = window._advoidLiveChatShared ||
                     (window._advoidLiveChatShared = {
-                        live: false, videoId: null, routeKey: null
+                        live: false, videoId: null, routeKey: null, candidate: null
                     });
 
                 function currentRouteKey() {
@@ -1184,9 +1184,29 @@ class MainActivity : Activity() {
                 // current when it arrived. Clear old SPA state before resolving
                 // a new route so chat can never point at the previous stream.
                 if (shared.routeKey !== currentRouteKey()) {
+                    if (shared.candidate && !shared.candidate.carried &&
+                            shared.candidate.routeKey === shared.routeKey) {
+                        // A cached response for the next video can finish just
+                        // before pushState. Carry it across one route change;
+                        // isLiveNow() still requires its id to match the new URL
+                        // or the real player, so an old video cannot leak.
+                        shared.candidate.carried = true;
+                    } else {
+                        shared.candidate = null;
+                    }
                     shared.live = false;
                     shared.videoId = null;
                     shared.routeKey = currentRouteKey();
+                }
+
+                function currentPlayerData() {
+                    try {
+                        var player = document.querySelector('.html5-video-player');
+                        if (player && typeof player.getVideoData === 'function') {
+                            return player.getVideoData() || null;
+                        }
+                    } catch (e) { /* player is still being replaced */ }
+                    return null;
                 }
 
                 function currentVideoId() {
@@ -1195,9 +1215,13 @@ class MainActivity : Activity() {
                     }
                     // Channel live links keep their friendly /@channel/live URL
                     // instead of redirecting to /watch?v=... in the mobile app.
-                    // On that route the current id is available only in the
-                    // matching player response.
+                    // The live player's API is fresher than page globals during
+                    // SPA navigation and directly identifies what is on screen.
                     if (/\/live\/?$/.test(location.pathname)) {
+                        var playerData = currentPlayerData();
+                        if (playerData && playerData.video_id) {
+                            return playerData.video_id;
+                        }
                         if (shared.routeKey === currentRouteKey() && shared.videoId) {
                             return shared.videoId;
                         }
@@ -1225,6 +1249,12 @@ class MainActivity : Activity() {
                     var videoDetails = state.videoDetails;
                     var vid = videoDetails && (videoDetails.videoId || null);
                     var live = state.live;
+                    shared.candidate = {
+                        videoId: vid,
+                        live: live,
+                        routeKey: responseRouteKey,
+                        carried: false
+                    };
                     if (shared.videoId === vid && shared.live === live) return;
                     shared.videoId = vid;
                     shared.live = live;
@@ -1233,11 +1263,17 @@ class MainActivity : Activity() {
                 }
                 function trackResponse(data, responseRouteKey) {
                     try {
-                        // A player request may resolve after an SPA transition.
-                        // Never let a late response from the previous route
-                        // overwrite the current stream's id/live state.
-                        if (responseRouteKey !== currentRouteKey()) return;
-                        applyLive(data, responseRouteKey);
+                        // YouTube often starts the NEW player's request before
+                        // pushState changes the SPA URL. Accept that response
+                        // after navigation when its video id matches the player
+                        // now on screen; still reject a genuinely old response.
+                        if (responseRouteKey !== currentRouteKey()) {
+                            var state = liveStateFromResponse(data);
+                            var responseVideoId = state.videoDetails &&
+                                state.videoDetails.videoId;
+                            if (!responseVideoId || responseVideoId !== currentVideoId()) return;
+                        }
+                        applyLive(data, currentRouteKey());
                     } catch (e) { /* ignore */ }
                 }
                 // Hook fetch ONCE to capture the player response (youtubei/v1/player)
@@ -1287,7 +1323,16 @@ class MainActivity : Activity() {
                     // Trust the fetch-tracked status only when it belongs to the
                     // video currently on screen.
                     var vid = currentVideoId();
+                    var playerData = currentPlayerData();
+                    if (playerData && playerData.video_id === vid &&
+                            typeof playerData.isLive === 'boolean') {
+                        return playerData.isLive;
+                    }
                     if (shared.videoId && shared.videoId === vid) return shared.live;
+                    if (shared.candidate && shared.candidate.carried &&
+                            shared.candidate.videoId === vid) {
+                        return shared.candidate.live;
+                    }
                     // Fall back to ytInitialPlayerResponse, but ONLY when it
                     // belongs to the current video: after SPA navigation the
                     // global still holds the PREVIOUS page's response, and a
@@ -1306,11 +1351,14 @@ class MainActivity : Activity() {
                     btn.type = 'button';
                     btn.setAttribute('aria-label', 'Open live chat');
                     btn.textContent = 'Live chat';
+                    btn._advoidVideoId = videoId;
                     document.body.appendChild(btn);
                     btn.addEventListener('click', function() { togglePanel(videoId); });
 
                     if (!SETUP) {
                         SETUP = window._advoidLiveChatSetup = true;
+                    }
+                    if (!document.getElementById('advoid-live-chat-style')) {
                         injectChatStyles();
                     }
                 }
@@ -1376,15 +1424,28 @@ class MainActivity : Activity() {
                 }
 
                 window._advoidSyncLiveChat = function() {
-                    teardown();
                     var isLivePage = location.pathname.indexOf('/watch') === 0 ||
                         /\/live\/?$/.test(location.pathname);
                     var videoId = currentVideoId();
-                    if (!isLivePage || !videoId || !isLiveNow()) return;
+                    if (!isLivePage || !videoId || !isLiveNow()) {
+                        teardown();
+                        return;
+                    }
+                    var existing = document.getElementById('advoid-live-chat-btn');
+                    if (existing && existing._advoidVideoId === videoId) return;
+                    teardown();
                     ensureChatUi(videoId);
                 };
 
                 window._advoidSyncLiveChat();
+                if (!window._advoidLiveChatMonitor) {
+                    window._advoidLiveChatMonitor = true;
+                    document.addEventListener('yt-navigate-finish', function() {
+                        setTimeout(window._advoidSyncLiveChat, 0);
+                        setTimeout(window._advoidSyncLiveChat, 300);
+                    }, true);
+                    setInterval(window._advoidSyncLiveChat, 1000);
+                }
             })();
         """
 
