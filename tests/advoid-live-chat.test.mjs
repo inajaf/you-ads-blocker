@@ -162,6 +162,7 @@ describe('Android live chat affordance', () => {
     const { document, window } = runScript({
       pathname: '/@SkyNews/live',
       playerResponse: staleResponse,
+      playerData: { video_id: 'current-live-id', isLive: true },
       fetchedResponse: currentResponse,
     })
 
@@ -264,13 +265,21 @@ describe('Android live chat affordance', () => {
 
     await env.window.fetch('/youtubei/v1/player')
     await Promise.all(env.window._advoidFetchPromises || [])
-    assert.equal(env.window._advoidLiveChatShared.videoId, 'current-live-id')
+    assert.equal(env.window._advoidLiveChatShared.videoId, null)
+    assert.equal(env.window._advoidLiveChatShared.candidate.videoId, 'current-live-id')
 
     env.location.search = '?v=current-live-id'
-    env.setPlayerData({ video_id: 'current-live-id' })
+    env.window.ytInitialPlayerResponse = currentResponse
     env.rerun()
 
-    assert.ok(env.document.getElementById('advoid-live-chat-btn'))
+    assert.equal(env.document.getElementById('advoid-live-chat-btn'), null)
     assert.equal(env.window._advoidLiveChatShared.candidate.carried, true)
+
+    env.setPlayerData({ video_id: 'current-live-id', isLive: true })
+    env.window._advoidSyncLiveChat()
+
+    assert.ok(env.document.getElementById('advoid-live-chat-btn'))
+    assert.equal(env.window._advoidLiveChatShared.videoId, 'current-live-id')
+    assert.equal(env.window._advoidLiveChatShared.live, true)
   })
 })

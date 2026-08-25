@@ -1201,7 +1201,8 @@ class MainActivity : Activity() {
 
                 function currentPlayerData() {
                     try {
-                        var player = document.querySelector('.html5-video-player');
+                        var player = document.getElementById('movie_player') ||
+                            document.querySelector('.html5-video-player');
                         if (player && typeof player.getVideoData === 'function') {
                             return player.getVideoData() || null;
                         }
@@ -1249,31 +1250,28 @@ class MainActivity : Activity() {
                     var videoDetails = state.videoDetails;
                     var vid = videoDetails && (videoDetails.videoId || null);
                     var live = state.live;
+                    var playerData = currentPlayerData();
+                    var playerVideoId = playerData && playerData.video_id || null;
+                    var routeVideoId = /^\/watch/.test(location.pathname) ?
+                        new URLSearchParams(location.search).get('v') : null;
+                    if (!vid || (responseRouteKey !== currentRouteKey() &&
+                            vid !== playerVideoId && vid !== routeVideoId)) return;
                     shared.candidate = {
                         videoId: vid,
                         live: live,
-                        routeKey: responseRouteKey,
-                        carried: false
+                        routeKey: currentRouteKey(),
+                        carried: responseRouteKey !== currentRouteKey()
                     };
+                    if (vid !== playerVideoId) return;
                     if (shared.videoId === vid && shared.live === live) return;
                     shared.videoId = vid;
                     shared.live = live;
-                    shared.routeKey = responseRouteKey;
+                    shared.routeKey = currentRouteKey();
                     if (window._advoidSyncLiveChat) window._advoidSyncLiveChat();
                 }
                 function trackResponse(data, responseRouteKey) {
                     try {
-                        // YouTube often starts the NEW player's request before
-                        // pushState changes the SPA URL. Accept that response
-                        // after navigation when its video id matches the player
-                        // now on screen; still reject a genuinely old response.
-                        if (responseRouteKey !== currentRouteKey()) {
-                            var state = liveStateFromResponse(data);
-                            var responseVideoId = state.videoDetails &&
-                                state.videoDetails.videoId;
-                            if (!responseVideoId || responseVideoId !== currentVideoId()) return;
-                        }
-                        applyLive(data, currentRouteKey());
+                        applyLive(data, responseRouteKey);
                     } catch (e) { /* ignore */ }
                 }
                 // Hook fetch ONCE to capture the player response (youtubei/v1/player)
@@ -1324,15 +1322,20 @@ class MainActivity : Activity() {
                     // video currently on screen.
                     var vid = currentVideoId();
                     var playerData = currentPlayerData();
+                    if (shared.candidate && playerData &&
+                            shared.candidate.videoId === playerData.video_id) {
+                        shared.videoId = shared.candidate.videoId;
+                        shared.live = shared.candidate.live;
+                        shared.routeKey = currentRouteKey();
+                    }
                     if (playerData && playerData.video_id === vid &&
                             typeof playerData.isLive === 'boolean') {
                         return playerData.isLive;
                     }
-                    if (shared.videoId && shared.videoId === vid) return shared.live;
-                    if (shared.candidate && shared.candidate.carried &&
-                            shared.candidate.videoId === vid) {
-                        return shared.candidate.live;
+                    if (playerData && playerData.video_id && playerData.video_id !== vid) {
+                        return false;
                     }
+                    if (shared.videoId && shared.videoId === vid) return shared.live;
                     // Fall back to ytInitialPlayerResponse, but ONLY when it
                     // belongs to the current video: after SPA navigation the
                     // global still holds the PREVIOUS page's response, and a

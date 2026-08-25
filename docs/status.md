@@ -7,10 +7,10 @@
   rejected as belonging to the old route even when its `videoId` matched the
   live video now on screen.
 - Live state now prefers the active YouTube player's `getVideoData()` identity
-  and `isLive` flag, uses response `videoId` to distinguish a current pre-route
-  request from a genuinely stale response, and rechecks after YouTube's
-  `yt-navigate-finish` event. Periodic reconciliation is idempotent and does not
-  close an already-open chat panel.
+  and `isLive` flag. A pre-route response remains pending until its `videoId`
+  matches that real player, genuinely stale responses are discarded, and state
+  is rechecked after YouTube's `yt-navigate-finish` event. Periodic reconciliation
+  is idempotent and does not close an already-open chat panel.
 - Added regressions for stale page globals, pre-route player requests, keeping
   an open panel mounted, old delayed responses, current `/watch` live streams,
   channel `/live`, and completed-live recordings.
