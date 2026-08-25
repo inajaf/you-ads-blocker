@@ -1,5 +1,20 @@
 # Project status
 
+## 2026-08-25 — Google Play internal release and listing assets
+
+- Published the signed `v1.4.4-android` AAB (`versionCode=6`) to the existing
+  Google Play internal-testing track as `AdVoid 1.4.4 (6)`.
+- Created four 1080x1920 phone screenshots, a 1024x500 feature graphic, and a
+  512x512 app icon in `play-store-assets/final/` from real release-app emulator
+  screens.
+- Prepared a standalone privacy policy at `public/privacy.html`, wired the next
+  Android build's in-app privacy affordance to its planned stable GitHub Pages
+  URL, and bumped that build to `1.4.5` / `versionCode=7`. It must not replace
+  the internal release until the page is deployed and verified HTTP 200.
+- Production access remains gated by Google Play's requirement for at least 12
+  opted-in closed-test users for 14 continuous days. The store listing also
+  needs the owner's chosen public support email before it can be completed.
+
 ## 2026-08-25 — Landing exposes both Android release files
 
 - Kept the primary Android CTA pointed at the latest signed

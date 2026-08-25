@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AdVoid Google Play artwork</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: Inter, "SF Pro Display", "Segoe UI", system-ui, sans-serif;
+        background: #07070a;
+        color: #f8fafc;
+      }
+
+      * { box-sizing: border-box; }
+      html, body { margin: 0; min-height: 100%; overflow: hidden; }
+      body { width: 100vw; height: 100vh; }
+
+      .art {
+        position: relative;
+        width: 100vw;
+        height: 100vh;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at 14% 8%, rgba(34, 211, 238, .23), transparent 32%),
+          radial-gradient(circle at 92% 22%, rgba(236, 72, 153, .24), transparent 36%),
+          linear-gradient(160deg, #081326 0%, #09090f 49%, #16071d 100%);
+      }
+
+      .art::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background-image: linear-gradient(rgba(255,255,255,.024) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255,255,255,.024) 1px, transparent 1px);
+        background-size: 48px 48px;
+        mask-image: linear-gradient(to bottom, black, transparent 72%);
+      }
+
+      .header {
+        position: relative;
+        z-index: 2;
+        padding: 92px 88px 42px;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        margin-bottom: 34px;
+        color: #dbeafe;
+        font-size: 28px;
+        font-weight: 760;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+      }
+
+      .brand img { width: 66px; height: 66px; border-radius: 18px; box-shadow: 0 12px 36px rgba(34,211,238,.18); }
+      h1 { margin: 0; max-width: 930px; font-size: 78px; line-height: .98; letter-spacing: -.055em; }
+      .accent { color: #67e8f9; }
+      .sub { margin: 24px 0 0; max-width: 810px; color: #b6c2d3; font-size: 30px; line-height: 1.35; }
+
+      .phone {
+        position: absolute;
+        z-index: 1;
+        left: 50%;
+        bottom: -184px;
+        width: 842px;
+        height: 1450px;
+        padding: 16px;
+        transform: translateX(-50%);
+        border: 2px solid rgba(255,255,255,.24);
+        border-radius: 74px;
+        background: linear-gradient(145deg, #262834, #050507 55%);
+        box-shadow: 0 60px 130px rgba(0,0,0,.62), 0 0 80px rgba(34,211,238,.09);
+      }
+
+      .phone::before {
+        content: "";
+        position: absolute;
+        z-index: 3;
+        top: 31px;
+        left: 50%;
+        width: 20px;
+        height: 20px;
+        transform: translateX(-50%);
+        border: 2px solid rgba(255,255,255,.08);
+        border-radius: 50%;
+        background: #030305;
+      }
+
+      .phone img {
+        width: 100%;
+        height: 100%;
+        display: block;
+        object-fit: cover;
+        object-position: top center;
+        border-radius: 58px;
+      }
+
+      .slide-2 .art { background: radial-gradient(circle at 78% 10%, rgba(168,85,247,.3), transparent 38%), linear-gradient(155deg, #180921, #07070a 56%, #071824); }
+      .slide-3 .art { background: radial-gradient(circle at 20% 8%, rgba(244,63,94,.3), transparent 34%), linear-gradient(155deg, #1b080f, #07070a 52%, #061a22); }
+      .slide-4 .art { background: radial-gradient(circle at 84% 8%, rgba(34,211,238,.3), transparent 35%), linear-gradient(155deg, #06171d, #07070a 54%, #19091f); }
+      .slide-2 .accent { color: #c084fc; }
+      .slide-3 .accent { color: #fb7185; }
+
+      .feature {
+        position: relative;
+        display: flex;
+        align-items: center;
+        width: 100vw;
+        height: 100vh;
+        overflow: hidden;
+        padding: 56px 84px;
+        background:
+          radial-gradient(circle at 18% 48%, rgba(34, 211, 238, .24), transparent 32%),
+          radial-gradient(circle at 86% 18%, rgba(236, 72, 153, .27), transparent 38%),
+          linear-gradient(145deg, #071225, #09090e 52%, #18081e);
+      }
+
+      .feature::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background-image: linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+
+      .feature-icon { position: relative; z-index: 1; width: 330px; height: 330px; flex: none; border-radius: 76px; box-shadow: 0 32px 90px rgba(0,0,0,.48), 0 0 70px rgba(34,211,238,.12); }
+      .feature-copy { position: relative; z-index: 1; min-width: 0; margin-left: 64px; }
+      .feature-kicker { color: #67e8f9; font-size: 25px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+      .feature h1 { margin-top: 12px; font-size: 64px; line-height: .96; }
+      .feature p { margin: 18px 0 0; color: #cbd5e1; font-size: 25px; line-height: 1.28; }
+    </style>
+  </head>
+  <body>
+    <main id="root"></main>
+    <script>
+      const params = new URLSearchParams(location.search);
+      const mode = params.get('mode') || '1';
+      const slides = {
+        1: { title: 'Find what you love.<br><span class="accent">Watch with less noise.</span>', sub: 'Fast YouTube search in a focused cinema-dark experience.', image: 'raw/02-search.png' },
+        2: { title: 'Your video.<br><span class="accent">Front and center.</span>', sub: 'A clean player experience designed for Android.', image: 'raw/03-watch.png' },
+        3: { title: 'Stay live.<br><span class="accent">Join the conversation.</span>', sub: 'Open live chat without leaving the stream.', image: 'raw/04-live-chat.png' },
+        4: { title: 'Browse in<br><span class="accent">cinema dark.</span>', sub: 'A familiar mobile experience with AdVoid protection built in.', image: 'raw/05-protection.png' },
+      };
+      const root = document.getElementById('root');
+      if (mode === 'feature') {
+        root.innerHTML = `<section class="feature"><img class="feature-icon" src="../android/AdVoid/app/src/main/res/drawable-nodpi/advoid_adaptive_icon.png" alt=""><div class="feature-copy"><div class="feature-kicker">AdVoid for Android</div><h1>Watch more.<br>Interrupt less.</h1><p>Cinema-dark YouTube browsing<br>with protection built in.</p></div></section>`;
+      } else {
+        const item = slides[mode] || slides[1];
+        root.className = `slide-${mode}`;
+        root.innerHTML = `<section class="art"><header class="header"><div class="brand"><img src="../android/AdVoid/app/src/main/res/drawable-nodpi/advoid_adaptive_icon.png" alt="">AdVoid for Android</div><h1>${item.title}</h1><p class="sub">${item.sub}</p></header><div class="phone"><img src="${item.image}" alt=""></div></section>`;
+      }
+    </script>
+  </body>
+</html>

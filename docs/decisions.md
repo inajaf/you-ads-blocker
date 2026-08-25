@@ -352,3 +352,12 @@ pause/suspension is the least surprising temporary behavior. Reintroducing
 background audio requires a native media pipeline with a reliable supported
 stream source and proper MediaSession controls, not lifecycle spoofing around
 the WebView.
+## 2026-08-25 — Google Play privacy policy will ship with the public landing bundle
+
+AdVoid's Android privacy-policy link will use the stable GitHub Pages URL
+`https://inajaf.github.io/you-ads-blocker/privacy.html`. The standalone policy
+is copied from `public/privacy.html` into both normal Vite and landing-only
+builds, so it does not depend on SPA routing and remains reachable without an
+installed app. The policy reflects the current client: only internet permission,
+no AdVoid analytics/telemetry servers, local WebView cookies and site data, and
+YouTube/Google handling network and account data under their own policies.
