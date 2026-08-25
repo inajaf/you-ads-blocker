@@ -85,6 +85,14 @@ function PlatformCard({ platform }: { platform: Platform }) {
             {platform.downloadLabel}
           </a>
           {platform.note && <p className="nv-dl-note nv-mono">{platform.note}</p>}
+          {platform.additionalDownloads?.map((download) => (
+            <div className="nv-dl-secondary" key={download.href}>
+              <a className="nv-dl-secondary-link nv-mono" href={download.href}>
+                {download.label}
+              </a>
+              <span className="nv-dl-secondary-note">{download.note}</span>
+            </div>
+          ))}
         </>
       ) : (
         <p className="nv-dl-body">

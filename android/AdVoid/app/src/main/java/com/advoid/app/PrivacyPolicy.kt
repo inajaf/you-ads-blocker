@@ -4,12 +4,11 @@ package com.advoid.app
  * Public privacy policy URL, required by Google Play and reachable from the app
  * via the in-app "Privacy policy" affordance (see MainActivity).
  *
- * PLACEHOLDER: the captain must replace this with the real hosted privacy
- * policy URL before uploading to Google Play. It must be a valid https:// URL
- * that returns the policy (e.g. "https://<your-site>/privacy").
+ * The policy is published with the landing bundle on GitHub Pages so the URL
+ * remains available independently of an app installation.
  */
 const val PRIVACY_POLICY_URL: String =
-    "https://your-site.example/privacy" // TODO(captain): replace with the real privacy policy URL
+    "https://inajaf.github.io/you-ads-blocker/privacy.html"
 
 /**
  * Returns true when [url] is safe to open for the in-app privacy policy

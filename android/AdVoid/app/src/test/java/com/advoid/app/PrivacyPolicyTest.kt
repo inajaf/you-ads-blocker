@@ -34,13 +34,9 @@ class PrivacyPolicyTest {
     }
 
     @Test
-    fun `placeholder url is clearly marked and rejected until replaced`() {
-        // The captain must replace PRIVACY_POLICY_URL with a real policy before
-        // the Play upload. While it is still the placeholder, the affordance
-        // refuses to open it (isValidPrivacyPolicyUrl rejects it), so no user is
-        // ever sent to a fake policy. This asserts the constant is recognizably
-        // a placeholder so it can't be mistaken for the shipped URL.
-        assertTrue(PRIVACY_POLICY_URL.startsWith("https://your-site.example"))
-        assertFalse(isValidPrivacyPolicyUrl(PRIVACY_POLICY_URL))
+    fun `shipped privacy policy url is public and accepted`() {
+        assertTrue(PRIVACY_POLICY_URL.startsWith("https://inajaf.github.io/"))
+        assertTrue(PRIVACY_POLICY_URL.endsWith("/privacy.html"))
+        assertTrue(isValidPrivacyPolicyUrl(PRIVACY_POLICY_URL))
     }
 }

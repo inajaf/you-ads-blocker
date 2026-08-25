@@ -976,6 +976,26 @@
   color: var(--nv-dim);
   margin: 12px 0 0;
 }
+.nv-dl-secondary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 10px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 11px;
+}
+.nv-dl-secondary-link {
+  color: var(--nv-text);
+  text-underline-offset: 3px;
+}
+.nv-dl-secondary-link:hover {
+  color: var(--nv-red);
+}
+.nv-dl-secondary-note {
+  color: var(--nv-dim);
+}
 .nv-dl-body {
   color: var(--nv-muted);
   font-size: 13.5px;

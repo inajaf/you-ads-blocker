@@ -1,5 +1,29 @@
 # Project status
 
+## 2026-08-25 — Google Play internal release and listing assets
+
+- Published the signed `v1.4.4-android` AAB (`versionCode=6`) to the existing
+  Google Play internal-testing track as `AdVoid 1.4.4 (6)`.
+- Created four 1080x1920 phone screenshots, a 1024x500 feature graphic, and a
+  512x512 app icon in `play-store-assets/final/` from real release-app emulator
+  screens.
+- Prepared a standalone privacy policy at `public/privacy.html`, wired the next
+  Android build's in-app privacy affordance to its planned stable GitHub Pages
+  URL, and bumped that build to `1.4.5` / `versionCode=7`. It must not replace
+  the internal release until the page is deployed and verified HTTP 200.
+- Production access remains gated by Google Play's requirement for at least 12
+  opted-in closed-test users for 14 continuous days. The store listing also
+  needs the owner's chosen public support email before it can be completed.
+
+## 2026-08-25 — Landing exposes both Android release files
+
+- Kept the primary Android CTA pointed at the latest signed
+  `app-release.apk` for direct device installation.
+- Added the signed `app-release.aab` as a clearly labelled secondary Google
+  Play bundle download on the Android card. Both links use the stable
+  `releases/latest/download/<filename>` convention, so future Android releases
+  appear on the landing page without another version-specific edit.
+
 ## 2026-08-25 — Android: live chat survives real SPA request ordering (v1.4.4)
 
 - Fixed the released live-chat regression where YouTube starts the next
@@ -176,10 +200,7 @@ the pill renders as a LinearLayout with an ImageView + "Privacy policy" TextView
 (364×99px), no crash in logcat. `npm test` 199/199 and
 `./gradlew testDebugUnitTest` BUILD SUCCESSFUL.
 
-Remaining before the Play upload (captain): replace the placeholder
-`PRIVACY_POLICY_URL` (`https://your-site.example/privacy`) in `PrivacyPolicy.kt`
-with the real hosted policy — no real URL exists in the repo yet, and the guard
-correctly refuses to open the placeholder until it is replaced.
+The policy URL was subsequently replaced; see the 2026-08-25 Google Play entry.
 
 ## 2026-08-15 — Android: loading spinner no longer strands over a playing video
 
@@ -289,19 +310,17 @@ the running app via CDP (used for the QA above).
 
 Readied `android/AdVoid` for its first Google Play upload:
 - **Managed versioning.** `versionCode`/`versionName` now come from the tracked
-  `android/AdVoid/version.properties` (currently `1` / `1.0`), the single source
-  of truth for bumps. `app/build.gradle.kts` reads it and fails clearly if it's
-  missing or malformed.
+  `android/AdVoid/version.properties`, the single source of truth for bumps.
+  `app/build.gradle.kts` reads it and fails clearly if it's missing or malformed.
 - **Fail-closed release signing.** `assembleRelease`/`bundleRelease` now FAIL
   with "Refusing to build an unsigned release" when the gitignored
   `keystore.properties` (or the keystore it points to) is absent, instead of
   silently emitting an unsigned artifact. `assembleDebug` and
   `testDebugUnitTest` are unaffected and need no keystore.
 - **In-app privacy policy link.** A minimal floating "Privacy policy" chip opens
-  the public policy in the system browser. The URL is a clearly-marked
-  placeholder (`https://your-site.example/privacy`, TODO(captain)) in
-  `PrivacyPolicy.kt`; `isValidPrivacyPolicyUrl` refuses to open the placeholder
-  until it's replaced. Unit-tested in `PrivacyPolicyTest.kt`.
+  the public policy in the system browser. `isValidPrivacyPolicyUrl` refuses
+  unsafe or placeholder URLs. Unit-tested in `PrivacyPolicyTest.kt`; current
+  hosting is recorded in the 2026-08-25 Google Play entry.
 
 Verified:
 - `cd android/AdVoid && ./gradlew testDebugUnitTest assembleRelease bundleRelease`
@@ -309,9 +328,6 @@ Verified:
   and reports `versionCode='1' versionName='1.0'`; `PrivacyPolicyTest` 5/5.
 - With `keystore.properties` removed, `assembleRelease` fails fast with the
   clear error; `assembleDebug` + `testDebugUnitTest` still succeed.
-Remaining (for the captain / later PR): replace the placeholder privacy URL with
-the real hosted policy before the Play upload.
-
 ## 2026-08-12 — Desktop apps auto-update from the GitHub release feed (branch fm/you-ads-desktop-auto-update)
 
 Packaged macOS/Windows builds now self-update via `electron-updater` (^6.8.9):
