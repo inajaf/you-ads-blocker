@@ -1,5 +1,23 @@
 # Project status
 
+## 2026-08-25 — Android: loading overlay follows the real player state
+
+- Fixed the AdVoid loading logo occasionally staying over a video that had
+  already started after an SPA switch. A stale `waiting`/`loadstart` event or a
+  replaced `<video>` can no longer override the current player's state.
+- The overlay now follows YouTube's actual `buffering-mode`; `playing-mode`
+  without buffering hides it, while an active seek remains unobstructed. While
+  visible, a player-local 50 ms check removes it promptly instead of waiting
+  for the one-second safety reconciliation, and stops if the player is detached.
+- Added regression coverage for stale media events, replaced video elements,
+  real buffering, and prompt 50 ms removal when playback starts.
+
+Runtime verification on the API 37 `Pixel_9` emulator: five consecutive real
+YouTube recommendation switches produced real loading samples while buffering
+and zero samples where the AdVoid overlay covered a ready, playing video after
+buffering ended. The final video was playing with `readyState=4` and no loading
+overlay. Updated debug APK installed successfully.
+
 ## 2026-08-25 — Android: live chat works on channel `/live` URLs
 
 - Fixed the missing `Live chat` button when YouTube keeps an active stream on

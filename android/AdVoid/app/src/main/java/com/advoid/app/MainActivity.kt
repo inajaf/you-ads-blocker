@@ -752,8 +752,7 @@ class MainActivity : Activity() {
                     return el;
                 }
 
-                function setLoading(video, loading) {
-                    var player = playerOf(video);
+                function setPlayerLoading(player, loading) {
                     if (!player) return;
                     // YouTube reuses player nodes across SPA routes. Never leave
                     // a loading class from /watch attached after navigation to
@@ -767,9 +766,78 @@ class MainActivity : Activity() {
                             createOverlay(player);
                         }
                         player.classList.add('advoid-loading');
+                        monitorVisibleLoading(player);
                     } else {
                         player.classList.remove('advoid-loading');
+                        if (player._advoidLoadingTimer) {
+                            clearTimeout(player._advoidLoadingTimer);
+                            player._advoidLoadingTimer = null;
+                        }
                     }
+                }
+
+                function videosForPlayer(player) {
+                    return player ? Array.prototype.slice.call(player.querySelectorAll('video')) : [];
+                }
+
+                function shouldShowLoading(player) {
+                    if (!player || !isOnWatchPage()) return false;
+
+                    var videos = videosForPlayer(player);
+                    var activeVideos = videos.filter(function(video) {
+                        return !video.paused && !video.ended;
+                    });
+                    var currentVideo = activeVideos[activeVideos.length - 1] ||
+                        videos[videos.length - 1];
+                    if (currentVideo && currentVideo.seeking) return false;
+
+                    // YouTube's own player state is the source of truth. A late
+                    // `waiting`/`loadstart` from a video element that was just
+                    // replaced must not cover a new video that is already
+                    // playing. During a real stall YouTube keeps playing-mode
+                    // but also adds buffering-mode, so buffering wins here.
+                    if (player.classList.contains('buffering-mode')) return true;
+                    if (player.classList.contains('playing-mode')) return false;
+
+                    if (activeVideos.length > 0) return false;
+
+                    // Cold start fallback before YouTube has assigned its mode
+                    // classes: show only when no playable frame exists yet.
+                    return videos.some(function(video) {
+                        return video.readyState < HAVE_CURRENT_DATA && !video.seeking;
+                    });
+                }
+
+                function refreshPlayerLoading(player) {
+                    setPlayerLoading(player, shouldShowLoading(player));
+                }
+
+                function monitorVisibleLoading(player) {
+                    if (!player || player._advoidLoadingTimer) return;
+                    player._advoidLoadingTimer = setTimeout(function checkPlayerMode() {
+                        player._advoidLoadingTimer = null;
+                        if (!player.isConnected ||
+                                !player.classList.contains('advoid-loading')) {
+                            return;
+                        }
+                        if (!shouldShowLoading(player)) {
+                            setPlayerLoading(player, false);
+                            return;
+                        }
+                        monitorVisibleLoading(player);
+                    }, 50);
+                }
+
+                function refreshVideoLoading(video) {
+                    var player = playerOf(video);
+                    refreshPlayerLoading(player);
+                }
+
+                function refreshAfterPlayerStateSettles(video) {
+                    refreshVideoLoading(video);
+                    // YouTube may assign buffering-mode just after dispatching
+                    // the media event. Reconcile once more on the next task.
+                    setTimeout(function() { refreshVideoLoading(video); }, 0);
                 }
 
                 function isAnyVideoPlaying() {
@@ -807,17 +875,29 @@ class MainActivity : Activity() {
 
                         // Media events that signal an in-flight load replace the
                         // grey play button with the AdVoid loading overlay.
-                        video.addEventListener('emptied', function() { setLoading(video, true); });
-                        video.addEventListener('loadstart', function() { setLoading(video, true); });
+                        video.addEventListener('emptied', function() {
+                            refreshAfterPlayerStateSettles(video);
+                        });
+                        video.addEventListener('loadstart', function() {
+                            refreshAfterPlayerStateSettles(video);
+                        });
                         video.addEventListener('waiting', function() {
                             // A stalled seek keeps the current frame on screen;
                             // only genuine buffering gets the overlay.
-                            setLoading(video, !video.seeking);
+                            refreshAfterPlayerStateSettles(video);
                         });
-                        video.addEventListener('loadeddata', function() { setLoading(video, false); });
-                        video.addEventListener('canplay', function() { setLoading(video, false); });
-                        video.addEventListener('playing', function() { setLoading(video, false); });
-                        video.addEventListener('seeking', function() { setLoading(video, false); });
+                        video.addEventListener('loadeddata', function() {
+                            refreshAfterPlayerStateSettles(video);
+                        });
+                        video.addEventListener('canplay', function() {
+                            refreshAfterPlayerStateSettles(video);
+                        });
+                        video.addEventListener('playing', function() {
+                            refreshAfterPlayerStateSettles(video);
+                        });
+                        video.addEventListener('seeking', function() {
+                            setPlayerLoading(playerOf(video), false);
+                        });
                         video._advoidLastMediaTime = Number(video.currentTime);
                         video.addEventListener('timeupdate', function() {
                             var previousTime = video._advoidLastMediaTime;
@@ -825,14 +905,13 @@ class MainActivity : Activity() {
                             video._advoidLastMediaTime = currentTime;
                             if (!video.paused && Number.isFinite(previousTime) &&
                                     Number.isFinite(currentTime) && currentTime > previousTime) {
-                                setLoading(video, false);
+                                refreshVideoLoading(video);
                             }
                         });
 
                         // Fresh element (new video or SPA navigation): not ready
                         // yet means it is loading, so show the overlay now.
-                        setLoading(video, isOnWatchPage() &&
-                            video.readyState < HAVE_CURRENT_DATA && !video.seeking);
+                        refreshVideoLoading(video);
                     });
                 }
 
@@ -847,8 +926,13 @@ class MainActivity : Activity() {
                     // Only the main player video drives the overlay; feed preview
                     // thumbnails (readyState 0) live outside .html5-video-player
                     // and must never trigger it.
+                    var players = [];
                     document.querySelectorAll('.html5-video-player video').forEach(function(video) {
-                        setLoading(video, video.readyState < HAVE_CURRENT_DATA && !video.seeking);
+                        var player = playerOf(video);
+                        if (player && players.indexOf(player) < 0) players.push(player);
+                    });
+                    players.forEach(function(player) {
+                        refreshPlayerLoading(player);
                     });
                 }
 
