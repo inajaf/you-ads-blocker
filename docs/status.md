@@ -1,5 +1,14 @@
 # Project status
 
+## 2026-08-25 — Landing exposes both Android release files
+
+- Kept the primary Android CTA pointed at the latest signed
+  `app-release.apk` for direct device installation.
+- Added the signed `app-release.aab` as a clearly labelled secondary Google
+  Play bundle download on the Android card. Both links use the stable
+  `releases/latest/download/<filename>` convention, so future Android releases
+  appear on the landing page without another version-specific edit.
+
 ## 2026-08-25 — Google Play internal release and listing assets
 
 - Published the signed `v1.4.4-android` AAB (`versionCode=6`) to the existing
@@ -14,15 +23,6 @@
 - Production access remains gated by Google Play's requirement for at least 12
   opted-in closed-test users for 14 continuous days. The store listing also
   needs the owner's chosen public support email before it can be completed.
-
-## 2026-08-25 — Landing exposes both Android release files
-
-- Kept the primary Android CTA pointed at the latest signed
-  `app-release.apk` for direct device installation.
-- Added the signed `app-release.aab` as a clearly labelled secondary Google
-  Play bundle download on the Android card. Both links use the stable
-  `releases/latest/download/<filename>` convention, so future Android releases
-  appear on the landing page without another version-specific edit.
 
 ## 2026-08-25 — Android: live chat survives real SPA request ordering (v1.4.4)
 
