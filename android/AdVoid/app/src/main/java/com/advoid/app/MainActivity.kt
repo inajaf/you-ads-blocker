@@ -1164,13 +1164,10 @@ class MainActivity : Activity() {
                 var SETUP = !!window._advoidLiveChatSetup;
 
                 // ytInitialPlayerResponse is only set on full page loads and goes
-                // stale after SPA navigation, so track the CURRENT video's live
-                // status from the player-response fetch instead (and re-sync the
-                // chat affordance whenever it changes). The flag is cached on
-                // window together with the video id it belongs to, so a stale
-                // flag from a previous video can never leak onto the next one
-                // (and the once-installed fetch hook keeps agreeing with the
-                // current SPA closure).
+                // stale after SPA navigation. Track player-response fetches as
+                // candidates, but accept live state only when the response id
+                // matches the real movie_player. Cache the accepted id and flag
+                // together so state from a previous video cannot leak forward.
                 var shared = window._advoidLiveChatShared ||
                     (window._advoidLiveChatShared = {
                         live: false, videoId: null, routeKey: null, candidate: null
@@ -1180,9 +1177,9 @@ class MainActivity : Activity() {
                     return location.pathname + location.search;
                 }
 
-                // A fetch-tracked response belongs only to the route that was
-                // current when it arrived. Clear old SPA state before resolving
-                // a new route so chat can never point at the previous stream.
+                // Clear accepted state on a route change. A response for the next
+                // video may arrive before pushState, so carry one candidate until
+                // the new route/player identity can confirm or reject its id.
                 if (shared.routeKey !== currentRouteKey()) {
                     if (shared.candidate && !shared.candidate.carried &&
                             shared.candidate.routeKey === shared.routeKey) {
@@ -1318,8 +1315,8 @@ class MainActivity : Activity() {
                 }
 
                 function isLiveNow() {
-                    // Trust the fetch-tracked status only when it belongs to the
-                    // video currently on screen.
+                    // Promote fetch-tracked state only after the real player id
+                    // confirms that the candidate belongs to the video on screen.
                     var vid = currentVideoId();
                     var playerData = currentPlayerData();
                     if (shared.candidate && playerData &&
