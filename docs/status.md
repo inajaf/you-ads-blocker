@@ -1,5 +1,11 @@
 # Project status
 
+## 2026-08-25 — Android v1.4.3 release preparation
+
+- Bumped the active `android/AdVoid` client to `VERSION_NAME=1.4.3` and
+  `VERSION_CODE=5` for the signed Android release containing background-playback
+  removal, robust channel live chat, and the loading-overlay race fix.
+
 ## 2026-08-25 — Android: loading overlay follows the real player state
 
 - Fixed the AdVoid loading logo occasionally staying over a video that had
