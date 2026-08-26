@@ -26,7 +26,7 @@ export const FAQS: readonly FaqItem[] = [
   },
   {
     q: 'macOS says the app is damaged. What do I do?',
-    a: 'Right-click (or Control-click) the AdVoid app and select "Open". This bypasses Gatekeeper on first launch. The app is signed and safe.',
+    a: 'AdVoid is not notarized, so Gatekeeper may block the first launch — on Apple Silicon it often reports "damaged" and right-click → Open will NOT help. Remove the quarantine flag instead: run xattr -dr com.apple.quarantine /Applications/AdVoid.app in Terminal, then open AdVoid normally.',
   },
 ] as const
 

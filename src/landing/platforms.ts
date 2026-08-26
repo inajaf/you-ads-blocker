@@ -74,12 +74,19 @@ export const PLATFORMS: readonly Platform[] = [
     kind: 'download',
     name: 'macOS',
     icon: 'apple',
-    spec: 'DMG · 119MB · macOS 12+',
+    spec: 'DMG · 120MB · macOS 12+ · Apple Silicon',
     href: `${RELEASES_LATEST}/AdVoid-1.0.0-arm64.dmg`,
     ctaLabel: 'Download for macOS',
     downloadLabel: 'Download DMG',
     primary: false,
-    note: 'Right-click → Open on first launch',
+    note: 'Unsigned build — if macOS calls it "damaged", remove the quarantine flag (see FAQ)',
+    additionalDownloads: [
+      {
+        href: `${RELEASES_LATEST}/AdVoid-1.0.0-x64.dmg`,
+        label: 'Download DMG (Intel)',
+        note: 'For Intel Macs — M-series Macs should use the main Apple Silicon DMG (the Intel build freezes under Rosetta)',
+      },
+    ],
   },
   {
     id: 'windows',

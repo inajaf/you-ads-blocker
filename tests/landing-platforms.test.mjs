@@ -8,6 +8,7 @@ import {
   isDownloadPlatform,
   orderByDetectedPlatform,
 } from '../src/landing/platforms.ts'
+import { FAQS } from '../src/landing/faq.ts'
 
 const ANDROID_UA =
   'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36'
@@ -64,6 +65,32 @@ test('Android landing card exposes both signed release files', () => {
     android.additionalDownloads?.map((download) => download.href.split('/').at(-1)),
     ['app-release.aab'],
   )
+})
+
+test('macOS landing card defaults to Apple Silicon and links Intel as secondary', () => {
+  const macos = DOWNLOAD_PLATFORMS.find((platform) => platform.id === 'macos')
+  assert.ok(macos)
+  assert.equal(macos.href.endsWith('/AdVoid-1.0.0-arm64.dmg'), true)
+  assert.deepEqual(
+    macos.additionalDownloads?.map((download) => download.href.split('/').at(-1)),
+    ['AdVoid-1.0.0-x64.dmg'],
+  )
+})
+
+test('macOS install guidance no longer recommends the right-click bypass', () => {
+  // The old FAQ claimed "The app is signed and safe" + right-click → Open. On
+  // Apple Silicon quarantined ad-hoc builds die as "damaged" and right-click
+  // does nothing; the reliable workaround is removing the quarantine attribute.
+  const macos = DOWNLOAD_PLATFORMS.find((platform) => platform.id === 'macos')
+  const damagedFaq = FAQS.find((item) => item.q.startsWith('macOS says'))
+  assert.ok(macos, 'macOS download card must exist')
+  assert.ok(damagedFaq, 'macOS damaged-app FAQ must exist')
+  for (const text of [macos.note, ...macos.additionalDownloads.map((d) => d.note), damagedFaq.a]) {
+    assert.doesNotMatch(text, /app is signed/i, 'must not claim the app is signed for distribution')
+  }
+  for (const text of [macos.note, damagedFaq.a]) {
+    assert.match(text, /(quarantine|xattr)/i, 'unsigned-mac install guidance must point at the real workaround')
+  }
 })
 
 test('isDownloadPlatform separates real downloads from source-only entries', () => {
