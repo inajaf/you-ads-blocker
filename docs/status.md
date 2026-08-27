@@ -1,5 +1,42 @@
 # Project status
 
+## 2026-08-26 — macOS arm64 install fixed (broken latest-release link + Gatekeeper guidance) — branch fm/macos-arm64-install-fix
+
+User reports: the mac **arm** DMG "does not install", and the "usual" (x64) DMG
+runs but freezes. Two independent causes, both addressed:
+
+- **The landing-page mac download was a 404.**
+  `releases/latest/download/AdVoid-1.0.0-arm64.dmg` resolved against the newest
+  release (`v1.4.4-android`), which contains only Android assets; desktop
+  artifacts had last been uploaded when `v1.4.3-android` was latest. Fix: rebuilt
+  fresh x64+arm64 DMG/zip/update-feed artifacts from current main
+  (`npm run dist:mac`) and uploaded them into the current latest release with
+  `gh release upload --clobber`, keeping the stable pinned filenames
+  (`AdVoid-1.0.0-*`) that `src/landing/platforms.ts` and the electron-updater
+  feed expect.
+- **Apple Silicon Gatekeeper rejects the unsigned build as "damaged".**
+  Builds are ad-hoc signed (no Developer ID), so quarantined arm64 downloads die
+  with *"AdVoid is damaged and can't be opened"* — and right-click → Open does
+  NOT bypass that (Intel-style warning only). The landing FAQ actively
+  recommended the wrong bypass ("Right-click → Open… The app is signed"). Fixed:
+  FAQ + macOS card note now give the real workaround
+  (`xattr -dr com.apple.quarantine /Applications/AdVoid.app`), the card links
+  the Intel DMG as a labelled secondary download, and new regression tests in
+  `tests/landing-platforms.test.mjs` forbid reintroducing the right-click advice.
+  Full user steps were added to the release notes for the release carrying the
+  refreshed artifacts.
+- **Freezing explained:** the x64 build under Rosetta 2 on M-series Macs is
+  janky/freezy by nature; the fix is installing the native arm64 build above.
+  The Intel DMG's secondary note on the landing card now warns Intel-Macs-only.
+
+Developer-ID signing + notarization remains unavailable (no cert on the machine,
+Program enrollment not configured) — recorded in docs/decisions.md; once enrolled,
+set `CSC_LINK` + notarytool keychain profile in the desktop build env and drop the
+quarantine workaround copy from the landing page.
+
+Gates on this branch: `npm test` 220/220, `npm run build`,
+`./scripts/ui-check.sh` green (12/12), targeted oxlint clean.
+
 ## 2026-08-25 — Google Play internal release and listing assets
 
 - Published the signed `v1.4.4-android` AAB (`versionCode=6`) to the existing
