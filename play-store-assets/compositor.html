@@ -13,13 +13,13 @@
       }
 
       * { box-sizing: border-box; }
-      html, body { margin: 0; min-height: 100%; overflow: hidden; }
-      body { width: 100vw; height: 100vh; }
+      html, body { margin: 0; min-height: 100%; }
+      body { width: 1080px; height: 1920px; }
 
       .art {
         position: relative;
-        width: 100vw;
-        height: 100vh;
+        width: 1080px;
+        height: 1920px;
         overflow: hidden;
         background:
           radial-gradient(circle at 14% 8%, rgba(34, 211, 238, .23), transparent 32%),
@@ -133,6 +133,25 @@
       .feature-kicker { color: #67e8f9; font-size: 25px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
       .feature h1 { margin-top: 12px; font-size: 64px; line-height: .96; }
       .feature p { margin: 18px 0 0; color: #cbd5e1; font-size: 25px; line-height: 1.28; }
+      /* Store screenshots: show the complete captured Android screen. */
+      .art, .slide-2 .art, .slide-3 .art, .slide-4 .art {
+        background: radial-gradient(ellipse at 50% 75%, #13262d, transparent 65%), #080b10;
+      }
+      .art::after { display: none; }
+      .header { padding: 48px 72px 0; }
+      .brand { margin-bottom: 26px; font-size: 23px; letter-spacing: .12em; }
+      .brand img { width: 48px; height: 48px; border-radius: 12px; box-shadow: none; }
+      h1 { font-size: 66px; line-height: 1.05; letter-spacing: -.035em; }
+      .sub { margin-top: 18px; font-size: 27px; }
+      .accent, .slide-2 .accent, .slide-3 .accent { color: #73e1d8; }
+      .phone {
+        top: 360px; bottom: auto; width: 682px; height: auto;
+        padding: 10px; border-radius: 39px;
+        background: #202a30; box-shadow: 0 22px 70px #0008;
+      }
+      .phone::before { display: none; }
+      .phone img { width: 100%; height: auto; object-fit: contain; border-radius: 28px; }
+      body.feature-mode, .feature-mode .feature { width: 1024px; height: 500px; min-height: 0; }
     </style>
   </head>
   <body>
@@ -141,13 +160,14 @@
       const params = new URLSearchParams(location.search);
       const mode = params.get('mode') || '1';
       const slides = {
-        1: { title: 'Find what you love.<br><span class="accent">Watch with less noise.</span>', sub: 'Fast YouTube search in a focused cinema-dark experience.', image: 'raw/02-search.png' },
-        2: { title: 'Your video.<br><span class="accent">Front and center.</span>', sub: 'A clean player experience designed for Android.', image: 'raw/03-watch.png' },
-        3: { title: 'Stay live.<br><span class="accent">Join the conversation.</span>', sub: 'Open live chat without leaving the stream.', image: 'raw/04-live-chat.png' },
-        4: { title: 'Browse in<br><span class="accent">cinema dark.</span>', sub: 'A familiar mobile experience with AdVoid protection built in.', image: 'raw/05-protection.png' },
+        1: { title: 'Search. Discover.<br><span class="accent">Find your next video.</span>', sub: 'Explore videos in a focused, dark interface.', image: 'raw/02-search.png' },
+        2: { title: 'Press play.<br><span class="accent">Enjoy the view.</span>', sub: 'Your video, with its controls close at hand.', image: 'raw/03-watch.png' },
+        3: { title: 'Watch live.<br><span class="accent">Keep the chat close.</span>', sub: 'Live streams and conversation in one screen.', image: 'raw/04-live-chat.png' },
+        4: { title: 'Made for<br><span class="accent">cinema-dark viewing.</span>', sub: 'A dark interface from search to playback.', image: 'raw/05-protection.png' },
       };
       const root = document.getElementById('root');
       if (mode === 'feature') {
+        document.body.classList.add('feature-mode');
         root.innerHTML = `<section class="feature"><img class="feature-icon" src="../android/AdVoid/app/src/main/res/drawable-nodpi/advoid_adaptive_icon.png" alt=""><div class="feature-copy"><div class="feature-kicker">AdVoid for Android</div><h1>Watch more.<br>Interrupt less.</h1><p>Cinema-dark YouTube browsing<br>with protection built in.</p></div></section>`;
       } else {
         const item = slides[mode] || slides[1];
