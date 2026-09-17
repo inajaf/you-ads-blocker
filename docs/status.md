@@ -1,5 +1,43 @@
 # Project status
 
+## 2026-09-17 — Play review follow-up
+
+- Play Console still shows all four submitted changes under `Changes in review`:
+  production rollout, 176 named countries/regions, rest of world, and the
+  en-US phone screenshots. Managed publishing remains off, so approval should
+  publish the release automatically. Public availability is not yet confirmed.
+- Dashboard checklist: open testing is 1/4 complete, but this is an optional
+  separate test track. Production is 4/5 complete; the final publish step is
+  pending review. Production's track summary says Active with 15 installs,
+  while its Releases tab explicitly labels `AdVoid 1.4.4 — Production` In review.
+- Production dashboard flags DEX obfuscation at 0%, with a Feb 2027 fix-by date,
+  and recommends checking edge-to-edge display. These are follow-up quality
+  items; the submitted release is still in review.
+
+## 2026-09-15 — Google Play production submission and refreshed screenshots
+
+- Pulled origin/main through `2930163` with a fast-forward; worked on
+  `codex/play-production-assets`. Existing untracked `scripts/cdp-taptest.mjs`
+  was left untouched.
+- Refreshed four 1080x1920 phone compositions in `play-store-assets/production/`
+  using the existing real Android release captures. Complete phone screens,
+  shorter headings, consistent dark styling; no new emulator captures.
+- Uploaded and saved all four images in the default en-US Play listing.
+  Order: search, playback, cinema dark, live chat. Existing icon, feature
+  graphic, and description retained.
+- Confirmed production access is granted. Created `AdVoid 1.4.4 — Production`
+  from the existing closed-tested AAB (versionCode 6), targeted all 177
+  countries/regions including rest of world, and submitted the release and
+  screenshot changes for review. Play Console shows `Changes in review`;
+  automatic pre-review checks were still running at submission.
+- Turned managed publishing off so Google publishes automatically on approval.
+  This is a submission, not confirmation that the app is publicly live.
+- Remaining: Google review and automatic publication. Non-blocking release
+  warnings: no deobfuscation mapping and no native debug symbols. Planned
+  version 1.4.5 / code 7 remains unsubmitted.
+- Validation: `npm test` 220/220, `npm run build`, UI check 12/12. Independent
+  asset/code review passed after fixing feature-mode canvas dimensions.
+
 ## 2026-08-26 — macOS arm64 install fixed (broken latest-release link + Gatekeeper guidance) — branch fm/macos-arm64-install-fix
 
 User reports: the mac **arm** DMG "does not install", and the "usual" (x64) DMG
