@@ -6,6 +6,13 @@
   production rollout, 176 named countries/regions, rest of world, and the
   en-US phone screenshots. Managed publishing remains off, so approval should
   publish the release automatically. Public availability is not yet confirmed.
+- Dashboard checklist: open testing is 1/4 complete, but this is an optional
+  separate test track. Production is 4/5 complete; the final publish step is
+  pending review. Production's track summary says Active with 15 installs,
+  while its Releases tab explicitly labels `AdVoid 1.4.4 — Production` In review.
+- Production dashboard flags DEX obfuscation at 0%, with a Feb 2027 fix-by date,
+  and recommends checking edge-to-edge display. These are follow-up quality
+  items; the submitted release is still in review.
 
 ## 2026-09-15 — Google Play production submission and refreshed screenshots
 
