@@ -1,5 +1,14 @@
 # Architectural decisions
 
+## 2026-09-26 — Android privacy link moved into an app menu
+Reason: the always-visible Privacy policy pill covered video content and drew
+attention away from playback, while Google Play still requires an in-app link.
+Approach: `MainActivity.addAppMenu` adds a compact native bar above the WebView.
+Its overflow popup contains Privacy policy and retains the guarded public URL
+and external-browser behavior. The button has a 48dp touch target and an
+accessibility description. The bar keeps the menu clear of YouTube's Shorts,
+navigation, and video controls.
+
 <!-- Format: ## YYYY-MM-DD — Decision
 Reason: ...
 Alternatives: ... -->
@@ -25,16 +34,11 @@ Approach (three independent changes):
   gitignored `keystore.properties` contract is preserved — secrets never enter
   source control.
 - **In-app privacy policy link.** Google Play requires a privacy policy
-  reachable from the app. A floating "Privacy policy" pill (over the WebView,
-  sharing the refresh-indicator overlay host) opens the policy in the system
-  browser. The URL constant lives in
+  reachable from the app. The URL constant lives in
   `app/src/main/java/com/advoid/app/PrivacyPolicy.kt`. A pure, unit-tested
   `isValidPrivacyPolicyUrl` guard refuses unsafe or placeholder URLs. The
   hosting decision and current URL are recorded in the 2026-08-25 decision
-  below. The affordance was later redesigned from a bare text chip into a
-  rounded translucent pill (lock icon + medium label + press ripple) so it
-  reads as a proper control — see `MainActivity.addPrivacyPolicyAffordance` /
-  `privacyPillBackground`.
+  below. The original floating pill was moved into the app menu on 2026-09-26.
 Alternatives: (a) keep versioning in build.gradle.kts and just comment it —
 versionCode is exactly the value most often mis-bumped at release time, so a
 single tracked properties file is safer than editing Groovy DSL; (b) fail the
