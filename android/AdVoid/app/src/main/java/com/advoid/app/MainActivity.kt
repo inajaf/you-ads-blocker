@@ -2,13 +2,9 @@ package com.advoid.app
 
 import android.annotation.SuppressLint
 import android.content.res.Configuration
-import android.content.res.ColorStateList
 import android.content.Intent
 import android.net.Uri
 import android.graphics.*
-import android.graphics.drawable.Drawable
-import android.graphics.drawable.GradientDrawable
-import android.graphics.drawable.RippleDrawable
 import android.os.Bundle
 import android.os.SystemClock
 import android.util.Base64
@@ -210,6 +206,8 @@ class MainActivity : Activity() {
             loadUrl("https://m.youtube.com")
         }
 
+        addAppMenu(rootLayout)
+
         // WebView added directly — no SwipeRefreshLayout wrapper
         // (pull-to-refresh handled via JavaScript to avoid intercepting touches).
         // A FrameLayout hosts the refresh indicator as a top overlay so showing
@@ -228,81 +226,48 @@ class MainActivity : Activity() {
         rootLayout.addView(webContainer, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
 
-        addPrivacyPolicyAffordance(webContainer)
-
         setContentView(rootLayout)
     }
 
-    /**
-     * Bottom floating affordances: a privacy-policy pill.
-     * Floats over the WebView so it never pushes the video layout.
-     */
-    private fun addPrivacyPolicyAffordance(host: ViewGroup) {
-        val row = LinearLayout(this).apply {
+    /** Keep the required privacy link above the WebView, clear of video controls. */
+    private fun addAppMenu(host: LinearLayout) {
+        val bar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(16), 0, dp(8), 0)
+            setBackgroundColor(darkBg)
         }
-
-        row.addView(createPill(
-            iconRes = android.R.drawable.ic_lock_lock,
-            label = "Privacy policy",
-            contentDescription = "Open privacy policy",
-            onClick = {
-                if (isValidPrivacyPolicyUrl(PRIVACY_POLICY_URL)) {
-                    openInBrowser(PRIVACY_POLICY_URL, "privacy policy")
-                } else {
-                    Log.e(TAG, "privacy policy URL is invalid or unavailable; refusing to open it")
-                }
-            },
-        ))
-
-        val params = FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.WRAP_CONTENT,
-            FrameLayout.LayoutParams.WRAP_CONTENT
-        ).apply {
-            gravity = Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM
-            bottomMargin = dp(44)
-        }
-        host.addView(row, params)
-    }
-
-    private fun createPill(
-        iconRes: Int,
-        label: String,
-        contentDescription: String,
-        onClick: () -> Unit,
-    ): View {
-        val description = contentDescription
-        val pill = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
+        bar.addView(TextView(this).apply {
+            text = "AdVoid"
+            textSize = 14f
+            setTextColor(Color.parseColor("#AAB0B5"))
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(14), dp(10), dp(16), dp(10))
-            background = privacyPillBackground()
+        }, LinearLayout.LayoutParams(0, dp(48), 1f))
+        val button = TextView(this).apply {
+            text = "\u22ee"
+            textSize = 24f
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            contentDescription = "AdVoid options"
             isClickable = true
             isFocusable = true
-            this.contentDescription = description
-            setOnClickListener { onClick() }
+            setOnClickListener { anchor ->
+                PopupMenu(this@MainActivity, anchor).apply {
+                    menu.add("Privacy policy").setOnMenuItemClickListener {
+                        if (isValidPrivacyPolicyUrl(PRIVACY_POLICY_URL)) {
+                            openInBrowser(PRIVACY_POLICY_URL, "privacy policy")
+                        } else {
+                            Log.e(TAG, "privacy policy URL is invalid or unavailable; refusing to open it")
+                        }
+                        true
+                    }
+                    show()
+                }
+            }
         }
-
-        val icon = ImageView(this).apply {
-            setImageResource(iconRes)
-            imageTintList = ColorStateList.valueOf(green)
-            this.contentDescription = null
-        }
-        pill.addView(icon, LinearLayout.LayoutParams(dp(16), dp(16)))
-
-        val text = TextView(this).apply {
-            this.text = label
-            textSize = 13f
-            setTextColor(Color.WHITE)
-            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-            setPadding(dp(8), 0, 0, 0)
-        }
-        pill.addView(text, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT))
-
-        return pill
+        bar.addView(button, LinearLayout.LayoutParams(dp(48), dp(48)))
+        host.addView(bar, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, dp(48)))
     }
 
     private fun openInBrowser(url: String, what: String) {
@@ -311,30 +276,6 @@ class MainActivity : Activity() {
         } catch (e: Exception) {
             Log.e(TAG, "open $what failed: ${e.message}", e)
         }
-    }
-
-    /**
-     * Rounded translucent pill background with a subtle border and a press
-     * ripple, so the affordances read as proper floating actions instead of
-     * bare text labels.
-     */
-    private fun privacyPillBackground(): Drawable {
-        val content = GradientDrawable().apply {
-            shape = GradientDrawable.RECTANGLE
-            cornerRadius = dp(22).toFloat()
-            setColor(Color.parseColor("#E6161619"))
-            setStroke(dp(1), Color.parseColor("#2EFFFFFF"))
-        }
-        val mask = GradientDrawable().apply {
-            shape = GradientDrawable.RECTANGLE
-            cornerRadius = dp(22).toFloat()
-            setColor(Color.BLACK)
-        }
-        return RippleDrawable(
-            ColorStateList.valueOf(Color.parseColor("#33FFFFFF")),
-            content,
-            mask,
-        )
     }
 
     private fun injectPageScripts(view: WebView?) {

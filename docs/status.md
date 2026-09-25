@@ -1,5 +1,41 @@
 # Project status
 
+## 2026-09-26 — Android privacy menu and live Play monitoring
+
+- Pulled through `origin/main` at `a07d2ea`; preserved the existing local
+  `docs/status.md` notes and untracked `scripts/cdp-taptest.mjs`.
+- Moved the Android in-app Privacy policy link from the persistent bottom pill
+  into an overflow menu in a native bar above the WebView. The public policy URL
+  returned HTTP 200. The first bottom-corner menu overlapped Shorts content;
+  the final top bar leaves YouTube controls and navigation unobstructed.
+- Play Console Monitor and improve: no policy issues; crash, ANR, and cold-start
+  metrics say data unavailable. The only Take action item is DEX obfuscation 0%
+  for AdVoid 1.4.4 Production, with a Feb 2027 deadline. Release minification
+  is still disabled in `app/build.gradle.kts` and needs a separately validated
+  release change with retrace mapping upload.
+- Validation: Android `testDebugUnitTest assembleDebug` passed with JDK 21 and
+  the local SDK; updated debug APK installed on the emulator. `npm test` 220/220,
+  `npm run build`, and `git diff --check` passed. Emulator QA confirmed the menu
+  and external policy link on Home and Shorts, Back navigation, visible Shorts
+  controls, and normal video playback. Fullscreen was not confirmed in this pass.
+- Remaining: review and merge this branch's PR, then ship a new Android release;
+  no Play release or upload was made for this change.
+
+## 2026-09-22 — Google Play production review check
+
+- Submission 4 (Sep 15, 2026, 7:45 PM) still says `In review`. It contains the
+  AdVoid 1.4.4 production rollout, country coverage, and en-US phone screenshots.
+  Production → Releases confirms the specific release is `In review`.
+- Publishing overview shows the four changes under `Changes in review` and
+  managed publishing off. Policy status says `No issues found`; no review
+  rejection or requested correction is shown. AdVoid's `com.advoid.app` package
+  is registered for Android developer verification.
+- The production dashboard flags 0% DEX obfuscation with a Feb 2027 deadline
+  and recommends edge-to-edge work. Neither is presented as a current review
+  blocker. Google's internal review reason or completion date is not visible.
+- Remaining: await Google's review. If it persists beyond seven days from the
+  last submission, contact Play Console support with submission ID 4 and date.
+
 ## 2026-09-17 — Play review follow-up
 
 - Play Console still shows all four submitted changes under `Changes in review`:
