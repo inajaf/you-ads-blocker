@@ -1,5 +1,99 @@
 # Architectural decisions
 
+## 2026-09-26 — Android background audio: foreground service + page bridge + Picture-in-Picture
+
+Decision: background audio in `android/AdVoid` is three cooperating layers, all
+started only from user-initiated in-app playback:
+1. **Native (required).** `PlaybackService` is a `mediaPlayback` foreground
+   service with a platform `MediaSession` and a `MediaStyle` notification
+   started while the activity is visible (while-in-use), carrying play/pause/
+   stop back into the WebView. It takes no audio focus and no wake lock.
+2. **Page bridge.** `BACKGROUND_AUDIO_SCRIPT` reports the document as visible
+   and swallows `visibilitychange`/`webkitvisibilitychange`/`pagehide`/`freeze`
+   on window capture while a session is armed, keeps a bounded keep-alive, and
+   suppresses script pauses of the main watch player while the app is not
+   interactively resumed.
+3. **Picture-in-Picture.** Leaving the app with a video playing enters PiP, so
+   the activity (and the page) stays visible; exiting from PiP restores the
+   normal fullscreen app.
+
+Reason — measured on the API 37 `emulator-5554` build, not assumed:
+- YouTube's mobile player stops playback from its own `visibilitychange`
+  handler: a captured stack is `jmr.stopVideo` → `QJ` →
+  `HTMLMediaElement.load()`, which set `paused=true`, `currentTime=0`,
+  `readyState=0`. That is the "frozen video" the app showed.
+- Without a foreground service Android 17 audio hardening silences the app and
+  ignores focus requests: `AudioHardening background playback muted … level:
+  partial` and `AudioHardening focus request … ignored … level: partial`. Per
+  Google's background-audio-hardening doc, `level: partial` means "no foreground
+  service at all"; the same doc exempts PiP-mode apps explicitly.
+- In PiP the activity is *paused* but visible, and YouTube's player still calls
+  `pauseVideo()` about four times a second from its own state machine (no
+  DOM event, no resize), so PiP alone does not keep audio alive. Suppressing
+  those script pauses (with a 3 s tap allowance and an explicit action flag)
+  plus resuming the element and calling the player's `playVideo()` keeps it
+  playing: 20–60 s samples advance `currentTime` at 1 s/s with an `AAudio`
+  player `state:started mutedState:none` and no new hardening entries.
+- A full-screen-suspended WebView cannot be fixed from JS: with the app fully
+  hidden, the pause has no JS stack (Chromium/native) and `play()` resolves but
+  the position freezes again. This supersedes the 2026-08-25 assumption that the
+  media pipeline suspension was the only cause: YouTube's own unload and the
+  platform mute are actionable, the native suspend is not.
+
+Implementation notes: `BackgroundPlaybackCoordinator` is pure logic (started vs
+resumed activity, playback state, service transition, spoof/suppression flags)
+and unit-tested; the service is never started from the background, so the
+hardening exemption (while-in-use) is always valid; the visibility bridge only
+spoofs while a session is armed, so in-app behaviour is unchanged; the overflow
+menu gained a "Background audio" toggle that restores the previous plain WebView
+behaviour exactly.
+
+Details that only became visible during review and emulator QA:
+- **Only trusted input is a user gesture.** YouTube synthesises its own
+  click/mouse events around player state changes, and rotation auto-fullscreen
+  injects a real activation tap. Counting either as user intent made every PiP
+  transition look like a user pause and ended the session, so the bridge
+  requires `event.isTrusted === true`, and rotation auto-fullscreen now only
+  runs while the activity is resumed and not in PiP (its "landscape" in PiP is
+  just the window aspect).
+- **The page arms pause suppression itself** the moment it really goes hidden,
+  in the same task as the event; waiting for the native round trip let YouTube's
+  first `pauseVideo()` slip through as if the user had paused.
+- **A permitted pause is reported to native** (`userPaused`), so a tap on
+  YouTube's controls inside the PiP window ends the session instead of leaving a
+  running service with a paused notification.
+- **The notification carries its own play/pause action** (`MediaStyle`
+  compact action): API 33+ builds controls from the `MediaSession`, but minSdk
+  26 platforms render only what the notification holds. Duration/seek metadata
+  is deliberately not advertised because the session exposes no `ACTION_SEEK_TO`.
+- **POST_NOTIFICATIONS is requested at most once per install** (stored in the
+  app's `advoid` preferences, decision in `NotificationPermissionGate`): a
+  dialog is itself a top activity, so while it is up Home never reaches AdVoid
+  and PiP cannot engage. Background audio works with the permission denied.
+- **Screen off** keeps the session alive but paused and preserves the playback
+  position (the system media session reports `PAUSED`), instead of ending the
+  session — ending it disarmed the bridge before YouTube saw the page hide,
+  which made YouTube unload the video and lose the position. Returning to the
+  app resumes where it left off. Screen-off *audio* still cannot work.
+
+Alternatives rejected:
+- **Native media pipeline (ExoPlayer/media3) fed by stream URLs captured in
+  `shouldInterceptRequest`**: fragile (expiring, IP-bound URLs, DASH/`n`
+  churn) and it bypasses YouTube playback accounting/ads.
+- **Wake lock + audio focus only** (the removed 2026-08-25 attempt): leaves both
+  measured causes in place.
+- **`SYSTEM_ALERT_WINDOW` overlay to keep the WebView "visible"**: sensitive
+  permission and Play policy risk.
+- **Chromium flags to disable background media suspension**: not shippable.
+- media3 `MediaSessionService` + `SimpleBasePlayer` remains the documented
+  upgrade if the platform ever treats a non-media3 foreground service as
+  non-compliant.
+
+Known limitation: with the screen off the activity stops, PiP is hidden, and
+the native suspend wins — audio stops there (the session stays paused with the
+position preserved and resumes on return). Screen-off audio would need the
+rejected native pipeline.
+
 ## 2026-09-26 — Android privacy link moved into an app menu
 Reason: the always-visible Privacy policy pill covered video content and drew
 attention away from playback, while Google Play still requires an in-app link.
@@ -356,6 +450,13 @@ pause/suspension is the least surprising temporary behavior. Reintroducing
 background audio requires a native media pipeline with a reliable supported
 stream source and proper MediaSession controls, not lifecycle spoofing around
 the WebView.
+
+Superseded 2026-09-26: the "media pipeline suspension" diagnosis was incomplete
+and the native-pipeline conclusion was too pessimistic. YouTube's own
+`visibilitychange` unload, Android 17 audio hardening (`level: partial`), and
+YouTube's PiP `pauseVideo()` storm are the actual causes; a foreground service,
+a page bridge, and PiP solve the user-visible problem. See the 2026-09-26
+background-audio entry (screen-off audio remains unsolved).
 
 ## 2026-08-25 — Google Play privacy policy will ship with the public landing bundle
 

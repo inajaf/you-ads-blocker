@@ -1,5 +1,55 @@
 # Project status
 
+## 2026-09-26 — Android background audio (branch fm/android-bg-audio-v2)
+
+- Videos now keep playing with sound when the app is minimized. Leaving AdVoid
+  while a video plays promotes playback into Picture-in-Picture (16:9, with a
+  play/pause action), a native `mediaPlayback` foreground service plus a
+  `MediaSession` keeps the audio unmuted and controllable from the notification
+  and lock screen, and an injected page bridge stops YouTube from unloading the
+  video and stops its own `pauseVideo()` storm while the app is not interactive.
+  A new "Background audio" item in the overflow menu turns the feature off and
+  restores the previous behavior exactly.
+- Root causes were measured in the emulator, not assumed: YouTube's player calls
+  `jmr.stopVideo` → `HTMLMediaElement.load()` from `visibilitychange` (position
+  reset to 0), Android 17 audio hardening mutes background playback and ignores
+  focus requests without a foreground service (`level: partial`), and YouTube's
+  player issues `pauseVideo()` ~4×/s while the activity is paused in PiP. See
+  `docs/decisions.md` (the 2026-08-25 removal entry is marked superseded).
+- Validation: `npm test` 255/255, `npm run build`, `./scripts/ui-check.sh` 12/12;
+  Android `./gradlew testDebugUnitTest assembleDebug` (JDK 21) with 39 Kotlin
+  tests (`BackgroundPlaybackCoordinatorTest` 16, `BackgroundAudioScriptTest` 7,
+  `NotificationPermissionGateTest` 5, plus the existing 11).
+  Emulator QA on `emulator-5554` (API 37, 16 KB pages) with the debug APK:
+  foreground playback starts the service (`isForeground=true`,
+  `types=0x00000002`, while-in-use granted) and the session is `PLAYING`;
+  Home → PiP kept `paused=false` with `currentTime` advancing 1 s/s for 15–60 s
+  and the app's `AAudio` player `state:started mutedState:none` with **no new
+  `AudioHardening` entries**; notification/lock-screen pause stopped the service
+  and removed the notification; expanding PiP back to the app resumed the normal
+  UI with suppression released; an in-app pause ended the session; the menu
+  toggle off produced the old `visibilityState=hidden`, `currentTime=0` behavior
+  and no PiP; the notification exposes a play/pause action; with the permission
+  denied audio still works. Probe helper: `scripts/android-bg-audio-probe.mjs`.
+- Two emulator-only defects that unit tests could not catch were found and fixed
+  in review/QA: YouTube's synthetic clicks and the rotation-fullscreen
+  activation tap were being counted as user gestures (ending the session on
+  every PiP transition), and ending the session on screen-off made YouTube
+  unload the video and lose the playback position. See the 2026-09-26 decision
+  entry for both.
+- Known limitation: with the **screen off** the activity stops, PiP is hidden and
+  Chromium's native media suspend wins, so audio stops there. The session is
+  kept paused (the media session reports `PAUSED`) with the position preserved,
+  and playback resumes on return. Screen-off audio would need a native media
+  pipeline, which is recorded as rejected in `docs/decisions.md`.
+- The notification permission is asked at most **once per install** (stored in
+  the app's `advoid` preferences, gate in `NotificationPermissionGate`): a
+  dialog is itself a top activity, so it kept Home from reaching AdVoid and PiP
+  never engaged while it was up.
+- Remaining: review/merge this branch's PR and cut the next Android release. No
+  Play upload was made; `version.properties` stays at `1.4.5`/code 7 (never
+  uploaded) — bump to code 8 / 1.4.6 if 1.4.5 ships first.
+
 ## 2026-09-26 — Android privacy menu and live Play monitoring
 
 - Pulled through `origin/main` at `a07d2ea`; preserved the existing local

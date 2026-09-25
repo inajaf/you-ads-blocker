@@ -190,6 +190,16 @@ function makeEnv(pathname = '/watch') {
   player.classList.add('html5-video-player')
   const createdObservers = []
   const pendingTimers = []
+  const bridge = {
+    playback: [],
+    states: [],
+    onPlaybackStateChanged(playing) {
+      this.playback.push(playing)
+    },
+    onMediaStateChanged(json) {
+      this.states.push(JSON.parse(json))
+    },
+  }
   const CreatedMutationObserver = class extends FakeMutationObserver {
     constructor(callback) {
       super(callback)
@@ -209,6 +219,8 @@ function makeEnv(pathname = '/watch') {
     },
     setInterval: () => 0,
     console,
+    // Native playback session mirror (PlaybackService/notification/PiP).
+    AdVoidBridge: bridge,
   }
   sandbox.window = sandbox
   const context = vm.createContext(sandbox)
@@ -222,10 +234,12 @@ function makeEnv(pathname = '/watch') {
   return {
     player,
     addVideo,
+    bridge,
     navigate: (nextPathname) => {
       location.pathname = nextPathname
     },
     sync: () => vm.runInContext('window._advoidSyncVideoState();', context),
+    notifyUserPause: () => vm.runInContext('window._advoidNotifyUserPause();', context),
     setup: () => vm.runInContext(WATCH_SCRIPT, context),
     runNextTimer: () => {
       let callback
@@ -466,6 +480,54 @@ describe('AdVoid loading overlay (VIDEO_WATCH_SCRIPT)', () => {
     env.runNextTimer()
 
     assert.equal(env.pendingTimerCount(), 0)
+  })
+})
+
+describe('AdVoid media state reporting (VIDEO_WATCH_SCRIPT → native)', () => {
+  it('reports the main watch player as playing', () => {
+    const env = makeEnv()
+    env.addVideo({ readyState: 4, paused: false, currentTime: 12 })
+    env.setup()
+
+    const last = env.bridge.states.at(-1)
+    assert.equal(last.playing, true)
+    assert.equal(last.ended, false)
+    assert.equal(last.userPaused, false)
+    assert.equal(last.positionMs, 12000)
+    // A title is always present: the native notification must never be blank.
+    assert.ok(last.title)
+  })
+
+  it('never reports a feed preview as background playback', () => {
+    const env = makeEnv()
+    // A preview lives outside .html5-video-player and must not arm the native
+    // playback service or Picture-in-Picture.
+    env.addVideo({ readyState: 4, paused: false, currentTime: 3 }, false)
+    env.setup()
+
+    assert.equal(env.bridge.states.at(-1).playing, false)
+  })
+
+  it('never reports playback on Shorts', () => {
+    const env = makeEnv('/shorts/abc')
+    env.addVideo({ readyState: 4, paused: false, currentTime: 3 })
+    env.setup()
+
+    assert.equal(env.bridge.states.at(-1).playing, false)
+  })
+
+  it('flags a user pause exactly once', () => {
+    const env = makeEnv()
+    env.addVideo({ readyState: 4, paused: false, currentTime: 5 })
+    env.setup()
+    assert.equal(env.bridge.states.at(-1).userPaused, false)
+
+    env.notifyUserPause()
+    assert.equal(env.bridge.states.at(-1).userPaused, true)
+
+    // The hint is consumed by the report: it must not keep ending new sessions.
+    env.sync()
+    assert.equal(env.bridge.states.at(-1).userPaused, false)
   })
 })
 
