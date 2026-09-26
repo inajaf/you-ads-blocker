@@ -1,5 +1,56 @@
 # Architectural decisions
 
+## 2026-09-26 — Locked-screen audio: a shadow audio-only renderer (ships)
+
+Reason: "if I lock AdVoid while a video plays, I need it to keep playing audio."
+
+The previous entry established the constraint: with the screen off Chromium
+suspends the `<video>` element natively, while media **without a video track**
+keeps playing (measured: an audio element advanced through the lock and stayed
+`state:started mutedState:none`). The native ExoPlayer route stays rejected
+(expiring IP-bound URLs, DASH `n` churn, bypasses YouTube playback accounting),
+so the page mirrors the audio instead.
+
+Design (`BACKGROUND_AUDIO_SCRIPT`, hooks installed when the bridge loads):
+- `MediaSource.prototype.addSourceBuffer` is wrapped and every `appendBuffer` on
+  an **audio** SourceBuffer that belongs to the MediaSource the playing video is
+  attached to (matched through a `URL.createObjectURL` → MediaSource map, so
+  YouTube's throwaway capability-probe MediaSources are skipped) is copied with
+  `data.slice(0)` into a queue.
+- The queue feeds a second `MediaSource` on a `<video>` element that only ever
+  receives that audio SourceBuffer, so it has **no video track** — the one kind
+  of media Chromium keeps playing while hidden. `remove()` is mirrored, the
+  original calls are never altered, and mirroring only runs while background
+  audio is armed. After six rebuilds (ads, quality switches) it disables itself.
+- While the screen is on the shadow stays **muted** and follows the video
+  (keep-warm every 5 s, half a second behind), so the user hears YouTube's own
+  audio in perfect sync; when the screen locks the shadow is unmuted, the video
+  silenced, and the shadow aligned to the video's position. On screen-on the
+  video is seeked to the shadow's position and the shadow muted again, keeping
+  one continuous timeline instead of jumping backwards.
+- `_advoidShadowPlaying()` / `_advoidShadowPositionMs()` feed the state report so
+  the native session reports PLAYING with the shadow's position while it is the
+  audible source — otherwise it would see a paused player over playing audio and
+  stop the foreground service that keeps the audio unmuted. Lock-screen
+  pause/play/seek drive the shadow too.
+
+Verified on the API 37 emulator (debug build of the shipped code):
+- Screen on: shadow `muted:true, paused:false`, `ct` tracking the video
+  (10.2 vs 9.3; 15.4 vs 14.5).
+- Screen locked: video `paused:true` frozen at 16.16 s while the shadow advanced
+  23.43 → 31.53 with `muted:false`; `dumpsys audio` showed
+  `state:started mutedState:none`; the media session showed
+  `state=PLAYING(3), position=30031` and the foreground service stayed up.
+- Screen back on: the video resumed at 37.98 s — where the audio actually was —
+  with the shadow muted again and both advancing in step.
+- Lock-screen pause: `playback paused by the user; ending the background session`
+  → service stopped, no started audio player left, shadow torn down.
+
+Residual risks (accepted): a YouTube MSE change breaks the mirror (guarded: it
+disables itself and the previous behaviour returns); a second audio decode runs
+while the screen is on (small CPU, no extra network — buffers are copied, not
+re-fetched); Shorts and non-MSE playback get no shadow.
+
 ## 2026-09-26 — Locked screens: stand down instead of fighting the platform
 
 Reason: "if I lock AdVoid while a video plays, I need the audio to keep playing."

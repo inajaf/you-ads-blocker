@@ -1501,9 +1501,24 @@ class MainActivity : Activity() {
                     var data = playerVideoData();
                     var duration = video && Number.isFinite(video.duration) ? video.duration : 0;
                     var position = video && Number.isFinite(video.currentTime) ? video.currentTime : 0;
+                    // While the screen is locked the video element is suspended
+                    // and the audio shadow is the audible source, so it owns the
+                    // playing flag and the position: otherwise the native session
+                    // would report a paused player over playing audio (and stop
+                    // the foreground service that keeps the audio unmuted).
+                    var shadowPlaying = typeof window._advoidShadowPlaying === 'function' &&
+                        window._advoidShadowPlaying();
+                    if (shadowPlaying) {
+                        var shadowPositionMs = typeof window._advoidShadowPositionMs === 'function'
+                            ? window._advoidShadowPositionMs()
+                            : null;
+                        if (shadowPositionMs !== null) {
+                            position = shadowPositionMs / 1000;
+                        }
+                    }
                     return {
-                        playing: isMainPlayerPlaying(),
-                        ended: !!(video && video.ended),
+                        playing: shadowPlaying || isMainPlayerPlaying(),
+                        ended: shadowPlaying ? false : !!(video && video.ended),
                         userPaused: userPauseHint,
                         title: (data && data.title) || document.title || 'AdVoid',
                         artist: (data && data.author) || 'YouTube',
@@ -1856,25 +1871,295 @@ class MainActivity : Activity() {
                     clearKeepAlive();
                     if (armed) {
                         armKeepAlive();
+                    } else {
+                        // Toggling background audio off must also stop the shadow
+                        // renderer: it exists only to keep audio alive off-screen.
+                        teardownShadow();
                     }
                 };
 
                 // Screen state, pushed by the native side (ACTION_SCREEN_ON/OFF).
-                // Locked screens cannot play WebView video at all, so the retry
-                // loop stands down and resumes from a single attempt when the
-                // screen comes back.
+                // Locked screens suspend the <video> element natively, so the retry
+                // loop stands down; what keeps the audio alive instead is the
+                // shadow renderer below.
                 window._advoidScreenInteractive = true;
                 window._advoidSetScreenInteractive = function(on) {
                     var interactive = on !== false;
                     if (window._advoidScreenInteractive === interactive) return;
                     window._advoidScreenInteractive = interactive;
-                    if (interactive && window._advoidBgAudioArmed) {
-                        ensurePlaying();
-                        armKeepAlive();
+                    if (interactive) {
+                        setShadowAudible(false);
+                        if (window._advoidBgAudioArmed) {
+                            ensurePlaying();
+                            armKeepAlive();
+                        }
                     } else {
                         clearKeepAlive();
+                        setShadowAudible(true);
                     }
                 };
+
+                // ---- Locked-screen audio shadow ------------------------------
+                // Measured: with the screen off Chromium suspends the <video>
+                // element natively (paused, position frozen, no JS pause involved)
+                // but keeps playing media that has NO video track. YouTube's MSE
+                // runs on the main thread with a separate audio SourceBuffer, so
+                // every audio segment it appends is copied into a shadow element
+                // that only ever receives that audio SourceBuffer. While the app
+                // is visible the shadow stays muted (the video's own audio is what
+                // the user hears) and simply follows the position; when the screen
+                // locks the shadow is unmuted and the video silenced, so the audio
+                // plays on through the lock. Verified on the emulator: video
+                // paused=true at 74.1 s while the shadow advanced to 89.4 s with
+                // the screen asleep and the platform reporting state:started
+                // mutedState:none.
+                var shadowElement = null;
+                var shadowMediaSource = null;
+                var shadowSourceBuffer = null;
+                var shadowMirroring = null;
+                var shadowQueue = [];
+                var shadowSources = 0;
+                var shadowDisabled = false;
+                var shadowUrlOf = new WeakMap();
+                var shadowVideoMutedBeforeLock = null;
+
+                function shadowVideo() {
+                    // The shadow only ever mirrors the main player's stream.
+                    return isMainPlayerVideo(mainPlayerVideo()) ? mainPlayerVideo() : null;
+                }
+
+                function shadowFlush() {
+                    if (!shadowSourceBuffer || !shadowMediaSource ||
+                        shadowMediaSource.readyState !== 'open' ||
+                        shadowSourceBuffer.updating) return;
+                    var op = shadowQueue.shift();
+                    if (!op) return;
+                    try {
+                        if (op.type === 'append') {
+                            shadowSourceBuffer.appendBuffer(op.data);
+                        } else {
+                            shadowSourceBuffer.remove(op.start, op.end);
+                        }
+                    } catch (error) {
+                        console.warn('[AdVoid] shadow ' + op.type + ' failed: ' + error);
+                    }
+                }
+
+                function buildShadow(mime) {
+                    shadowSources++;
+                    if (shadowSources > 6) {
+                        // YouTube keeps re-creating MediaSources (ads, quality
+                        // switches); stop rather than churn forever.
+                        shadowDisabled = true;
+                        console.warn('[AdVoid] shadow audio disabled after repeated rebuilds');
+                        return;
+                    }
+                    if (shadowElement && shadowElement.parentNode) {
+                        shadowElement.parentNode.removeChild(shadowElement);
+                    }
+                    shadowElement = document.createElement('video');
+                    shadowElement.id = 'advoid-shadow-audio';
+                    shadowElement.playsInline = true;
+                    shadowElement.muted = true;
+                    shadowElement.volume = 1;
+                    shadowElement.style.cssText =
+                        'position:fixed;left:0;bottom:0;width:2px;height:2px;' +
+                        'opacity:0.01;pointer-events:none;z-index:-1;';
+                    shadowElement.addEventListener('error', function() {
+                        var code = shadowElement && shadowElement.error ? shadowElement.error.code : '?';
+                        console.warn('[AdVoid] shadow element error: ' + code);
+                        shadowDisabled = true;
+                    });
+                    document.documentElement.appendChild(shadowElement);
+
+                    shadowMediaSource = new MediaSource();
+                    shadowMediaSource.addEventListener('sourceopen', function() {
+                        try {
+                            // The captured original: the shadow must not mirror
+                            // itself through the patched prototype.
+                            shadowSourceBuffer = shadowNativeAddSourceBuffer
+                                .call(shadowMediaSource, mime);
+                            shadowSourceBuffer.addEventListener('updateend', shadowFlush);
+                            shadowFlush();
+                        } catch (error) {
+                            console.warn('[AdVoid] shadow addSourceBuffer failed: ' + error);
+                            shadowDisabled = true;
+                        }
+                    });
+                    shadowElement.src = shadowNativeCreateObjectURL.call(URL, shadowMediaSource);
+                }
+
+                var shadowNativeAddSourceBuffer = null;
+                var shadowNativeAppendBuffer = null;
+                var shadowNativeRemove = null;
+                var shadowNativeCreateObjectURL = null;
+                var shadowHooksInstalled = false;
+
+                function installShadowHooks() {
+                    if (shadowHooksInstalled) return;
+                    if (!window.MediaSource || !window.SourceBuffer) return;
+                    shadowHooksInstalled = true;
+                    shadowNativeAddSourceBuffer = MediaSource.prototype.addSourceBuffer;
+                    shadowNativeAppendBuffer = SourceBuffer.prototype.appendBuffer;
+                    shadowNativeRemove = SourceBuffer.prototype.remove;
+                    shadowNativeCreateObjectURL = URL.createObjectURL;
+
+                    URL.createObjectURL = function(value) {
+                        var url = shadowNativeCreateObjectURL.apply(URL, arguments);
+                        if (window.MediaSource && value instanceof MediaSource) {
+                            shadowUrlOf.set(value, url);
+                        }
+                        return url;
+                    };
+
+                    MediaSource.prototype.addSourceBuffer = function(requested) {
+                        var mime = String(requested);
+                        var buffer = shadowNativeAddSourceBuffer.apply(this, arguments);
+                        var owner = this;
+                        if (mime.indexOf('audio/') !== 0) return buffer;
+
+                        buffer.appendBuffer = function(data) {
+                            var video = shadowVideo();
+                            // Only the MediaSource the playing video is attached
+                            // to: YouTube also builds throwaway ones to probe
+                            // codec support.
+                            var live = !!(video && video.src &&
+                                video.src === shadowUrlOf.get(owner));
+                            if (live && window._advoidBgAudioArmed && !shadowDisabled) {
+                                if (shadowMirroring !== this) {
+                                    shadowMirroring = this;
+                                    shadowQueue = [];
+                                    buildShadow(mime);
+                                }
+                                if (shadowQueue.length < 400) {
+                                    try {
+                                        shadowQueue.push({ type: 'append', data: data.slice(0) });
+                                        shadowFlush();
+                                    } catch (error) {
+                                        console.warn('[AdVoid] shadow copy failed: ' + error);
+                                    }
+                                }
+                            }
+                            return shadowNativeAppendBuffer.apply(this, arguments);
+                        };
+
+                        buffer.remove = function(start, end) {
+                            if (shadowMirroring === this && shadowQueue.length < 400) {
+                                shadowQueue.push({ type: 'remove', start: start, end: end });
+                                shadowFlush();
+                            }
+                            return shadowNativeRemove.apply(this, arguments);
+                        };
+
+                        return buffer;
+                    };
+                }
+
+                function shadowPosition() {
+                    // Both elements run the same timeline: the shadow is started
+                    // at the video's position minus half a second and stays close,
+                    // so a lock switches sources without an audible jump.
+                    if (!shadowElement || !shadowElement.buffered || !shadowElement.buffered.length) {
+                        return null;
+                    }
+                    return shadowElement.currentTime;
+                }
+
+                function setShadowAudible(on) {
+                    if (!shadowElement || shadowDisabled) return;
+                    if (on === shadowElement.__advoidAudible) return;
+                    shadowElement.__advoidAudible = on;
+                    var video = mainPlayerVideo();
+                    if (on) {
+                        if (video) {
+                            shadowVideoMutedBeforeLock = video.muted;
+                            video.muted = true;
+                            // Keep one continuous timeline: the platform freezes
+                            // the video, and the audio carries on from the same
+                            // position (a small correction here, if any).
+                            if (Math.abs(shadowElement.currentTime - video.currentTime) > 0.5) {
+                                seekShadowTo(video.currentTime);
+                            }
+                        }
+                        shadowElement.volume = 1;
+                        shadowElement.muted = false;
+                        resume(shadowElement);
+                        console.log('[AdVoid] locked screen: playing the audio shadow');
+                    } else {
+                        shadowElement.muted = true;
+                        // The video was frozen while the shadow kept playing, so
+                        // take the video to where the audio actually is — the
+                        // alternative is a backwards jump at unlock.
+                        var position = shadowPosition();
+                        if (video && position !== null &&
+                            Math.abs(video.currentTime - position) > 0.5) {
+                            try {
+                                video.currentTime = position;
+                            } catch (error) {
+                                console.warn('[AdVoid] shadow sync seek failed: ' + error);
+                            }
+                            var player = playerApi();
+                            if (player && typeof player.seekTo === 'function') {
+                                try {
+                                    player.seekTo(position, true);
+                                } catch (error) {
+                                    console.warn('[AdVoid] shadow sync player seek failed: ' + error);
+                                }
+                            }
+                        }
+                        if (video && shadowVideoMutedBeforeLock !== null) {
+                            video.muted = shadowVideoMutedBeforeLock;
+                        }
+                        shadowVideoMutedBeforeLock = null;
+                    }
+                }
+
+                function seekShadowTo(seconds) {
+                    if (!shadowElement || !shadowElement.buffered || !shadowElement.buffered.length) {
+                        return;
+                    }
+                    var start = shadowElement.buffered.start(0);
+                    var end = shadowElement.buffered.end(shadowElement.buffered.length - 1);
+                    if (seconds < start || seconds > end) return;
+                    try {
+                        shadowElement.currentTime = seconds;
+                    } catch (error) {
+                        console.warn('[AdVoid] shadow seek failed: ' + error);
+                    }
+                }
+
+                window._advoidShadowPlaying = function() {
+                    return !!(shadowElement && !shadowElement.muted && !shadowElement.paused);
+                };
+
+                function teardownShadow() {
+                    if (shadowElement && shadowElement.parentNode) {
+                        shadowElement.parentNode.removeChild(shadowElement);
+                    }
+                    shadowElement = null;
+                    shadowMediaSource = null;
+                    shadowSourceBuffer = null;
+                    shadowMirroring = null;
+                    shadowQueue = [];
+                }
+
+                window._advoidShadowPositionMs = function() {
+                    var position = shadowPosition();
+                    return position === null ? null : Math.round(position * 1000);
+                };
+
+                installShadowHooks();
+
+                // Keep the shadow warm and in step while the screen is on: muted
+                // playback costs little and means the lock switch is seamless.
+                setInterval(function() {
+                    if (!window._advoidBgAudioArmed || shadowDisabled) return;
+                    if (!shadowElement || shadowElement.__advoidAudible) return;
+                    var video = mainPlayerVideo();
+                    if (!video || video.paused || !shadowElement.paused) return;
+                    shadowElement.currentTime = Math.max(0, video.currentTime - 0.5);
+                    resume(shadowElement);
+                }, 5000);
 
                 // Page-level pause suppression. Measured in Picture-in-Picture:
                 // YouTube's player calls pauseVideo() about four times a second
@@ -2001,9 +2286,15 @@ class MainActivity : Activity() {
 
                 window._advoidMediaAction = function(action, positionMs) {
                     var video = mainPlayerVideo();
+                    var shadow = document.getElementById('advoid-shadow-audio');
                     if (!video) return;
                     if (action === 'play') {
                         resume(video);
+                        // Locked screen: the video element is suspended by the
+                        // platform, so the audible player is the shadow.
+                        if (shadow && window._advoidScreenInteractive === false) {
+                            resume(shadow);
+                        }
                     } else if (action === 'seek') {
                         // Lock screen / media card scrubber.
                         var seconds = Number(positionMs) / 1000;
@@ -2015,6 +2306,15 @@ class MainActivity : Activity() {
                             video.currentTime = seconds;
                         } catch (e) {
                             console.warn('[AdVoid] seek failed: ' + e);
+                        }
+                        // While locked the shadow is what the user hears, so it
+                        // has to move too.
+                        if (shadow && !shadow.muted) {
+                            try {
+                                shadow.currentTime = seconds;
+                            } catch (e) {
+                                console.warn('[AdVoid] shadow seek failed: ' + e);
+                            }
                         }
                         // Keep YouTube's own player in step with the element.
                         var seekPlayer = playerApi();
@@ -2033,6 +2333,16 @@ class MainActivity : Activity() {
                         window._advoidAllowPause = true;
                         try {
                             video.pause();
+                            // A pause from the lock screen must silence the
+                            // shadow as well, or the audio would keep playing
+                            // while the notification says paused.
+                            if (shadow && !shadow.paused) {
+                                try {
+                                    shadow.pause();
+                                } catch (e) {
+                                    console.warn('[AdVoid] shadow pause failed: ' + e);
+                                }
+                            }
                             var player = playerApi();
                             if (player && typeof player.pauseVideo === 'function') {
                                 try {

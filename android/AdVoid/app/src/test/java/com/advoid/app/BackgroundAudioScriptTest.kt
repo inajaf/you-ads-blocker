@@ -140,16 +140,30 @@ class BackgroundAudioScriptTest {
     @Test
     fun `stands down while the screen is locked`() {
         // Measured on a locked screen: Chromium suspends the video element
-        // natively and re-pauses it on every play() attempt (21 pause events in
-        // 17 s, lock-screen card flapping between playing and paused), while a
-        // plain <audio> element in the same page keeps playing. Nothing the page
-        // can do brings the video back, so the retry loop waits for the screen
-        // instead of fighting it.
+        // natively (21 pause events in 17 s came from our own retries, and the
+        // lock-screen card flapped between playing and paused), while media
+        // without a video track keeps playing. So the retry loop stops, and the
+        // audio shadow takes over instead.
         assertTrue(script.contains("window._advoidSetScreenInteractive = function(on)"))
         assertTrue(script.contains("window._advoidScreenInteractive = true"))
         assertTrue(script.contains("if (window._advoidScreenInteractive === false) return"))
-        assertTrue(script.contains("if (interactive && window._advoidBgAudioArmed)"))
-        assertTrue(script.contains("armKeepAlive();"))
+        assertTrue(script.contains("clearKeepAlive();"))
+        assertTrue(script.contains("setShadowAudible(true)"))
+        assertTrue(script.contains("setShadowAudible(false)"))
+    }
+
+    @Test
+    fun `mirrors the audio stream into a video-track-free shadow element`() {
+        // The shadow exists so audio survives a locked screen: Chromium only
+        // suspends media that has a video track.
+        assertTrue(script.contains("MediaSource.prototype.addSourceBuffer = function(requested)"))
+        assertTrue(script.contains("shadowNativeAddSourceBuffer"))
+        assertTrue(script.contains(".call(shadowMediaSource, mime)"))
+        assertTrue(script.contains("data.slice(0)"))
+        assertTrue(script.contains("shadowElement.muted = false"))
+        assertTrue(script.contains("video.muted = true"))
+        assertTrue(script.contains("window._advoidShadowPlaying = function()"))
+        assertTrue(script.contains("function teardownShadow()"))
     }
 
     @Test

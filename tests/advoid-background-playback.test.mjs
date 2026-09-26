@@ -249,6 +249,52 @@ describe('Android background audio wiring', () => {
 // "hidden" while the bridge is armed.
 // ---------------------------------------------------------------------------
 
+let urlCounter = 1
+
+/** Every SourceBuffer the page creates, so mirrored copies can be asserted. */
+const sourceBuffers = []
+
+/** Minimal MSE stand-in so the audio-shadow hooks can be driven. */
+class FakeSourceBuffer {
+  constructor(mime) {
+    this.mime = mime
+    this.updating = false
+    this.appends = []
+    this.removes = []
+    sourceBuffers.push(this)
+  }
+  appendBuffer(data) {
+    this.appends.push(data)
+  }
+  remove(start, end) {
+    this.removes.push([start, end])
+  }
+  addEventListener() {}
+}
+
+class FakeMediaSource {
+  constructor() {
+    this.readyState = 'open'
+    this.sourceBuffers = []
+    this.listeners = new Map()
+  }
+  addSourceBuffer(mime) {
+    const buffer = new FakeSourceBuffer(mime)
+    this.sourceBuffers.push(buffer)
+    return buffer
+  }
+  addEventListener(type, listener) {
+    if (!this.listeners.has(type)) this.listeners.set(type, [])
+    this.listeners.get(type).push(listener)
+    // The shim fires sourceopen immediately (a real MediaSource fires it on the
+    // next task) so the shadow SourceBuffer exists by the first append.
+    if (type === 'sourceopen') listener()
+  }
+  endOfStream() {
+    this.readyState = 'ended'
+  }
+}
+
 function makeBackgroundEnv({ videos = [] } = {}) {
   const real = { hidden: true, visibilityState: 'hidden' }
   const windowListeners = new Map()
@@ -302,6 +348,58 @@ function makeBackgroundEnv({ videos = [] } = {}) {
   }
   document.title = 'A video'
 
+  // --- Locked-screen audio shadow fakes (MediaSource + a shadow element) -----
+  const createdElements = []
+  class ShadowElement {
+    constructor(tag) {
+      this.tagName = String(tag).toUpperCase()
+      this.id = ''
+      this.muted = true
+      this.volume = 1
+      this.paused = true
+      this.currentTime = 0
+      this.duration = 100
+      this.readyState = 4
+      this.buffered = { length: 0, start: () => 0, end: () => 0 }
+      this.style = {}
+      this.listeners = new Map()
+      this.parentNode = null
+      this.playCalls = 0
+      this.src = ''
+    }
+    play() {
+      this.playCalls += 1
+      this.paused = false
+      return { catch() {} }
+    }
+    pause() {
+      this.paused = true
+    }
+    addEventListener(type, listener) {
+      if (!this.listeners.has(type)) this.listeners.set(type, [])
+      this.listeners.get(type).push(listener)
+    }
+  }
+  document.createElement = (tag) => {
+    const element = new ShadowElement(tag)
+    createdElements.push(element)
+    return element
+  }
+  document.getElementById = (id) =>
+    createdElements.find(
+      (element) => element.id === id && element.parentNode === document.documentElement,
+    ) || null
+  document.documentElement = {
+    appendChild: (element) => {
+      element.parentNode = document.documentElement
+      return element
+    },
+    removeChild: (element) => {
+      element.parentNode = null
+      return element
+    },
+  }
+
   const sandbox = {
     Document,
     HTMLMediaElement,
@@ -319,6 +417,12 @@ function makeBackgroundEnv({ videos = [] } = {}) {
     clearTimeout: (timerId) => {
       timers[timerId - 1] = null
     },
+    // The bridge's keep-warm interval for the audio shadow.
+    setInterval: () => 0,
+    clearInterval: () => {},
+    MediaSource: FakeMediaSource,
+    SourceBuffer: FakeSourceBuffer,
+    URL: { createObjectURL: (value) => value.__advoidUrl || (value.__advoidUrl = `blob:${urlCounter++}`) },
   }
   sandbox.window = sandbox
   sandbox.window.addEventListener = (type, listener) => {
@@ -341,6 +445,34 @@ function makeBackgroundEnv({ videos = [] } = {}) {
       vm.runInContext(`window._advoidSetBackgroundAudio(${literal});`, context),
     setSuppression: (on) =>
       vm.runInContext(`window._advoidSetPagePauseSuppression(${on});`, context),
+    makeSourceBuffer: (mime) => {
+      const mediaSource = new FakeMediaSource()
+      return mediaSource.addSourceBuffer(mime)
+    },
+    /**
+     * Attaches a fresh MediaSource to `video` the way YouTube does (blob URL
+     * first, SourceBuffer second) and returns both handles. Must be called after
+     * setup(), or the bridge's hooks will not see it.
+     */
+    attachLiveAudioSource: (video, mime = 'audio/webm; codecs="opus"') => {
+      sandbox.window.__advoidTestVideo = video
+      return vm.runInContext(
+        `(() => {
+          var mediaSource = new MediaSource();
+          var url = URL.createObjectURL(mediaSource);
+          if (window.__advoidTestVideo) window.__advoidTestVideo.src = url;
+          var sourceBuffer = mediaSource.addSourceBuffer(${JSON.stringify(mime)});
+          return { mediaSource: mediaSource, sourceBuffer: sourceBuffer };
+        })()`,
+        context,
+      )
+    },
+    setScreenInteractive: (on) =>
+      vm.runInContext(`window._advoidSetScreenInteractive(${on});`, context),
+    shadowElement: () => document.getElementById('advoid-shadow-audio'),
+    shadowSourceBuffers: (origin) =>
+      sourceBuffers.filter((buffer) => buffer !== origin),
+    shadowPlaying: () => vm.runInContext('window._advoidShadowPlaying();', context),
     ensurePlaying: () => vm.runInContext('window._advoidEnsurePlaying();', context),
     // Freezes the page clock so the tap allowance can be aged out.
     freezeNowAt: (value) =>
@@ -765,6 +897,129 @@ describe('AdVoid page pause suppression', () => {
     assert.equal(video.pauseCalls, 1)
   })
 })
+
+
+// ---------------------------------------------------------------------------
+// Layer D: the locked-screen audio shadow. While the screen is off Chromium
+// suspends the <video> element but keeps playing media without a video track,
+// so the bridge mirrors YouTube's audio SourceBuffer into a shadow element.
+// ---------------------------------------------------------------------------
+
+describe('AdVoid locked-screen audio shadow (BACKGROUND_AUDIO_SCRIPT)', () => {
+  function shadowEnv() {
+    const env = makeBackgroundEnv()
+    const video = env.makeVideo()
+    video.muted = false
+    video.paused = false
+    env.videos.push(video)
+    env.setup()
+    env.setArmed(true)
+    return { env, video }
+  }
+
+  it('copies the live audio SourceBuffer into a shadow element', () => {
+    const { env, video } = shadowEnv()
+    const { sourceBuffer } = env.attachLiveAudioSource(video)
+
+    sourceBuffer.appendBuffer({ slice: () => 'init-segment' })
+
+    assert.ok(env.shadowElement(), 'shadow element was created')
+    const mirrored = env.shadowSourceBuffers(sourceBuffer)
+    assert.equal(mirrored.length, 1, 'exactly one shadow SourceBuffer')
+    assert.deepEqual(mirrored[0].appends, ['init-segment'])
+  })
+
+  it('ignores MediaSources the player is not attached to', () => {
+    // YouTube builds throwaway MediaSources to probe codec support.
+    const { env, video } = shadowEnv()
+    env.attachLiveAudioSource(video)
+    const probe = env.makeSourceBuffer('audio/webm; codecs="opus"')
+
+    probe.appendBuffer({ slice: () => 'probe-data' })
+
+    assert.equal(env.shadowElement(), null)
+  })
+
+  it('mirrors nothing while background audio is switched off', () => {
+    const env = makeBackgroundEnv()
+    const video = env.makeVideo()
+    env.videos.push(video)
+    env.setup()
+    const { sourceBuffer } = env.attachLiveAudioSource(video)
+
+    sourceBuffer.appendBuffer({ slice: () => 'data' })
+
+    assert.equal(env.shadowElement(), null)
+  })
+
+  it('unmutes the shadow and silences the video when the screen locks', () => {
+    const { env, video } = shadowEnv()
+    const { sourceBuffer } = env.attachLiveAudioSource(video)
+    sourceBuffer.appendBuffer({ slice: () => 'init' })
+    const shadow = env.shadowElement()
+    assert.equal(shadow.muted, true, 'silent while the screen is on')
+
+    env.setScreenInteractive(false)
+
+    assert.equal(shadow.muted, false)
+    assert.equal(shadow.volume, 1)
+    assert.equal(video.muted, true)
+    assert.equal(env.shadowPlaying(), true)
+  })
+
+  it('restores the video and silences the shadow when the screen returns', () => {
+    const { env, video } = shadowEnv()
+    const { sourceBuffer } = env.attachLiveAudioSource(video)
+    sourceBuffer.appendBuffer({ slice: () => 'init' })
+    const shadow = env.shadowElement()
+    env.setScreenInteractive(false)
+
+    env.setScreenInteractive(true)
+
+    assert.equal(shadow.muted, true)
+    assert.equal(video.muted, false)
+    assert.equal(env.shadowPlaying(), false)
+  })
+
+  it('stops the shadow when the user pauses from the lock screen', () => {
+    const { env, video } = shadowEnv()
+    const { sourceBuffer } = env.attachLiveAudioSource(video)
+    sourceBuffer.appendBuffer({ slice: () => 'init' })
+    const shadow = env.shadowElement()
+    env.setScreenInteractive(false)
+    assert.equal(shadow.paused, false)
+
+    env.mediaAction('pause')
+
+    assert.equal(shadow.paused, true)
+  })
+
+  it('tears the shadow down when background audio is switched off', () => {
+    const { env, video } = shadowEnv()
+    const { sourceBuffer } = env.attachLiveAudioSource(video)
+    sourceBuffer.appendBuffer({ slice: () => 'init' })
+    assert.ok(env.shadowElement())
+
+    env.setArmed(false)
+
+    assert.equal(env.shadowElement(), null)
+    assert.equal(env.shadowPlaying(), false)
+  })
+
+  it('ships the shadow wiring in the bridge and the state report', () => {
+    assert.match(BACKGROUND_SCRIPT, /window\._advoidShadowPlaying = function/)
+    assert.match(BACKGROUND_SCRIPT, /shadowElement\.muted = false/)
+    assert.match(BACKGROUND_SCRIPT, /shadowNativeAddSourceBuffer/)
+    assert.match(BACKGROUND_SCRIPT, /data\.slice\(0\)/)
+    // The native session must follow the shadow while it is the audible source,
+    // or it would report a paused player over playing audio and stop the
+    // foreground service that keeps the audio unmuted.
+    assert.match(mainActivity, /window\._advoidShadowPlaying/)
+    assert.match(mainActivity, /shadowPlaying \|\| isMainPlayerPlaying\(\)/)
+    assert.match(mainActivity, /_advoidShadowPositionMs/)
+  })
+})
+
 
 
 // ---------------------------------------------------------------------------

@@ -1,5 +1,34 @@
 # Project status
 
+## 2026-09-26 — Locked-screen audio now works (shadow audio renderer)
+
+- **Done: audio keeps playing while the phone is locked.** Chromium suspends the
+  `<video>` element on a hidden page but keeps playing media that has no video
+  track, so the bridge mirrors YouTube's own audio SourceBuffer into a second
+  MediaSource on an element that never receives video. While the screen is on the
+  shadow stays muted (the video's audio is what you hear, in sync); when the
+  screen locks the shadow is unmuted, the video silenced, and the position
+  aligned. On unlock the video is seeked to where the audio actually was, so
+  there is no backwards jump.
+- **Measured on the API 37 emulator:** locked → video frozen at 16.16 s while the
+  shadow advanced 23.43 → 31.53 s unmuted, `dumpsys audio` `state:started
+  mutedState:none`, media session `PLAYING, position=30031`, foreground service
+  alive; unlock → video resumed at 37.98 s with the shadow muted and in step;
+  lock-screen pause → session ended, service stopped, nothing left playing.
+- **Guards:** mirroring only runs while background audio is armed, only for the
+  MediaSource the playing video is attached to (capability-probe sources are
+  skipped), gives up after six rebuilds, and is torn down when the toggle is
+  switched off or the session ends. Shorts and non-MSE playback fall back to the
+  previous behaviour (audio stops on lock, position preserved).
+- Validation: `npm test` 279/279 (8 new shadow tests with MSE/DOM shims),
+  `npm run build`, UI check 12/12, `npx oxlint` 0 errors, Android
+  `testDebugUnitTest` 45/45. `scripts/android-bg-audio-probe.mjs` now reports the
+  shadow, and `scripts/shadow-audio-probe.mjs` is the standalone prototype/QA
+  driver used to prove it.
+- Remaining: re-test on the Xiaomi phone (lock → audio continues; unlock →
+  continues from the same spot), and keep an eye on YouTube player changes, which
+  are the one thing that can break the mirror.
+
 ## 2026-09-26 — Locked screen: the app stops fighting the platform (audio itself still needs PiP/native)
 
 - **Measured what a lock actually does:** Chromium suspends the `<video>` element
