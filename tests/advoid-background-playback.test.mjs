@@ -198,20 +198,28 @@ describe('Android background audio wiring', () => {
     assert.match(mainActivity, /postDelayed\(pipEntryCheckRunnable, PIP_ENTRY_CHECK_DELAY_MS\)/)
   })
 
-  it('stands down while the screen is locked, then resumes once', () => {
-    // Locking the phone stops the activity, hides PiP and makes Chromium suspend
-    // the video element natively (measured: 21 pause events in 17 s from our own
-    // retries, and a lock-screen card flapping between playing and paused).
-    assert.match(mainActivity, /Intent\.ACTION_SCREEN_OFF -> setScreenInteractive\(false\)/)
-    assert.match(mainActivity, /Intent\.ACTION_SCREEN_ON -> setScreenInteractive\(true\)/)
+  it('hands the audio to the shadow whenever the app cannot present video', () => {
+    // The app can present video only while its activity is started and the screen
+    // is on. Everything else — screen off, Home without PiP (OEMs that ignore
+    // auto-enter, devices where PiP is blocked), the keyguard over a stopped
+    // activity — suspends the video element, so the page is told to stand down
+    // and the audio-only shadow takes over (measured: 21 pause events in 17 s
+    // came from retrying instead).
+    assert.match(mainActivity, /private var activityStarted = false/)
+    assert.match(mainActivity, /val presentable = activityStarted && screenInteractive/)
+    assert.match(mainActivity, /Intent\.ACTION_SCREEN_OFF -> \{/)
+    assert.match(mainActivity, /screenInteractive = false\r?\n\s+updateAppPresentable\(\)/)
+    assert.match(mainActivity, /screenInteractive = true\r?\n\s+updateAppPresentable\(\)/)
+    assert.match(mainActivity, /activityStarted = true[\s\S]{0,400}updateAppPresentable\(\)/)
+    assert.match(mainActivity, /activityStarted = false[\s\S]{0,400}updateAppPresentable\(\)/)
     assert.match(mainActivity, /registerScreenStateReceiver\(\)/)
     assert.match(mainActivity, /unregisterReceiver\(screenStateReceiver\)/)
-    assert.match(mainActivity, /if \(!screenInteractive\) return/)
+    assert.match(mainActivity, /if \(!appPresentable\) return/)
     assert.match(
       mainActivity,
-      /window\._advoidSetScreenInteractive && window\._advoidSetScreenInteractive\(\$interactive\)/,
+      /window\._advoidSetPresentable && window\._advoidSetPresentable\(\$presentable\)/,
     )
-    assert.match(mainActivity, /nudgePlayback\("screen on"\)/)
+    assert.match(mainActivity, /nudgePlayback\("app presentable"\)/)
   })
 
   it('never stops and restarts the foreground service in quick succession', () => {
@@ -470,8 +478,8 @@ function makeBackgroundEnv({ videos = [] } = {}) {
         context,
       )
     },
-    setScreenInteractive: (on) =>
-      vm.runInContext(`window._advoidSetScreenInteractive(${on});`, context),
+    setPresentable: (on) =>
+      vm.runInContext(`window._advoidSetPresentable(${on});`, context),
     shadowElement: () => document.getElementById('advoid-shadow-audio'),
     shadowSourceBuffers: (origin) =>
       sourceBuffers.filter((buffer) => buffer !== origin),
@@ -963,7 +971,7 @@ describe('AdVoid locked-screen audio shadow (BACKGROUND_AUDIO_SCRIPT)', () => {
     const shadow = env.shadowElement()
     assert.equal(shadow.muted, true, 'silent while the screen is on')
 
-    env.setScreenInteractive(false)
+    env.setPresentable(false)
 
     assert.equal(shadow.muted, false)
     assert.equal(shadow.volume, 1)
@@ -976,9 +984,9 @@ describe('AdVoid locked-screen audio shadow (BACKGROUND_AUDIO_SCRIPT)', () => {
     const { sourceBuffer } = env.attachLiveAudioSource(video)
     sourceBuffer.appendBuffer({ slice: () => 'init' })
     const shadow = env.shadowElement()
-    env.setScreenInteractive(false)
+    env.setPresentable(false)
 
-    env.setScreenInteractive(true)
+    env.setPresentable(true)
 
     assert.equal(shadow.muted, true)
     assert.equal(video.muted, false)
@@ -990,7 +998,7 @@ describe('AdVoid locked-screen audio shadow (BACKGROUND_AUDIO_SCRIPT)', () => {
     const { sourceBuffer } = env.attachLiveAudioSource(video)
     sourceBuffer.appendBuffer({ slice: () => 'init' })
     const shadow = env.shadowElement()
-    env.setScreenInteractive(false)
+    env.setPresentable(false)
     assert.equal(shadow.paused, false)
 
     env.mediaAction('pause')
@@ -1007,7 +1015,7 @@ describe('AdVoid locked-screen audio shadow (BACKGROUND_AUDIO_SCRIPT)', () => {
     const { sourceBuffer } = env.attachLiveAudioSource(video)
     sourceBuffer.appendBuffer({ slice: () => 'init' })
     const shadow = env.shadowElement()
-    env.setScreenInteractive(false)
+    env.setPresentable(false)
     assert.equal(env.shadowPlaying(), true)
 
     shadow.readyState = 2
@@ -1025,7 +1033,7 @@ describe('AdVoid locked-screen audio shadow (BACKGROUND_AUDIO_SCRIPT)', () => {
     const { sourceBuffer } = env.attachLiveAudioSource(video)
     sourceBuffer.appendBuffer({ slice: () => 'init' })
     const shadow = env.shadowElement()
-    env.setScreenInteractive(false)
+    env.setPresentable(false)
     assert.equal(env.shadowPlaying(), true)
 
     shadow.ended = true
@@ -1040,7 +1048,7 @@ describe('AdVoid locked-screen audio shadow (BACKGROUND_AUDIO_SCRIPT)', () => {
     const { env, video } = shadowEnv()
     const first = env.attachLiveAudioSource(video)
     first.sourceBuffer.appendBuffer({ slice: () => 'init' })
-    env.setScreenInteractive(false)
+    env.setPresentable(false)
 
     const second = env.attachLiveAudioSource(video, 'audio/webm; codecs="opus"')
     second.sourceBuffer.appendBuffer({ slice: () => 'init-2' })
