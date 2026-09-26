@@ -1,5 +1,27 @@
 # Project status
 
+## 2026-09-26 — Play-queue boundaries and a full regression pass (round 3)
+
+- **Fixed an `ended` shadow reporting "playing".** An ended media element keeps
+  `readyState` 4, so `_advoidShadowPlaying()` now also requires `!ended`; without
+  it a session could claim to play over silence, or end and disarm the bridge
+  right before YouTube autoplays the next video.
+- **End of a video while locked, measured:** the shadow starves just short of the
+  end (212.78 s of 213.1 s, `readyState` 2), YouTube does not autoplay the next
+  video while its element is suspended (player stuck in `BUFFERING`), and the
+  session settles on PAUSED at 212.8 s — the audio's stop point. Unlocking plays
+  the remaining fraction, ends the video and closes the session cleanly (shadow
+  torn down, `armed=false`), with no crash.
+- **Regression pass over the earlier fixes with the current build:** Home → PiP
+  keeps playing with `pipClass:true` and the video visible (`videoTop` 48);
+  expanding restores the page (`pipClass:false`, no inline styles); real taps
+  reach the video; the media-session pause ends the session and removes the
+  notification; no crash.
+- Validation: `npm test` 282/282, Android `testDebugUnitTest` 45/45, build, UI
+  check 12/12, `npx oxlint` 0 errors.
+- Still open: the user's phone verification, and whether the buffer-limited
+  locked-audio window (~1 minute) is enough or the native pipeline is wanted.
+
 ## 2026-09-26 — Locked-screen audio: honest limits measured and handled
 
 - **How long it lasts:** locked audio plays out the audio that was already

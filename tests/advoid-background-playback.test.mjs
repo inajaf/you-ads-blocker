@@ -1013,6 +1013,22 @@ describe('AdVoid locked-screen audio shadow (BACKGROUND_AUDIO_SCRIPT)', () => {
     assert.equal(env.shadowPlaying(), true)
   })
 
+  it('treats an ended shadow as stopped at a play-queue boundary', () => {
+    // An ended media element keeps readyState 4, so without this the session
+    // would keep reporting playing after a video finishes — or end the session
+    // and disarm the bridge right before YouTube autoplays the next video.
+    const { env, video } = shadowEnv()
+    const { sourceBuffer } = env.attachLiveAudioSource(video)
+    sourceBuffer.appendBuffer({ slice: () => 'init' })
+    const shadow = env.shadowElement()
+    env.setScreenInteractive(false)
+    assert.equal(env.shadowPlaying(), true)
+
+    shadow.ended = true
+
+    assert.equal(env.shadowPlaying(), false)
+  })
+
   it('keeps a mid-lock rebuild audible', () => {
     // YouTube re-creates its MediaSource on quality switches/ads; if that lands
     // while the screen is off, the fresh shadow must be unmuted immediately or

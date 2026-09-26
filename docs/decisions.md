@@ -51,6 +51,15 @@ disables itself and the previous behaviour returns); a second audio decode runs
 while the screen is on (small CPU, no extra network — buffers are copied, not
 re-fetched); Shorts and non-MSE playback get no shadow.
 
+One more boundary, verified: when the buffered audio runs out at the very end of
+a video, the shadow starves just short of the end (`readyState` 2) rather than
+ending, and YouTube does **not** autoplay the next video while its element is
+suspended (player stuck in `BUFFERING`), so a play queue stops there — the
+session settles on PAUSED at the audio's stop point, and unlocking plays the
+remaining fraction, ends the video, and closes the session cleanly. An *ended*
+shadow (which keeps `readyState` 4) is reported as stopped so it can never claim
+to play over silence or end the session just before an autoplay transition.
+
 **Measured limit (important):** locked audio lasts only as long as the audio that
 was already buffered when the screen locked. While locked YouTube fetches
 nothing — its player sits in `BUFFERING` (3) with the element suspended, moving

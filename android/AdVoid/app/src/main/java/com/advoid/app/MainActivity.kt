@@ -2159,6 +2159,10 @@ class MainActivity : Activity() {
 
                 window._advoidShadowPlaying = function() {
                     if (!shadowElement || shadowElement.muted || shadowElement.paused) return false;
+                    // An ended element is a play-queue boundary (readyState stays 4
+                    // when ended): report it as stopped instead of claiming to
+                    // play over silence.
+                    if (shadowElement.ended) return false;
                     // Measured: while the screen is off YouTube fetches nothing (its
                     // player sits in BUFFERING and the platform has suspended the
                     // video element), and the page's timers are throttled or
