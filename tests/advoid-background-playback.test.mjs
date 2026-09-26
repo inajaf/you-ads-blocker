@@ -89,12 +89,6 @@ describe('Android background audio wiring', () => {
     )
     assert.match(mainActivity, /backgroundPlayback\.shouldAutoEnterPictureInPicture\(/)
     assert.match(mainActivity, /private fun updatePictureInPictureParams\(\)/)
-    // The legacy manual entry stays for API 26-30 only.
-    assert.match(
-      mainActivity,
-      /if \(Build\.VERSION\.SDK_INT >= Build\.VERSION_CODES\.S\) \{[\s\S]{0,500}schedulePipNudges\(\)\r?\n\s+return/,
-    )
-    assert.match(mainActivity, /enterPictureInPictureMode\(pipParams\(autoEnter = false\)\)/)
   })
 
   it('nudges playback back after a PiP transition, within a bound', () => {
@@ -174,8 +168,26 @@ describe('Android background audio wiring', () => {
     assert.match(playbackService, /R\.drawable\.ic_advoid_playback/)
   })
 
-  it('never stops and restarts the foreground service in quick succession', () => {
-    // Measured: a transport pause followed by YouTube flapping pause/play made
+  it('wires the media-card scrubber back into the page', () => {
+    // Without ACTION_SEEK_TO + duration the media card shows "00:00 / 00:00".
+    assert.match(playbackService, /PlaybackState\.ACTION_SEEK_TO/)
+    assert.match(playbackService, /METADATA_KEY_DURATION/)
+    assert.match(playbackService, /override fun onSeekTo\(positionMs: Long\)/)
+    assert.match(playbackService, /var seekListener: \(\(Long\) -> Unit\)\? = null/)
+    assert.match(mainActivity, /PlaybackService\.seekListener = \{ positionMs ->/)
+    assert.match(mainActivity, /evaluateMediaAction\("seek", positionMs\)/)
+  })
+
+  it('enters PiP explicitly as well as leaving auto-enter armed', () => {
+    // Measured on Xiaomi/HyperOS: auto-enter alone produced no PiP window, so
+    // the explicit entry must stay on every API level.
+    assert.match(
+      mainActivity,
+      /schedulePipNudges\(\)\r?\n\s+try \{\r?\n\s+enterPictureInPictureMode\(pipParams\(autoEnter = true\)\)/,
+    )
+  })
+
+  it('never stops and restarts the foreground service in quick succession', () => {    // Measured: a transport pause followed by YouTube flapping pause/play made
     // the app call stopService and startForegroundService within milliseconds,
     // and the platform killed it with
     // RemoteServiceException$ForegroundServiceDidNotStartInTimeException.
@@ -307,6 +319,8 @@ function makeBackgroundEnv({ videos = [] } = {}) {
       vm.runInContext(`Date.now = function() { return ${value}; };`, context),
     mediaAction: (action) =>
       vm.runInContext(`window._advoidMediaAction(${JSON.stringify(action)});`, context),
+    seek: (positionMs) =>
+      vm.runInContext(`window._advoidMediaAction('seek', ${positionMs});`, context),
     // A real finger tap: the script records the gesture and allows the pause.
     tap: () => {
       for (const listener of windowListeners.get('pointerdown') || []) {
@@ -681,6 +695,23 @@ describe('AdVoid page pause suppression', () => {
     env.ensurePlaying()
 
     assert.equal(video.playCalls, 1)
+  })
+
+  it('seeks the main player from a media-card scrub', () => {
+    const { env, video } = envWithVideo()
+
+    env.seek(60_000)
+
+    assert.equal(video.currentTime, 60)
+  })
+
+  it('ignores an out-of-range scrub request', () => {
+    const { env, video } = envWithVideo()
+    const before = video.currentTime
+
+    env.seek(-5_000)
+
+    assert.equal(video.currentTime, before)
   })
 
   it('never suppresses videos outside the main watch player', () => {

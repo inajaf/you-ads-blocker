@@ -1,5 +1,45 @@
 # Architectural decisions
 
+## 2026-09-26 — Android background audio requires PiP; explicit entry + media-card seek
+
+Reason: a Xiaomi/HyperOS phone showed **no PiP window at all** when the Home
+button was pressed, and the media card sat paused at `00:00 / 00:00`. Two
+separate causes were measured on the API 37 emulator.
+
+Decisions:
+- **Enter PiP explicitly on every API level**, keeping `setAutoEnterEnabled`
+  armed as well. The previous revision relied on the system's auto-enter alone on
+  Android 12+; MIUI/HyperOS evidently does not honour it, so no PiP appeared and
+  the backgrounded WebView was suspended. The explicit
+  `enterPictureInPictureMode()` is what MIUI accepts, and where the system
+  transition does run it either wins first or our call is ignored. The resume
+  nudges from the same day keep the audio alive across either transition.
+- **Background audio without PiP is impossible in a WebView — do not chase it.**
+  Measured with PiP entry disabled in a scratch build: on Home the video stayed
+  `paused=true` at its position for 15 s with `readyState=4` (no unload), the
+  page's `ensurePlaying()`/keep-alive/`playVideo()` attempts all failed to stick,
+  and the platform additionally logged
+  `AudioHardening background playback muted … level: partial`. Chromium suspends
+  the media pipeline of a hidden WebView at the native layer; JS cannot resume
+  it. PiP (or the already-rejected native ExoPlayer pipeline) is therefore
+  mandatory for background audio, and a device that cannot show PiP is a support
+  case, not a code path: on MIUI the app also needs the
+  "Display pop-up windows while running in the background" permission before PiP
+  is allowed to appear.
+- **Advertise duration and support seeking** so the media card shows real times
+  instead of `00:00 / 00:00` and its scrubber works:
+  `METADATA_KEY_DURATION` is reported again, `PlaybackState.ACTION_SEEK_TO` is
+  advertised, `MediaSession.Callback.onSeekTo` forwards the position through a
+  new `PlaybackService.seekListener` into `_advoidMediaAction('seek', ms)`, and
+  the page sets `video.currentTime` plus YouTube's `player.seekTo(seconds, true)`
+  so the element and the player agree.
+
+Verification: `npm test` 266/266, `npm run build`, `./scripts/ui-check.sh` 12/12,
+`npx oxlint` 0 errors, Android `testDebugUnitTest` 43/43. Emulator: Home button →
+`mode=pinned` with `paused=false` and `currentTime` advancing 1 s/s for 12 s,
+audio `state:started mutedState:none`, session `state=PLAYING` with
+`actions=775` (includes seek) and title/artist/duration metadata.
+
 ## 2026-09-26 — Android background audio follow-ups: real-device PiP, filter row, FGS churn crash
 
 Reason: real-device testing of the background-audio change reported two defects.

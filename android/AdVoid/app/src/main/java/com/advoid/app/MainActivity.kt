@@ -316,6 +316,11 @@ class MainActivity : Activity() {
         PlaybackService.actionListener = { action ->
             runOnUiThread { handleMediaAction(action) }
         }
+        // Lock-screen/media-card scrubber: forward the requested position into
+        // the WebView player (the session advertises duration for this).
+        PlaybackService.seekListener = { positionMs ->
+            runOnUiThread { evaluateMediaAction("seek", positionMs) }
+        }
 
         setContentView(rootLayout)
     }
@@ -614,9 +619,10 @@ class MainActivity : Activity() {
         handleMediaAction(if (mediaPlaying) MediaAction.PAUSE else MediaAction.PLAY)
     }
 
-    private fun evaluateMediaAction(action: String) {
+    private fun evaluateMediaAction(action: String, positionMs: Long = 0L) {
+        val argument = if (action == "seek") positionMs.toString() else "null"
         webView.evaluateJavascript(
-            "window._advoidMediaAction && window._advoidMediaAction('$action');",
+            "window._advoidMediaAction && window._advoidMediaAction('$action', $argument);",
             null,
         )
     }
@@ -813,18 +819,16 @@ class MainActivity : Activity() {
             return
         }
         if (!backgroundPlayback.shouldEnterPictureInPicture(pipSupported())) return
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            // The system owns the transition on Android 12+ (auto-enter, armed
-            // by updatePictureInPictureParams) because it keeps the WebView
-            // surface alive; nudging covers the first frames either way.
-            schedulePipNudges()
-            return
-        }
+        // Enter PiP explicitly on every API level, and keep auto-enter armed as
+        // well. Measured on a Xiaomi/HyperOS phone: auto-enter alone produced no
+        // PiP window at all, so the backgrounded WebView was suspended and the
+        // audio died. The explicit call is what MIUI honours; where the system
+        // transition is used instead, our call either wins first or is ignored.
+        schedulePipNudges()
         try {
-            enterPictureInPictureMode(pipParams(autoEnter = false))
-            schedulePipNudges()
+            enterPictureInPictureMode(pipParams(autoEnter = true))
         } catch (e: IllegalStateException) {
-            Log.w(TAG, "picture-in-picture unavailable: ${e.message}")
+            Log.w(TAG, "picture-in-picture entry failed: ${e.message}")
         }
     }
 
@@ -864,6 +868,7 @@ class MainActivity : Activity() {
         serviceStopPending = false
         unregisterPipActions()
         PlaybackService.actionListener = null
+        PlaybackService.seekListener = null
         // The WebView is the only thing that can produce the audio, and it is
         // about to be destroyed: never strand a media notification over silence.
         PlaybackService.stop(this)
@@ -1831,11 +1836,32 @@ class MainActivity : Activity() {
                 // Native nudge after a PiP transition (see nudgePlayback).
                 window._advoidEnsurePlaying = ensurePlaying;
 
-                window._advoidMediaAction = function(action) {
+                window._advoidMediaAction = function(action, positionMs) {
                     var video = mainPlayerVideo();
                     if (!video) return;
                     if (action === 'play') {
                         resume(video);
+                    } else if (action === 'seek') {
+                        // Lock screen / media card scrubber.
+                        var seconds = Number(positionMs) / 1000;
+                        if (!Number.isFinite(seconds) || seconds < 0) return;
+                        if (Number.isFinite(video.duration) && video.duration > 0) {
+                            seconds = Math.min(seconds, video.duration);
+                        }
+                        try {
+                            video.currentTime = seconds;
+                        } catch (e) {
+                            console.warn('[AdVoid] seek failed: ' + e);
+                        }
+                        // Keep YouTube's own player in step with the element.
+                        var seekPlayer = playerApi();
+                        if (seekPlayer && typeof seekPlayer.seekTo === 'function') {
+                            try {
+                                seekPlayer.seekTo(seconds, true);
+                            } catch (e) {
+                                console.warn('[AdVoid] player.seekTo failed: ' + e);
+                            }
+                        }
                     } else if (action === 'pause') {
                         // The user asked for this explicitly: it must win over
                         // the suppression above, and the page's player state has

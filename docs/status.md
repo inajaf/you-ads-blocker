@@ -1,5 +1,39 @@
 # Project status
 
+## 2026-09-26 — Android background audio: PiP must actually appear (Xiaomi), media-card seek
+
+- **Explicit PiP entry restored alongside auto-enter.** The previous revision
+  relied on the Android 12+ system auto-enter alone; on a Xiaomi/HyperOS phone
+  that produced **no PiP window at all**, so the backgrounded WebView was
+  suspended and the audio stopped (media card paused at `00:00 / 00:00`).
+  `onUserLeaveHint` now calls `enterPictureInPictureMode()` on every API level
+  while `setAutoEnterEnabled` stays armed; the resume nudges cover either
+  transition. Verified on API 37: Home → `mode=pinned`, `paused=false`,
+  `currentTime` advancing 1 s/s for 12 s, audio `state:started mutedState:none`.
+- **Measured and documented: background audio is impossible without PiP.** With
+  PiP entry disabled in a scratch build, Home left the video `paused` at its
+  position for 15 s, every JS resume attempt failed to stick, and the platform
+  logged `AudioHardening background playback muted … level: partial`. Chromium
+  suspends a hidden WebView's media pipeline natively. PiP is mandatory; on MIUI
+  the app additionally needs the "Display pop-up windows while running in the
+  background" permission before PiP is allowed to show.
+- **Media card fixed:** duration is advertised again and
+  `ACTION_SEEK_TO`/`onSeekTo` now forward scrubbing into the page
+  (`video.currentTime` + `player.seekTo`), so the card shows real times instead of
+  `00:00 / 00:00` and the lock-screen scrubber works.
+- Validation: `npm test` 266/266, `npm run build`, `./scripts/ui-check.sh` 12/12,
+  `npx oxlint` 0 errors, Android `testDebugUnitTest` 43/43. Emulator session
+  reports `state=PLAYING`, `actions=775`, title/artist/duration metadata.
+- Remaining: re-test on the Xiaomi (Home button → PiP + audio; scrub from the
+  media card), confirm the MIUI pop-up permission if PiP still does not appear,
+  then merge PR #56 and cut the next release. `version.properties` stays at
+  `1.4.5`/code 7.
+- Note: the emulator (API 37 dev image) hung its `system_server` once and needed
+  a reboot during this work; treat unexplained "Can't find service" errors on it
+  as an emulator fault, not app behaviour. A Studio-built APK installed on it
+  earlier also shipped without the two newest page scripts, which is why
+  page-state checks are part of the QA recipe.
+
 ## 2026-09-26 — Android background audio: real-device follow-ups (branch fm/android-bg-audio-v2)
 
 Follow-up to the entry below, from testing the branch build on a real Android 12+

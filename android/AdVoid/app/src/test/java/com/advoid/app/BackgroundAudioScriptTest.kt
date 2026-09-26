@@ -66,13 +66,17 @@ class BackgroundAudioScriptTest {
 
     @Test
     fun `media actions drive play and pause on the main player`() {
-        assertTrue(script.contains("window._advoidMediaAction = function(action)"))
+        assertTrue(script.contains("window._advoidMediaAction = function(action, positionMs)"))
         assertTrue(script.contains("action === 'play'"))
         assertTrue(script.contains("action === 'pause'"))
         assertTrue(script.contains("video.pause()"))
         // The page's player must follow the element, or it keeps believing it is
         // playing and pauses again at the next sync.
         assertTrue(script.contains("player.pauseVideo()"))
+        // Lock-screen/media-card scrubbing is wired back into the page.
+        assertTrue(script.contains("action === 'seek'"))
+        assertTrue(script.contains("video.currentTime = seconds"))
+        assertTrue(script.contains("seekPlayer.seekTo(seconds, true)"))
     }
 
     @Test
