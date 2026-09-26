@@ -1,5 +1,47 @@
 # Architectural decisions
 
+## 2026-09-26 — Audio shadow: survive MediaSource churn (init cache + per-shadow queues)
+
+Reason: the shadow worked on a first lock but not on a later one. A five-minute
+endurance test and a forced starvation showed why: the starved element errored,
+which permanently disabled the renderer, and a seek makes YouTube re-create its
+MediaSource several times in a row — every rebuild failed with
+`addSourceBuffer … readyState is not 'open'` or `element error 4`, so no healthy
+shadow was left for the next lock.
+
+Root causes (all measured from the on-device diagnostics):
+- A single failure set `shadowDisabled` for the rest of the page, so *one*
+  starvation killed background audio for every later lock.
+- One shared segment queue was drained into the previous, already closed
+  SourceBuffer, so the replacement shadow never received an init segment
+  (`buffered=0, networkState=3`).
+- Late `sourceopen`/`error` events from replaced elements or sources ran against
+  the current shadow and tore it down.
+
+Decisions:
+- **Cache the initialisation segment per mime and replay it into every rebuild.**
+  The init segment for a stream is stable, so a rebuilt shadow can decode even
+  when its own source's init append was missed during the churn. This is the fix
+  that makes a post-seek/second lock work.
+- **Per-shadow queues**: each shadow owns the ops copied for it and drains only
+  into its own SourceBuffer; replaced shadows take their queues with them.
+- **Staleness guards** on `sourceopen`, element `error` and the failure reporter,
+  so a replaced element can never tear down the current one.
+- **Failure policy**: one failure disables nothing; only more than three failures
+  inside 60 s *while the shadow is actually needed* (`presentable === false`)
+  disable the renderer, and failures in the foreground (post-seek churn) are
+  ignored entirely. Recovery waits for a fresh source rather than replaying
+  segments whose source is gone. Failures always tear down cleanly, restoring the
+  video's mute state.
+- **Diagnostics** (`_advoidShadowState`, contextual failure logs) stay in: they
+  are how this class of bug is found again.
+
+Verified: after a forced starvation and return, the shadow rebuilt once
+(`sources: 2`, `disabled: false`, `readyState: 4`, buffered to 110 s) and the
+second lock played — `muted:false, paused:false`, `ct 83.58`, one started unmuted
+audio player, no failures logged, no crash. Previously the same scenario left
+`disabled: true` and silence.
+
 ## 2026-09-26 — Background audio without PiP: one "can the app present video" signal
 
 Reason: the original report — "when the app is minimised the audio stops" — and

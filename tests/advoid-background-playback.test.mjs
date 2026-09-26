@@ -259,6 +259,9 @@ describe('Android background audio wiring', () => {
 
 let urlCounter = 1
 
+/** When set, sourceopen callbacks queue here instead of firing immediately. */
+let deferredSourceOpens = null
+
 /** Every SourceBuffer the page creates, so mirrored copies can be asserted. */
 const sourceBuffers = []
 
@@ -269,15 +272,25 @@ class FakeSourceBuffer {
     this.updating = false
     this.appends = []
     this.removes = []
+    this.listeners = new Map()
     sourceBuffers.push(this)
   }
   appendBuffer(data) {
     this.appends.push(data)
+    this.notify('updateend')
   }
   remove(start, end) {
     this.removes.push([start, end])
+    this.notify('updateend')
   }
-  addEventListener() {}
+  addEventListener(type, listener) {
+    if (!this.listeners.has(type)) this.listeners.set(type, [])
+    this.listeners.get(type).push(listener)
+  }
+  // The real SourceBuffer fires updateend, which is what drains a queued shadow.
+  notify(type) {
+    for (const listener of this.listeners.get(type) || []) listener({ type })
+  }
 }
 
 class FakeMediaSource {
@@ -294,9 +307,12 @@ class FakeMediaSource {
   addEventListener(type, listener) {
     if (!this.listeners.has(type)) this.listeners.set(type, [])
     this.listeners.get(type).push(listener)
-    // The shim fires sourceopen immediately (a real MediaSource fires it on the
-    // next task) so the shadow SourceBuffer exists by the first append.
-    if (type === 'sourceopen') listener()
+    // The shim fires sourceopen immediately by default (a real MediaSource fires
+    // it on the next task) so the shadow SourceBuffer exists by the first append.
+    // Tests that need the real ordering defer it with setDeferSourceOpens(true).
+    if (type !== 'sourceopen') return
+    if (deferredSourceOpens) deferredSourceOpens.push(listener)
+    else listener()
   }
   endOfStream() {
     this.readyState = 'ended'
@@ -483,12 +499,30 @@ function makeBackgroundEnv({ videos = [] } = {}) {
     shadowElement: () => document.getElementById('advoid-shadow-audio'),
     shadowSourceBuffers: (origin) =>
       sourceBuffers.filter((buffer) => buffer !== origin),
+    allSourceBuffers: () => sourceBuffers.slice(),
     shadowPlaying: () => vm.runInContext('window._advoidShadowPlaying();', context),
     shadowState: () => vm.runInContext('window._advoidShadowState();', context),
+    setDeferSourceOpens: (defer) => {
+      deferredSourceOpens = defer ? [] : null
+    },
+    flushSourceOpens: () => {
+      const queued = deferredSourceOpens || []
+      deferredSourceOpens = []
+      for (const listener of queued) listener()
+    },
     ensurePlaying: () => vm.runInContext('window._advoidEnsurePlaying();', context),
     // Freezes the page clock so the tap allowance can be aged out.
     freezeNowAt: (value) =>
       vm.runInContext(`Date.now = function() { return ${value}; };`, context),
+    /** Fires an event on the current shadow element (element error, waiting…). */
+    fireShadowEvent: (type) => {
+      const shadow = document.getElementById('advoid-shadow-audio')
+      for (const listener of shadow?.listeners.get(type) || []) listener({ type })
+    },
+    /** Fires an event on a specific (possibly replaced) element. */
+    fireEventOn: (element, type) => {
+      for (const listener of element?.listeners.get(type) || []) listener({ type })
+    },
     mediaAction: (action) =>
       vm.runInContext(`window._advoidMediaAction(${JSON.stringify(action)});`, context),
     seek: (positionMs) =>
@@ -918,6 +952,15 @@ describe('AdVoid page pause suppression', () => {
 // ---------------------------------------------------------------------------
 
 describe('AdVoid locked-screen audio shadow (BACKGROUND_AUDIO_SCRIPT)', () => {
+  /** Runs queued timers until `done()` is true (or a guard trips). */
+  function runTimersUntil(env, done) {
+    let guard = 0
+    while (!done() && env.pendingTimerCount() > 0 && guard < 30) {
+      env.runNextTimer()
+      guard += 1
+    }
+  }
+
   function shadowEnv() {
     const env = makeBackgroundEnv()
     const video = env.makeVideo()
@@ -1092,6 +1135,99 @@ describe('AdVoid locked-screen audio shadow (BACKGROUND_AUDIO_SCRIPT)', () => {
     assert.equal(env.shadowState().disabled, true)
     assert.equal(env.shadowElement(), null)
     assert.equal(video.muted, false)
+  })
+
+  it('does not switch the shadow off for good after one failure', () => {
+    // Measured on a five-minute lock: the starved element fired an error, and
+    // treating it as permanent left every later lock without audio at all.
+    const { env, video } = shadowEnv()
+    env.freezeNowAt(3_000_000)
+    const first = env.attachLiveAudioSource(video)
+    first.sourceBuffer.appendBuffer({ slice: () => 'init' })
+    assert.ok(env.shadowElement())
+
+    env.fireShadowEvent('error')
+
+    assert.equal(env.shadowElement(), null, 'the failed shadow is gone')
+    assert.equal(env.shadowState().disabled, false, 'but background audio is not off')
+
+    // Recovery comes from a fresh source, whose first append carries a new init
+    // segment; replaying the dead source's segments cannot work.
+    const second = env.attachLiveAudioSource(video)
+    second.sourceBuffer.appendBuffer({ slice: () => 'init-2' })
+    assert.ok(env.shadowElement(), 'rebuilt from the fresh source')
+    assert.equal(env.shadowState().disabled, false)
+  })
+
+  it('drains each shadow queue into its own buffer', () => {
+    // A seek makes YouTube re-create its MediaSource several times in a row. With
+    // one shared queue the copied segments were drained into the previous, closed
+    // SourceBuffer, so the current shadow never saw an init segment and died with
+    // `element error 4`.
+    const { env, video } = shadowEnv()
+    env.setDeferSourceOpens(true)
+    const before = env.allSourceBuffers().length
+
+    const first = env.attachLiveAudioSource(video)
+    first.sourceBuffer.appendBuffer({ slice: () => 'a-init' })
+    env.flushSourceOpens()
+
+    const second = env.attachLiveAudioSource(video)
+    second.sourceBuffer.appendBuffer({ slice: () => 'b-init' })
+    env.flushSourceOpens()
+
+    // Creation order: YouTube's audio buffer, the shadow's, then the same pair
+    // again for the replacement source.
+    const created = env.allSourceBuffers().slice(before)
+    assert.equal(created.length, 4, 'two player buffers and two shadow buffers')
+    assert.deepEqual(created[1].appends, ['a-init'], 'first shadow got its own init')
+    // The replacement is seeded with the cached init segment and then its own data,
+    // so it can decode even though its source's init append raced the rebuild.
+    assert.deepEqual(
+      created[3].appends,
+      ['a-init', 'b-init'],
+      'replacement shadow replays the cached init',
+    )
+  })
+
+  it('ignores a late error from a replaced shadow element', () => {
+    // Replaced elements fire events while being torn down. Because the listeners
+    // referenced the module-level element, that used to tear down the current,
+    // healthy shadow — measured on the device as 4 rebuilds and no shadow left,
+    // i.e. no audio on the next lock.
+    const { env, video } = shadowEnv()
+    env.freezeNowAt(5_000_000)
+    const first = env.attachLiveAudioSource(video)
+    first.sourceBuffer.appendBuffer({ slice: () => 'init' })
+    const stale = env.shadowElement()
+    assert.ok(stale, 'first shadow built')
+
+    const second = env.attachLiveAudioSource(video)
+    second.sourceBuffer.appendBuffer({ slice: () => 'init-2' })
+    const current = env.shadowElement()
+    assert.ok(current, 'shadow rebuilt for the new source')
+    assert.notEqual(current, stale)
+
+    env.fireEventOn(stale, 'error')
+
+    assert.equal(env.shadowElement(), current, 'the current shadow survived')
+    assert.equal(env.shadowState().present, true)
+    assert.equal(env.shadowState().disabled, false)
+  })
+
+  it('gives up after repeated failures while the shadow is needed', () => {
+    // Failures in the foreground are post-seek churn: they must not switch the
+    // feature off. Repeated failures while the audio depends on the shadow do.
+    const { env, video } = shadowEnv()
+    env.freezeNowAt(4_000_000)
+    env.setPresentable(false)
+    for (let i = 0; i < 6; i += 1) {
+      const source = env.attachLiveAudioSource(video)
+      source.sourceBuffer.appendBuffer({ slice: () => `init-${i}` })
+      if (env.shadowElement()) env.fireShadowEvent('error')
+    }
+
+    assert.equal(env.shadowState().disabled, true)
   })
 
   it('tears the shadow down when background audio is switched off', () => {
