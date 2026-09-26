@@ -1,5 +1,35 @@
 # Project status
 
+## 2026-09-26 — Locked screen: the app stops fighting the platform (audio itself still needs PiP/native)
+
+- **Measured what a lock actually does:** Chromium suspends the `<video>` element
+  natively (paused, `readyState 4`, position frozen, no JS pause involved) while
+  an `<audio>` element in the same page keeps playing and stays
+  `state:started mutedState:none`. The suspend rule is per element: media with a
+  video track is suspended on a hidden page; audio-only media is not. This
+  WebView also exposes **no `navigator.mediaSession`** to pages, so the page
+  cannot claim Chromium's background-media exemption.
+- **Fixed the fight we were losing:** the retry loop produced 21 `pause` events
+  in 17 s and a lock-screen card flapping between playing and paused. The
+  activity now tracks screen state and tells the page
+  (`_advoidSetScreenInteractive`); with the screen off the keep-alive stands down
+  and nudges stop, so the card settles on one stable PAUSED state with the
+  position preserved, and on screen-on the page resumes once plus one native
+  nudge. Verified: session state changes while locked went from dozens per minute
+  to 1, and playback resumed (19.99 s → 23.05 s) after unlocking.
+- **Still open (needs a decision):** audio genuinely playing *while locked*.
+  A WebView cannot do it — the video element is suspended no matter what the page
+  does. The two possible routes are the native ExoPlayer pipeline (rejected
+  earlier: expiring IP-bound URLs, DASH `n` churn, bypasses YouTube playback
+  accounting) or a shadow audio-only renderer that mirrors YouTube's
+  `audio/webm; codecs="opus"` SourceBuffer into a second element with no video
+  track. The shadow route is technically reachable (YouTube's MSE is on the main
+  thread and the audio SourceBuffer is observable) but unproven: two prototype
+  attempts failed on my own plumbing (mirroring a discarded capability-probe
+  MediaSource, then a recursion bug) and the emulator's page loads were flaky.
+- Validation: `npm test` 271/271, `npm run build`, Android `testDebugUnitTest`
+  44/44, UI check 12/12, `npx oxlint` 0 errors.
+
 ## 2026-09-26 — Android: invisible-player bug fixed (the "player not playing / force play does nothing")
 
 - **Root cause found and reproduced live:** the PiP presentation forced inline

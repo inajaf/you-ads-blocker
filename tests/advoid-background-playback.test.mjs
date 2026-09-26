@@ -198,7 +198,24 @@ describe('Android background audio wiring', () => {
     assert.match(mainActivity, /postDelayed\(pipEntryCheckRunnable, PIP_ENTRY_CHECK_DELAY_MS\)/)
   })
 
-  it('never stops and restarts the foreground service in quick succession', () => {    // Measured: a transport pause followed by YouTube flapping pause/play made
+  it('stands down while the screen is locked, then resumes once', () => {
+    // Locking the phone stops the activity, hides PiP and makes Chromium suspend
+    // the video element natively (measured: 21 pause events in 17 s from our own
+    // retries, and a lock-screen card flapping between playing and paused).
+    assert.match(mainActivity, /Intent\.ACTION_SCREEN_OFF -> setScreenInteractive\(false\)/)
+    assert.match(mainActivity, /Intent\.ACTION_SCREEN_ON -> setScreenInteractive\(true\)/)
+    assert.match(mainActivity, /registerScreenStateReceiver\(\)/)
+    assert.match(mainActivity, /unregisterReceiver\(screenStateReceiver\)/)
+    assert.match(mainActivity, /if \(!screenInteractive\) return/)
+    assert.match(
+      mainActivity,
+      /window\._advoidSetScreenInteractive && window\._advoidSetScreenInteractive\(\$interactive\)/,
+    )
+    assert.match(mainActivity, /nudgePlayback\("screen on"\)/)
+  })
+
+  it('never stops and restarts the foreground service in quick succession', () => {
+    // Measured: a transport pause followed by YouTube flapping pause/play made
     // the app call stopService and startForegroundService within milliseconds,
     // and the platform killed it with
     // RemoteServiceException$ForegroundServiceDidNotStartInTimeException.
