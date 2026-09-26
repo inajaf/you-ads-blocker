@@ -79,6 +79,10 @@ const PROBE = `(() => {
       bufferedEnd: bufferedEnd(shadow)
     } : null,
     videoBufferedEnd: bufferedEnd(video),
+    // Renderer health: rebuild count and whether the churn guard tripped.
+    shadowState: typeof window._advoidShadowState === 'function'
+      ? window._advoidShadowState()
+      : null,
     playingMode: document.querySelectorAll('.html5-video-player.playing-mode').length
   });
 })()`

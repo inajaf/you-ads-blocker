@@ -1923,7 +1923,11 @@ class MainActivity : Activity() {
                 var shadowMirroring = null;
                 var shadowQueue = [];
                 var shadowSources = 0;
+                var shadowBuildTimes = [];
                 var shadowDisabled = false;
+                /** Rebuild churn guard: more than this many within the window is a bug. */
+                var SHADOW_CHURN_WINDOW_MS = 60000;
+                var SHADOW_MAX_REBUILDS_PER_WINDOW = 10;
                 var shadowUrlOf = new WeakMap();
                 var shadowVideoMutedBeforeLock = null;
 
@@ -1951,12 +1955,22 @@ class MainActivity : Activity() {
 
                 function buildShadow(mime) {
                     shadowSources++;
-                    if (shadowSources > 20) {
-                        // YouTube re-creates its MediaSource on quality switches,
-                        // ads and post-seek reloads, so a handful of rebuilds is
-                        // normal; stop only when it becomes a churn.
+                    // YouTube re-creates its MediaSource on quality switches, ads,
+                    // post-seek reloads and every unlock (the shadow is rebuilt
+                    // when its source changed), so a fixed lifetime cap would
+                    // disable the feature after enough ordinary use. Guard against
+                    // churn instead: too many rebuilds in a short window.
+                    var now = Date.now();
+                    shadowBuildTimes.push(now);
+                    shadowBuildTimes = shadowBuildTimes.filter(function(at) {
+                        return now - at < SHADOW_CHURN_WINDOW_MS;
+                    });
+                    if (shadowBuildTimes.length > SHADOW_MAX_REBUILDS_PER_WINDOW) {
                         shadowDisabled = true;
-                        console.warn('[AdVoid] shadow audio disabled after repeated rebuilds');
+                        console.warn(
+                            '[AdVoid] shadow audio disabled: ' + shadowBuildTimes.length +
+                                ' rebuilds within ' + (SHADOW_CHURN_WINDOW_MS / 1000) + 's'
+                        );
                         return;
                     }
                     if (shadowElement && shadowElement.parentNode) {
@@ -2155,6 +2169,21 @@ class MainActivity : Activity() {
                 /** True while the shadow (not the video) is the audible source. */
                 window._advoidShadowAudible = function() {
                     return !!(shadowElement && !shadowElement.muted && !shadowDisabled);
+                };
+
+                /** QA/telemetry view of the renderer, also used by the probe script. */
+                window._advoidShadowState = function() {
+                    return {
+                        sources: shadowSources,
+                        disabled: shadowDisabled,
+                        present: !!shadowElement,
+                        audible: window._advoidShadowAudible(),
+                        playing: window._advoidShadowPlaying(),
+                        readyState: shadowElement ? shadowElement.readyState : null,
+                        currentTime: shadowElement
+                            ? Number(shadowElement.currentTime.toFixed(2))
+                            : null
+                    };
                 };
 
                 window._advoidShadowPlaying = function() {

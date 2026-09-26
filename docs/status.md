@@ -1,5 +1,27 @@
 # Project status
 
+## 2026-09-26 — Repeated lock/unlock stress test + time-based rebuild guard (round 4)
+
+- **Four lock/unlock cycles back to back, all clean:** while locked the shadow was
+  audible and playing (`ct` 27.83 → 44.49 → 61.16 → 77.67, `readyState` 4), and
+  each unlock resumed the video where the audio was (35.44 → 52.18 → 68.68 →
+  85.07) — monotonic, no rewind, no crash, one foreground service and one
+  notification (no orphans) after the cycles.
+- **The mirror was never rebuilt across those cycles** (`sources: 1`,
+  `disabled: false`), so the old hard cap of 20 rebuilds could only ever trip on
+  real churn. It is a rolling window now: more than 10 rebuilds within 60 s
+  disables the renderer, while a long session with occasional rebuilds (seeks,
+  ads, quality switches) keeps working indefinitely. Two new tests cover it
+  (churn stops it; spaced-out rebuilds never do).
+- **Diagnostics added:** `window._advoidShadowState()` reports `sources`,
+  `disabled`, `present`, `audible`, `playing`, `readyState` and `currentTime`, and
+  `scripts/android-bg-audio-probe.mjs` prints it, so a future "audio stopped"
+  report can be diagnosed from one probe line.
+- Validation: `npm test` 284/284, Android `testDebugUnitTest` 45/45, build, UI
+  check 12/12, `npx oxlint` 0 errors.
+- Still open: the user's phone verification, and whether the buffer-limited
+  locked-audio window (~1 minute) is enough or the native pipeline is wanted.
+
 ## 2026-09-26 — Play-queue boundaries and a full regression pass (round 3)
 
 - **Fixed an `ended` shadow reporting "playing".** An ended media element keeps
