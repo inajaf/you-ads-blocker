@@ -473,6 +473,7 @@ function makeBackgroundEnv({ videos = [] } = {}) {
     shadowSourceBuffers: (origin) =>
       sourceBuffers.filter((buffer) => buffer !== origin),
     shadowPlaying: () => vm.runInContext('window._advoidShadowPlaying();', context),
+    shadowState: () => vm.runInContext('window._advoidShadowState();', context),
     ensurePlaying: () => vm.runInContext('window._advoidEnsurePlaying();', context),
     // Freezes the page clock so the tap allowance can be aged out.
     freezeNowAt: (value) =>
@@ -1069,6 +1070,44 @@ describe('AdVoid locked-screen audio shadow (BACKGROUND_AUDIO_SCRIPT)', () => {
     assert.match(mainActivity, /window\._advoidShadowPlaying/)
     assert.match(mainActivity, /shadowPlaying \|\| isMainPlayerPlaying\(\)/)
     assert.match(mainActivity, /_advoidShadowPositionMs/)
+  })
+
+  it('disables the shadow only on rebuild churn, not after a long session', () => {
+    // Every unlock rebuilds the mirror (the source changed), so a lifetime cap
+    // would switch the feature off after ordinary use. The guard is a rolling
+    // window: >10 rebuilds within 60 s is churn, spread-out rebuilds are fine.
+    const { env, video } = shadowEnv()
+    env.freezeNowAt(1_000_000)
+    const first = env.attachLiveAudioSource(video)
+    first.sourceBuffer.appendBuffer({ slice: () => 'init' })
+    assert.equal(env.shadowState().disabled, false)
+
+    // Eleven rebuilds in the same instant: churn, stop.
+    for (let i = 0; i < 11; i += 1) {
+      const next = env.attachLiveAudioSource(video)
+      next.sourceBuffer.appendBuffer({ slice: () => `init-${i}` })
+    }
+
+    const state = env.shadowState()
+    assert.equal(state.disabled, true)
+    assert.ok(state.sources >= 11)
+  })
+
+  it('keeps working across spaced-out rebuilds', () => {
+    const { env, video } = shadowEnv()
+    env.freezeNowAt(1_000_000)
+    const first = env.attachLiveAudioSource(video)
+    first.sourceBuffer.appendBuffer({ slice: () => 'init' })
+
+    for (let i = 0; i < 15; i += 1) {
+      env.freezeNowAt(1_000_000 + (i + 1) * 90_000)
+      const next = env.attachLiveAudioSource(video)
+      next.sourceBuffer.appendBuffer({ slice: () => `init-${i}` })
+    }
+
+    const state = env.shadowState()
+    assert.equal(state.disabled, false)
+    assert.ok(state.sources >= 15)
   })
 })
 
