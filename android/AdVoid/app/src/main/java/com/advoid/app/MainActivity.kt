@@ -1953,13 +1953,21 @@ class MainActivity : Activity() {
                 var shadowMediaSource = null;
                 var shadowSourceBuffer = null;
                 var shadowMirroring = null;
-                var shadowQueue = [];
+                /** Ops copied for the current shadow; drained only into its own buffer. */
+                var shadowPending = null;
                 var shadowSources = 0;
                 var shadowBuildTimes = [];
                 var shadowDisabled = false;
                 /** Rebuild churn guard: more than this many within the window is a bug. */
                 var SHADOW_CHURN_WINDOW_MS = 60000;
                 var SHADOW_MAX_REBUILDS_PER_WINDOW = 10;
+                var SHADOW_MAX_ERRORS_PER_WINDOW = 3;
+                var shadowErrorTimes = [];
+                /** Mirroring diagnostics: appends copied and the mime being used. */
+                var shadowAppends = 0;
+                var shadowLastMime = 'none';
+                /** mime -> the stream's init segment, reused by rebuilds. */
+                var shadowInitByMime = {};
                 var shadowUrlOf = new WeakMap();
                 var shadowVideoMutedBeforeLock = null;
 
@@ -1968,17 +1976,24 @@ class MainActivity : Activity() {
                     return isMainPlayerVideo(mainPlayerVideo()) ? mainPlayerVideo() : null;
                 }
 
-                function shadowFlush() {
-                    if (!shadowSourceBuffer || !shadowMediaSource ||
-                        shadowMediaSource.readyState !== 'open' ||
-                        shadowSourceBuffer.updating) return;
-                    var op = shadowQueue.shift();
+                /**
+                 * Drains one shadow's own queue into its own SourceBuffer. The queue
+                 * is bound to the shadow that will consume it: during rapid rebuilds
+                 * (a seek makes YouTube re-create its MediaSource several times) a
+                 * single shared queue was drained into the *previous*, already closed
+                 * SourceBuffer, so the current shadow never received an init segment
+                 * and died with `element error 4` — measured as a cascade of
+                 * failures and no audio on the next lock.
+                 */
+                function shadowFlush(pending, buffer) {
+                    if (!pending || !buffer || buffer.updating) return;
+                    var op = pending.shift();
                     if (!op) return;
                     try {
                         if (op.type === 'append') {
-                            shadowSourceBuffer.appendBuffer(op.data);
+                            buffer.appendBuffer(op.data);
                         } else {
-                            shadowSourceBuffer.remove(op.start, op.end);
+                            buffer.remove(op.start, op.end);
                         }
                     } catch (error) {
                         console.warn('[AdVoid] shadow ' + op.type + ' failed: ' + error);
@@ -1987,6 +2002,7 @@ class MainActivity : Activity() {
 
                 function buildShadow(mime) {
                     shadowSources++;
+                    shadowLastMime = mime;
                     // YouTube re-creates its MediaSource on quality switches, ads,
                     // post-seek reloads and every unlock (the shadow is rebuilt
                     // when its source changed), so a fixed lifetime cap would
@@ -2010,26 +2026,42 @@ class MainActivity : Activity() {
                     if (shadowElement && shadowElement.parentNode) {
                         shadowElement.parentNode.removeChild(shadowElement);
                     }
-                    shadowElement = document.createElement('video');
-                    shadowElement.id = 'advoid-shadow-audio';
-                    shadowElement.playsInline = true;
-                    shadowElement.muted = true;
-                    shadowElement.volume = 1;
-                    shadowElement.style.cssText =
+                    // The listeners must close over *this* element: a late event
+                    // from a replaced element (they fire while being torn down and
+                    // re-created after a seek or a source switch) used to tear down
+                    // the current, healthy shadow — measured as 4 rebuilds, no
+                    // shadow left and therefore no audio on the next lock.
+                    var element = document.createElement('video');
+                    shadowElement = element;
+                    element.id = 'advoid-shadow-audio';
+                    element.playsInline = true;
+                    element.muted = true;
+                    element.volume = 1;
+                    element.style.cssText =
                         'position:fixed;left:0;bottom:0;width:2px;height:2px;' +
                         'opacity:0.01;pointer-events:none;z-index:-1;';
-                    shadowElement.addEventListener('error', function() {
-                        var code = shadowElement && shadowElement.error ? shadowElement.error.code : '?';
-                        console.warn('[AdVoid] shadow element error: ' + code);
-                        shadowDisabled = true;
-                        teardownShadow();
+                    element.addEventListener('error', function() {
+                        if (element !== shadowElement) return;
+                        if (!element.parentNode) {
+                            // YouTube re-renders parts of the page and can drop our
+                            // element, which closes its MediaSource (measured:
+                            // sourceState=closed, networkState=no-source, buffered 0).
+                            // That is not a shadow failure — rebuild on the next
+                            // segment rather than counting it and switching the
+                            // renderer off for the rest of the page.
+                            console.warn('[AdVoid] audio shadow dropped by the page; rebuilding on the next segment');
+                            teardownShadow();
+                            return;
+                        }
+                        var code = element.error ? element.error.code : '?';
+                        shadowFailed('element error ' + code, element);
                     });
                     // Starvation is expected once the pre-buffered audio runs out
                     // (nothing new arrives while the screen is off); say so rather
                     // than leaving a silent player marked as playing.
                     ['waiting', 'stalled'].forEach(function(type) {
-                        shadowElement.addEventListener(type, function() {
-                            if (!shadowElement || shadowElement.muted) return;
+                        element.addEventListener(type, function() {
+                            if (element !== shadowElement || element.muted) return;
                             console.warn(
                                 '[AdVoid] shadow audio starved: buffered audio is used up, ' +
                                     'playback resumes on unlock'
@@ -2042,22 +2074,45 @@ class MainActivity : Activity() {
                     // `.html5-video-player`, so our player helpers still ignore it.
                     (document.body || document.documentElement).appendChild(shadowElement);
 
-                    shadowMediaSource = new MediaSource();
-                    shadowMediaSource.addEventListener('sourceopen', function() {
+                    var source = new MediaSource();
+                    shadowMediaSource = source;
+                    // This shadow's own queue: segments copied for it can only ever be
+                    // drained into its own SourceBuffer.
+                    var pending = [];
+                    if (shadowInitByMime[mime]) {
+                        // Seed with the cached init segment so this shadow can
+                        // decode even if its own source's init was missed.
+                        try {
+                            pending.push({ type: 'append', data: shadowInitByMime[mime].slice(0) });
+                        } catch (error) {
+                            console.warn('[AdVoid] shadow init replay failed: ' + error);
+                        }
+                    }
+                    shadowPending = pending;
+                    shadowSourceBuffer = null;
+                    // sourceopen is asynchronous: by the time it runs this shadow
+                    // may already have been replaced. Without this guard its
+                    // addSourceBuffer throws on a closed MediaSource, and the
+                    // failure handler then tore down the *current*, healthy shadow
+                    // — measured as a cascade of 4 failures and no audio on the
+                    // next lock.
+                    source.addEventListener('sourceopen', function() {
+                        if (source !== shadowMediaSource || element !== shadowElement) return;
                         try {
                             // The captured original: the shadow must not mirror
                             // itself through the patched prototype.
-                            shadowSourceBuffer = shadowNativeAddSourceBuffer
-                                .call(shadowMediaSource, mime);
-                            shadowSourceBuffer.addEventListener('updateend', shadowFlush);
-                            shadowFlush();
+                            var buffer = shadowNativeAddSourceBuffer.call(source, mime);
+                            shadowSourceBuffer = buffer;
+                            buffer.addEventListener('updateend', function() {
+                                shadowFlush(pending, buffer);
+                            });
+                            element.__advoidOpened = true;
+                            shadowFlush(pending, buffer);
                         } catch (error) {
-                            console.warn('[AdVoid] shadow addSourceBuffer failed: ' + error);
-                            shadowDisabled = true;
-                            teardownShadow();
+                            shadowFailed('addSourceBuffer: ' + error, element);
                         }
                     });
-                    shadowElement.src = shadowNativeCreateObjectURL.call(URL, shadowMediaSource);
+                    element.src = shadowNativeCreateObjectURL.call(URL, source);
                     // A rebuild that happens while the screen is still off (an ad
                     // or a quality switch mid-lock) must come back audible, or the
                     // audio goes silent until the user unlocks.
@@ -2106,15 +2161,28 @@ class MainActivity : Activity() {
                             if (live && window._advoidBgAudioArmed && !shadowDisabled) {
                                 if (shadowMirroring !== this) {
                                     shadowMirroring = this;
-                                    shadowQueue = [];
                                     buildShadow(mime);
                                 }
-                                if (shadowQueue.length < 400) {
+                                if (shadowPending && shadowPending.length < 400) {
                                     try {
-                                        shadowQueue.push({ type: 'append', data: data.slice(0) });
-                                        shadowFlush();
+                                        shadowPending.push({ type: 'append', data: data.slice(0) });
+                                        shadowAppends++;
+                                        shadowFlush(shadowPending, shadowSourceBuffer);
                                     } catch (error) {
                                         console.warn('[AdVoid] shadow copy failed: ' + error);
+                                    }
+                                }
+                                // Cache the stream's initialisation segment *after*
+                                // mirroring it: a rebuild can then be seeded with it
+                                // even when the new source's own init append was
+                                // missed during a post-seek churn (which is what left
+                                // rebuilt shadows empty, "element error 4").
+                                if (!this.__advoidInitCached) {
+                                    this.__advoidInitCached = true;
+                                    try {
+                                        shadowInitByMime[mime] = data.slice(0);
+                                    } catch (error) {
+                                        console.warn('[AdVoid] shadow init cache failed: ' + error);
                                     }
                                 }
                             }
@@ -2122,9 +2190,10 @@ class MainActivity : Activity() {
                         };
 
                         buffer.remove = function(start, end) {
-                            if (shadowMirroring === this && shadowQueue.length < 400) {
-                                shadowQueue.push({ type: 'remove', start: start, end: end });
-                                shadowFlush();
+                            if (shadowMirroring === this && shadowPending &&
+                                shadowPending.length < 400) {
+                                shadowPending.push({ type: 'remove', start: start, end: end });
+                                shadowFlush(shadowPending, shadowSourceBuffer);
                             }
                             return shadowNativeRemove.apply(this, arguments);
                         };
@@ -2247,6 +2316,53 @@ class MainActivity : Activity() {
                     return shadowElement.readyState >= 3;
                 };
 
+                /**
+                 * A single shadow failing (its element erroring, or its
+                 * SourceBuffer being refused) must not switch background audio off
+                 * for the rest of the page: measured on a five-minute lock, the
+                 * starved element fired an error and `shadowDisabled` stayed true,
+                 * so every later lock had no audio at all. Tear this shadow down
+                 * and let the next audio segment rebuild it; only repeated failures
+                 * inside the window give up.
+                 */
+                function shadowFailed(reason, failedElement) {
+                    // A replaced shadow reporting its own failure must not touch the
+                    // current one.
+                    if (failedElement && failedElement !== shadowElement) return;
+                    console.warn(
+                        '[AdVoid] audio shadow failed (' + reason + ')' +
+                            ' opened=' + (shadowElement ? shadowElement.__advoidOpened === true : '?') +
+                            ' sourceState=' + (shadowMediaSource ? shadowMediaSource.readyState : 'none') +
+                            ' appends=' + shadowAppends +
+                            ' buffered=' + (shadowElement && shadowElement.buffered
+                                ? shadowElement.buffered.length
+                                : '?') +
+                            ' elementReady=' + (shadowElement ? shadowElement.readyState : '?') +
+                            ' networkState=' + (shadowElement ? shadowElement.networkState : '?') +
+                            ' attached=' + (shadowElement ? !!shadowElement.parentNode : '?') +
+                            ' mime=' + shadowLastMime +
+                            '; rebuilding on the next segment'
+                    );
+                    var now = Date.now();
+                    shadowErrorTimes.push(now);
+                    shadowErrorTimes = shadowErrorTimes.filter(function(at) {
+                        return now - at < SHADOW_CHURN_WINDOW_MS;
+                    });
+                    if (shadowErrorTimes.length > SHADOW_MAX_ERRORS_PER_WINDOW) {
+                        shadowDisabled = true;
+                        console.warn(
+                            '[AdVoid] shadow audio disabled: ' + shadowErrorTimes.length +
+                                ' failures within ' + (SHADOW_CHURN_WINDOW_MS / 1000) + 's'
+                        );
+                    }
+                    // Do NOT replay the collected segments: after a seek they belong
+                    // to a SourceBuffer whose MediaSource is already closed. Wait for
+                    // a fresh source instead — its first append carries the init
+                    // segment this shadow needs.
+                    teardownShadow();
+                    console.warn('[AdVoid] shadow audio will rebuild on the next fresh source');
+                }
+
                 function teardownShadow() {
                     if (shadowElement && shadowElement.parentNode) {
                         shadowElement.parentNode.removeChild(shadowElement);
@@ -2263,7 +2379,8 @@ class MainActivity : Activity() {
                     shadowMediaSource = null;
                     shadowSourceBuffer = null;
                     shadowMirroring = null;
-                    shadowQueue = [];
+                    shadowPending = null;
+                    shadowSourceBuffer = null;
                 }
 
                 window._advoidShadowPositionMs = function() {

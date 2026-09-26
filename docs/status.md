@@ -1,5 +1,35 @@
 # Project status
 
+## 2026-09-26 — Post-seek shadow churn fixed; second lock now has audio (round 8)
+
+- **Found by a 5-minute endurance test:** after the buffered audio ran out, the
+  starved element errored and permanently disabled the renderer, so **every later
+  lock had no audio at all** — a textbook "sometimes it works, sometimes not".
+  Worse, a seek makes YouTube re-create its MediaSource several times in a row,
+  and each rebuild failed (`addSourceBuffer … readyState is not 'open'` /
+  `element error 4`) because the copied segments were drained into the previous,
+  already-closed SourceBuffer.
+- **Fixes:** one failure no longer disables anything (only >3 failures *while the
+  shadow is needed* do, and foreground churn is not counted at all); the queue is
+  bound to the shadow that consumes it; late events from replaced elements or
+  sources are ignored; failures tear down cleanly (restoring the video mute) and
+  recovery waits for a fresh source; and — the key fix — the stream's
+  **initialisation segment is cached per mime and replayed into every rebuild**, so
+  a rebuilt shadow can decode even when its own source's init append was missed.
+- **Verified on the API 37 emulator:** after a forced starvation and return, the
+  shadow rebuilt once (`sources: 2`, `disabled: false`, `readyState: 4`, buffer
+  110 s) and the **second lock played** — `muted:false, paused:false`,
+  `ct 83.58`, one started unmuted audio player, no failures logged, no crash.
+  Previously that same scenario ended with `disabled: true` and silence.
+- Also from this round: the 5-minute lock itself is healthy — audio for the
+  buffered window, then a stable PAUSED at the audio's position, **2 log lines in
+  5 minutes**, memory flat (185.6 → 186.2 MB), no crash.
+- Validation: `npm test` 290/290 (shadow MSE/DOM shims now fire `updateend` and can
+  defer `sourceopen`, so the queue/rebuild paths are actually exercised), Android
+  `testDebugUnitTest` 45/45, build, UI check 12/12, `npx oxlint` 0 errors.
+- Still open: the user's phone verification, and whether the ~1 minute buffered
+  window is enough or the native pipeline is wanted.
+
 ## 2026-09-26 — Silent-player leak fixed in the shadow teardown (round 7)
 
 - **Bug found by review:** the shadow mutes the video while it is audible, but

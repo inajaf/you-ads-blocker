@@ -158,7 +158,10 @@ class BackgroundAudioScriptTest {
         // suspends media that has a video track.
         assertTrue(script.contains("MediaSource.prototype.addSourceBuffer = function(requested)"))
         assertTrue(script.contains("shadowNativeAddSourceBuffer"))
-        assertTrue(script.contains(".call(shadowMediaSource, mime)"))
+        assertTrue(script.contains(".call(source, mime)"))
+        // sourceopen is asynchronous: a replaced shadow must not act on it.
+        assertTrue(script.contains("if (source !== shadowMediaSource || element !== shadowElement) return;"))
+        assertTrue(script.contains("if (failedElement && failedElement !== shadowElement) return;"))
         assertTrue(script.contains("data.slice(0)"))
         assertTrue(script.contains("shadowElement.muted = false"))
         assertTrue(script.contains("video.muted = true"))
