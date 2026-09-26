@@ -1,5 +1,33 @@
 # Project status
 
+## 2026-09-26 — Background audio now works WITHOUT PiP (round 6)
+
+- **Done: the app keeps playing audio when it is merely backgrounded, even if no
+  PiP window ever appears** — the original complaint ("audio stops when the app is
+  minimised") and the MIUI case where PiP is blocked or auto-enter is ignored.
+- **How:** the native side now pushes one signal, `presentable = activityStarted &&
+  screenInteractive` (`onStart`/`onStop`, `ACTION_SCREEN_OFF`/`ACTION_SCREEN_ON`;
+  PiP keeps the activity started, so a PiP window counts as presentable). When it
+  is false the page stands its retry loop down and unmutes the audio shadow; when
+  it becomes true the page mutes the shadow, seeks the video to the shadow's
+  position, restores the video's mute state and resumes once. No PiP anywhere in
+  that path.
+- **Verified with a scratch build that never enters PiP** (simulating MIUI/blocked
+  PiP): Home → `app presentable=false (activityStarted=false screenInteractive=true)`,
+  video frozen at 17.3 s while the shadow played on (21.43 → 29.67 s, unmuted, one
+  started player `mutedState:none`, foreground service alive, no PiP window);
+  returning → `app presentable=true` and the video resumed at **40.42 s**, exactly
+  where the audio was, shadow muted again, no crash.
+- **Regression-checked on the shipped build:** Home → PiP keeps the video playing
+  with the shadow muted and `presentable` never flipping (PiP keeps the activity
+  started); locking inside PiP hands the audio to the shadow (29.43 s) and
+  unlocking restores the video at 34.27 s.
+- Validation: `npm test` 284/284, Android `testDebugUnitTest` 45/45, build, UI
+  check 12/12, `npx oxlint` 0 errors.
+- Still open: the user's phone verification (now meaningful even without PiP), and
+  whether the ~1 minute buffered-audio window is enough or the native pipeline is
+  wanted.
+
 ## 2026-09-26 — PiP + lock verified, shadow moved into <body> (round 5)
 
 - **Picture-in-Picture combined with a lock, end to end:** in PiP the video plays

@@ -1,5 +1,44 @@
 # Architectural decisions
 
+## 2026-09-26 — Background audio without PiP: one "can the app present video" signal
+
+Reason: the original report — "when the app is minimised the audio stops" — and
+devices where a PiP window never appears (MIUI ignores auto-enter; PiP can be
+blocked outright). Until now background audio *required* PiP, and without it the
+WebView was suspended and the audio died.
+
+Measured: Chromium suspends the `<video>` element whenever the WebView cannot be
+presented, but keeps playing media **without a video track** (established for the
+locked screen). The shadow renderer therefore covers every one of those states,
+not just screen-off.
+
+Decision: the native side computes a single signal —
+
+`presentable = activityStarted && screenInteractive`
+
+— pushed to the page as `_advoidSetPresentable(...)`, driven by:
+- `onStart` / `onStop` (PiP keeps the activity started, so a PiP window counts as
+  presentable and the video keeps playing there);
+- `ACTION_SCREEN_OFF` → not presentable;
+- `ACTION_SCREEN_ON` → recomputed, so waking the phone over the keyguard (activity
+  still stopped) leaves audio playing until the user actually returns.
+
+When it turns false the page stands its retry loop down and unmutes the shadow
+(seeking it to the video's position); when it turns true the page mutes the
+shadow, seeks the video to the shadow's position, restores the video's own mute
+state and resumes once. No PiP window is involved anywhere in that path.
+
+Verified with a scratch build that never enters PiP (simulating MIUI or a blocked
+PiP): Home → `app presentable=false (activityStarted=false screenInteractive=true)`,
+the video froze at 17.3 s while the shadow played on (21.4 → 29.7 s, unmuted, one
+started player `mutedState:none`, foreground service alive, no PiP window);
+returning → `app presentable=true` and the video resumed at **40.42 s**, where the
+audio actually was, with the shadow muted again and no crash. Re-verified on the
+shipped build: Home → PiP keeps the video playing with the shadow muted
+(`presentable` never flips, because PiP keeps the activity started), and locking
+inside PiP hands the audio to the shadow (29.43 s) before restoring the video at
+34.27 s.
+
 ## 2026-09-26 — Locked-screen audio: a shadow audio-only renderer (ships)
 
 Reason: "if I lock AdVoid while a video plays, I need it to keep playing audio."
