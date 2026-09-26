@@ -1503,12 +1503,16 @@ class MainActivity : Activity() {
                     var position = video && Number.isFinite(video.currentTime) ? video.currentTime : 0;
                     // While the screen is locked the video element is suspended
                     // and the audio shadow is the audible source, so it owns the
-                    // playing flag and the position: otherwise the native session
-                    // would report a paused player over playing audio (and stop
-                    // the foreground service that keeps the audio unmuted).
+                    // position — even when it has starved, or the notification
+                    // would jump back to where the video froze. It also owns the
+                    // playing flag, or the native session would report a paused
+                    // player over playing audio and stop the foreground service
+                    // that keeps the audio unmuted.
+                    var shadowAudible = typeof window._advoidShadowAudible === 'function' &&
+                        window._advoidShadowAudible();
                     var shadowPlaying = typeof window._advoidShadowPlaying === 'function' &&
                         window._advoidShadowPlaying();
-                    if (shadowPlaying) {
+                    if (shadowAudible) {
                         var shadowPositionMs = typeof window._advoidShadowPositionMs === 'function'
                             ? window._advoidShadowPositionMs()
                             : null;
@@ -1518,7 +1522,7 @@ class MainActivity : Activity() {
                     }
                     return {
                         playing: shadowPlaying || isMainPlayerPlaying(),
-                        ended: shadowPlaying ? false : !!(video && video.ended),
+                        ended: shadowAudible ? false : !!(video && video.ended),
                         userPaused: userPauseHint,
                         title: (data && data.title) || document.title || 'AdVoid',
                         artist: (data && data.author) || 'YouTube',
@@ -1947,9 +1951,10 @@ class MainActivity : Activity() {
 
                 function buildShadow(mime) {
                     shadowSources++;
-                    if (shadowSources > 6) {
-                        // YouTube keeps re-creating MediaSources (ads, quality
-                        // switches); stop rather than churn forever.
+                    if (shadowSources > 20) {
+                        // YouTube re-creates its MediaSource on quality switches,
+                        // ads and post-seek reloads, so a handful of rebuilds is
+                        // normal; stop only when it becomes a churn.
                         shadowDisabled = true;
                         console.warn('[AdVoid] shadow audio disabled after repeated rebuilds');
                         return;
@@ -1970,6 +1975,18 @@ class MainActivity : Activity() {
                         console.warn('[AdVoid] shadow element error: ' + code);
                         shadowDisabled = true;
                     });
+                    // Starvation is expected once the pre-buffered audio runs out
+                    // (nothing new arrives while the screen is off); say so rather
+                    // than leaving a silent player marked as playing.
+                    ['waiting', 'stalled'].forEach(function(type) {
+                        shadowElement.addEventListener(type, function() {
+                            if (!shadowElement || shadowElement.muted) return;
+                            console.warn(
+                                '[AdVoid] shadow audio starved: buffered audio is used up, ' +
+                                    'playback resumes on unlock'
+                            );
+                        });
+                    });
                     document.documentElement.appendChild(shadowElement);
 
                     shadowMediaSource = new MediaSource();
@@ -1987,6 +2004,13 @@ class MainActivity : Activity() {
                         }
                     });
                     shadowElement.src = shadowNativeCreateObjectURL.call(URL, shadowMediaSource);
+                    // A rebuild that happens while the screen is still off (an ad
+                    // or a quality switch mid-lock) must come back audible, or the
+                    // audio goes silent until the user unlocks.
+                    if (window._advoidScreenInteractive === false && window._advoidBgAudioArmed) {
+                        shadowElement.__advoidAudible = false;
+                        setShadowAudible(true);
+                    }
                 }
 
                 var shadowNativeAddSourceBuffer = null;
@@ -2128,8 +2152,21 @@ class MainActivity : Activity() {
                     }
                 }
 
+                /** True while the shadow (not the video) is the audible source. */
+                window._advoidShadowAudible = function() {
+                    return !!(shadowElement && !shadowElement.muted && !shadowDisabled);
+                };
+
                 window._advoidShadowPlaying = function() {
-                    return !!(shadowElement && !shadowElement.muted && !shadowElement.paused);
+                    if (!shadowElement || shadowElement.muted || shadowElement.paused) return false;
+                    // Measured: while the screen is off YouTube fetches nothing (its
+                    // player sits in BUFFERING and the platform has suspended the
+                    // video element), and the page's timers are throttled or
+                    // frozen, so the shadow can only play out the audio that was
+                    // already buffered. A starved element (readyState 2) is NOT
+                    // playing: reporting it as playing kept the session and the
+                    // notification alive over silence.
+                    return shadowElement.readyState >= 3;
                 };
 
                 function teardownShadow() {

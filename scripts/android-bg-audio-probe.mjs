@@ -52,6 +52,10 @@ const PROBE = `(() => {
   var videoRect = video ? video.getBoundingClientRect() : null;
   var playerRect = player ? player.getBoundingClientRect() : null;
   var shadow = document.getElementById('advoid-shadow-audio');
+  function bufferedEnd(element) {
+    if (!element || !element.buffered || !element.buffered.length) return null;
+    return Number(element.buffered.end(element.buffered.length - 1).toFixed(1));
+  }
   return JSON.stringify({
     url: location.pathname,
     visibility: document.visibilityState,
@@ -71,8 +75,10 @@ const PROBE = `(() => {
       muted: shadow.muted,
       paused: shadow.paused,
       currentTime: Number(shadow.currentTime.toFixed(2)),
-      readyState: shadow.readyState
+      readyState: shadow.readyState,
+      bufferedEnd: bufferedEnd(shadow)
     } : null,
+    videoBufferedEnd: bufferedEnd(video),
     playingMode: document.querySelectorAll('.html5-video-player.playing-mode').length
   });
 })()`
