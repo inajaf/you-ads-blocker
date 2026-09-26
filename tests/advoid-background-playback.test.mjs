@@ -399,6 +399,9 @@ function makeBackgroundEnv({ videos = [] } = {}) {
       return element
     },
   }
+  // The bridge appends the shadow to <body> (valid DOM, out of YouTube's
+  // document-wide video sweeps); a real page has both, here they are one node.
+  document.body = document.documentElement
 
   const sandbox = {
     Document,

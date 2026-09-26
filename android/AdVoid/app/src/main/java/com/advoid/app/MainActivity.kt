@@ -2001,7 +2001,11 @@ class MainActivity : Activity() {
                             );
                         });
                     });
-                    document.documentElement.appendChild(shadowElement);
+                    // Inside <body>: a <video> directly under <html> is invalid and
+                    // YouTube's own document-wide `querySelectorAll('video')`
+                    // sweeps could pick up a stray player. The shadow is outside
+                    // `.html5-video-player`, so our player helpers still ignore it.
+                    (document.body || document.documentElement).appendChild(shadowElement);
 
                     shadowMediaSource = new MediaSource();
                     shadowMediaSource.addEventListener('sourceopen', function() {

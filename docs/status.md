@@ -1,5 +1,26 @@
 # Project status
 
+## 2026-09-26 — PiP + lock verified, shadow moved into <body> (round 5)
+
+- **Picture-in-Picture combined with a lock, end to end:** in PiP the video plays
+  (21.57 s) with the shadow muted; locking freezes the video at 25.59 s while the
+  shadow takes over (31.68 s, `audible:true`, `playing:true`, `readyState` 4);
+  unlocking restores PiP (`mode=pinned`, `pipClass:true`) with the video resumed
+  at 37 s — continuing from where the audio was — and the shadow muted again
+  (38.07 → 42.28 s), monotonic throughout, no crash.
+- **No double audio:** while locked `dumpsys audio` lists exactly one started
+  player (ours, `mutedState:none`); the video element is muted, and the video's
+  own mute state is restored on unlock (`muted:false`, as before the lock).
+- **The shadow now lives in `<body>`**, not under `<html>`: a `<video>` directly
+  under `<html>` is invalid DOM and YouTube's document-wide
+  `querySelectorAll('video')` sweeps could pick up a stray player. Verified:
+  `parent: BODY`, `closest('.html5-video-player') === null`, so both our player
+  helpers and YouTube's scoped queries ignore it.
+- Validation: `npm test` 284/284, Android `testDebugUnitTest` 45/45, build, UI
+  check 12/12, `npx oxlint` 0 errors.
+- Still open: the user's phone verification, and whether the buffer-limited
+  locked-audio window (~1 minute) is enough or the native pipeline is wanted.
+
 ## 2026-09-26 — Repeated lock/unlock stress test + time-based rebuild guard (round 4)
 
 - **Four lock/unlock cycles back to back, all clean:** while locked the shadow was
