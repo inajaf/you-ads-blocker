@@ -144,9 +144,9 @@ class BackgroundAudioScriptTest {
         // lock-screen card flapped between playing and paused), while media
         // without a video track keeps playing. So the retry loop stops, and the
         // audio shadow takes over instead.
-        assertTrue(script.contains("window._advoidSetScreenInteractive = function(on)"))
-        assertTrue(script.contains("window._advoidScreenInteractive = true"))
-        assertTrue(script.contains("if (window._advoidScreenInteractive === false) return"))
+        assertTrue(script.contains("window._advoidSetPresentable = function(on)"))
+        assertTrue(script.contains("window._advoidPresentable = true"))
+        assertTrue(script.contains("if (window._advoidPresentable === false) return"))
         assertTrue(script.contains("clearKeepAlive();"))
         assertTrue(script.contains("setShadowAudible(true)"))
         assertTrue(script.contains("setShadowAudible(false)"))

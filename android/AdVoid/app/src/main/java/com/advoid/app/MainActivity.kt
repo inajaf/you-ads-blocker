@@ -45,8 +45,12 @@ class MainActivity : Activity() {
     private var notificationPermissionRequested = false
     private var leavingForInternalActivity = false
     private var pipActive = false
-    /** Screen on/off, tracked natively: locked screens cannot play WebView video. */
+    /** Screen on/off, tracked natively: a locked screen cannot play WebView video. */
     private var screenInteractive = true
+    /** Whether the activity is started (PiP counts: it stays started while paused). */
+    private var activityStarted = false
+    /** `activityStarted && screenInteractive`: the app can put video on screen. */
+    private var appPresentable = true
     private var screenReceiverRegistered = false
     private var activityResumed = false
 
@@ -411,9 +415,9 @@ class MainActivity : Activity() {
         view?.evaluateJavascript(LIVE_CHAT_SCRIPT, null)
         view?.evaluateJavascript(BACKGROUND_AUDIO_SCRIPT, null)
         view?.evaluateJavascript(PIP_PRESENTATION_SCRIPT, null)
-        // Keep the page's screen state in step after every injection/navigation.
+        // Keep the page's presentable state in step after every injection/navigation.
         view?.evaluateJavascript(
-            "window._advoidSetScreenInteractive && window._advoidSetScreenInteractive($screenInteractive);",
+            "window._advoidSetPresentable && window._advoidSetPresentable($appPresentable);",
             null,
         )
         // Keep the Shorts marker class + reel-entry tracking current on SPA navs.
@@ -707,9 +711,10 @@ class MainActivity : Activity() {
         if (!::webView.isInitialized) return
         if (!backgroundPlayback.isBackgroundAudioEnabled()) return
         if (pipNudges >= MAX_PIP_NUDGES) return
-        // With the screen off Chromium suspends the video element natively and
-        // re-pauses it on every attempt, so retrying only churns the lock screen.
-        if (!screenInteractive) return
+        // While the app cannot present video Chromium suspends the element
+        // natively and re-pauses it on every attempt, so retrying only churns the
+        // lock screen (the shadow renderer owns the audio then).
+        if (!appPresentable) return
         // Rate limit: a page report with playing=false used to trigger a nudge,
         // and the nudge itself produced another report — measured as ten nudges
         // in 400 ms (each one a JS evaluation plus a play attempt) while the
@@ -726,37 +731,55 @@ class MainActivity : Activity() {
     }
 
     /**
-     * Screen on/off. Locking the phone stops the activity, PiP is hidden and
-     * Chromium suspends video media natively, so nothing can keep the audio
-     * alive from the page; the bridge is told to stand down instead of retrying
-     * forever, and playback is resumed once when the screen comes back.
+     * The app can present video only while its activity is started **and** the
+     * screen is on. Every other combination — screen off, Home without PiP
+     * (including OEMs that ignore auto-enter, or where PiP is blocked), the
+     * keyguard over a stopped activity — means the platform suspends the
+     * `<video>` element, so the page is told to stand its retry loop down and let
+     * the audio-only shadow renderer take over. Coming back restores the video
+     * from the shadow's position and nudges playback once.
      */
-    private val screenStateReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            when (intent?.action) {
-                Intent.ACTION_SCREEN_OFF -> setScreenInteractive(false)
-                Intent.ACTION_SCREEN_ON -> setScreenInteractive(true)
-            }
-        }
-    }
-
-    private fun setScreenInteractive(interactive: Boolean) {
-        if (screenInteractive == interactive) return
-        screenInteractive = interactive
-        Log.i(TAG, "screen interactive=$interactive")
+    private fun updateAppPresentable() {
+        val presentable = activityStarted && screenInteractive
+        if (presentable == appPresentable) return
+        appPresentable = presentable
+        Log.i(
+            TAG,
+            "app presentable=$presentable (activityStarted=$activityStarted " +
+                "screenInteractive=$screenInteractive)",
+        )
         if (!::webView.isInitialized) return
-        if (!interactive) {
+        if (!presentable) {
             cancelPipNudges()
         }
         webView.evaluateJavascript(
-            "window._advoidSetScreenInteractive && window._advoidSetScreenInteractive($interactive);",
+            "window._advoidSetPresentable && window._advoidSetPresentable($presentable);",
             null,
         )
-        if (interactive && backgroundPlayback.isServiceRunning()) {
-            // One attempt, not a budget: the page resumes on the screen-on signal
-            // itself, this covers the report that arrives a moment later.
+        if (presentable && backgroundPlayback.isServiceRunning()) {
+            // One attempt, not a budget: the page resumes on the signal itself,
+            // this covers the report that arrives a moment later.
             lastNudgeAt = 0L
-            nudgePlayback("screen on")
+            nudgePlayback("app presentable")
+        }
+    }
+
+    private val screenStateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when (intent?.action) {
+                Intent.ACTION_SCREEN_OFF -> {
+                    screenInteractive = false
+                    updateAppPresentable()
+                }
+                // Turning the screen on does not by itself make the app visible:
+                // behind the keyguard the activity is still stopped, and the audio
+                // should keep playing. onStart (or PiP being started already)
+                // decides.
+                Intent.ACTION_SCREEN_ON -> {
+                    screenInteractive = true
+                    updateAppPresentable()
+                }
+            }
         }
     }
 
@@ -827,6 +850,7 @@ class MainActivity : Activity() {
 
     override fun onStart() {
         super.onStart()
+        activityStarted = true
         applyPlaybackUiState(
             playbackUiCoordinator.onActivityVisibilityChanged(true)
         )
@@ -834,6 +858,7 @@ class MainActivity : Activity() {
             backgroundPlayback.onActivityStarted(true)
         )
         updatePictureInPictureParams()
+        updateAppPresentable()
     }
 
     override fun onResume() {
@@ -874,12 +899,15 @@ class MainActivity : Activity() {
     }
 
     override fun onStop() {
+        // PiP keeps the activity started, so this is "gone from the screen".
+        activityStarted = false
         applyPlaybackUiState(
             playbackUiCoordinator.onActivityVisibilityChanged(false)
         )
         applyBackgroundPlaybackState(
             backgroundPlayback.onActivityStarted(false)
         )
+        updateAppPresentable()
         super.onStop()
     }
 
@@ -1850,13 +1878,13 @@ class MainActivity : Activity() {
                 }
                 function tickKeepAlive() {
                     if (!window._advoidBgAudioArmed || keepAliveLeft <= 0) return;
-                    // With the screen off Chromium suspends the video element
-                    // natively (measured: a plain <audio> element in the same
-                    // page keeps playing, the <video> does not) and re-pauses it
-                    // on every play() we attempt. Retrying there achieved nothing
-                    // but 21 pause events in 17 s and a lock-screen card that
-                    // flapped between playing and paused. Wait for the screen.
-                    if (window._advoidScreenInteractive === false) return;
+                    // While the app cannot present video Chromium suspends the
+                    // <video> element natively (measured: a plain <audio> element in
+                    // the same page keeps playing, the <video> does not) and
+                    // re-pauses it on every play() we attempt. Retrying there
+                    // achieved nothing but 21 pause events in 17 s and a lock-screen
+                    // card that flapped between playing and paused. Stand down.
+                    if (window._advoidPresentable === false) return;
                     keepAliveLeft--;
                     keepAliveTimer = setTimeout(function() {
                         keepAliveTimer = null;
@@ -1882,16 +1910,20 @@ class MainActivity : Activity() {
                     }
                 };
 
-                // Screen state, pushed by the native side (ACTION_SCREEN_ON/OFF).
-                // Locked screens suspend the <video> element natively, so the retry
-                // loop stands down; what keeps the audio alive instead is the
-                // shadow renderer below.
-                window._advoidScreenInteractive = true;
-                window._advoidSetScreenInteractive = function(on) {
-                    var interactive = on !== false;
-                    if (window._advoidScreenInteractive === interactive) return;
-                    window._advoidScreenInteractive = interactive;
-                    if (interactive) {
+                // Can the app present video right now? Pushed by the native side as
+                // `activityStarted && screenInteractive`: false while the screen is
+                // off, while the activity is stopped (Home without PiP — including
+                // devices where PiP is blocked, and any OEM that ignores auto-enter)
+                // and while the keyguard covers a stopped activity. In that state the
+                // <video> element is suspended by the platform, so the retry loop
+                // stands down and the shadow renderer below takes over the audio —
+                // audio-only media keeps playing in a hidden WebView.
+                window._advoidPresentable = true;
+                window._advoidSetPresentable = function(on) {
+                    var presentable = on !== false;
+                    if (window._advoidPresentable === presentable) return;
+                    window._advoidPresentable = presentable;
+                    if (presentable) {
                         setShadowAudible(false);
                         if (window._advoidBgAudioArmed) {
                             ensurePlaying();
@@ -2025,7 +2057,7 @@ class MainActivity : Activity() {
                     // A rebuild that happens while the screen is still off (an ad
                     // or a quality switch mid-lock) must come back audible, or the
                     // audio goes silent until the user unlocks.
-                    if (window._advoidScreenInteractive === false && window._advoidBgAudioArmed) {
+                    if (window._advoidPresentable === false && window._advoidBgAudioArmed) {
                         shadowElement.__advoidAudible = false;
                         setShadowAudible(true);
                     }
@@ -2366,7 +2398,7 @@ class MainActivity : Activity() {
                         resume(video);
                         // Locked screen: the video element is suspended by the
                         // platform, so the audible player is the shadow.
-                        if (shadow && window._advoidScreenInteractive === false) {
+                        if (shadow && window._advoidPresentable === false) {
                             resume(shadow);
                         }
                     } else if (action === 'seek') {
