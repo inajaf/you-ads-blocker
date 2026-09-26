@@ -193,6 +193,49 @@ class BackgroundPlaybackCoordinatorTest {
     }
 
     @Test
+    fun `the system owns the pip transition from Android 12`() {
+        foregroundPlayback()
+
+        assertTrue(
+            coordinator.shouldAutoEnterPictureInPicture(
+                pipSupported = true,
+                apiLevel = BackgroundPlaybackCoordinator.AUTO_ENTER_API_LEVEL,
+            ),
+        )
+        // Older platforms have no setAutoEnterEnabled and keep the legacy call.
+        assertFalse(
+            coordinator.shouldAutoEnterPictureInPicture(
+                pipSupported = true,
+                apiLevel = BackgroundPlaybackCoordinator.AUTO_ENTER_API_LEVEL - 1,
+            ),
+        )
+    }
+
+    @Test
+    fun `auto-enter follows the same gates as the legacy pip entry`() {
+        foregroundPlayback()
+
+        assertFalse(
+            coordinator.shouldAutoEnterPictureInPicture(pipSupported = false, apiLevel = 34),
+        )
+
+        coordinator.onBackgroundAudioEnabledChanged(false)
+        assertFalse(
+            coordinator.shouldAutoEnterPictureInPicture(pipSupported = true, apiLevel = 34),
+        )
+    }
+
+    @Test
+    fun `auto-enter stays off while nothing is playing`() {
+        coordinator.onActivityStarted(true)
+        coordinator.onActivityResumed(true)
+
+        assertFalse(
+            coordinator.shouldAutoEnterPictureInPicture(pipSupported = true, apiLevel = 34),
+        )
+    }
+
+    @Test
     fun `ending the session stops the service`() {
         foregroundPlayback()
 

@@ -79,16 +79,62 @@ describe('Android background audio wiring', () => {
     assert.match(mainActivity, /leavingForInternalActivity = true/)
   })
 
-  it('starts and stops the service from the coordinator decision, never unconditionally', () => {
-    // Anchored to the decision branches: a bare start/stop anywhere in the
-    // activity must not satisfy this.
+  it('lets the system own the PiP transition on Android 12+', () => {
+    // Measured on a real device: the system's PiP transition keeps the WebView
+    // surface alive (audio keeps playing), while entering PiP from
+    // onUserLeaveHint hides the WebView and Chromium pauses the media natively.
     assert.match(
       mainActivity,
-      /if \(state\.startForegroundService\) \{\r?\n\s+requestNotificationPermissionIfNeeded\(\)/,
+      /if \(Build\.VERSION\.SDK_INT >= Build\.VERSION_CODES\.S\) \{[\s\S]{0,400}builder\.setAutoEnterEnabled\(autoEnter\)/,
+    )
+    assert.match(mainActivity, /backgroundPlayback\.shouldAutoEnterPictureInPicture\(/)
+    assert.match(mainActivity, /private fun updatePictureInPictureParams\(\)/)
+  })
+
+  it('nudges playback back after a PiP transition, within a bound', () => {
+    assert.match(mainActivity, /window\._advoidEnsurePlaying && window\._advoidEnsurePlaying\(\)/)
+    assert.match(mainActivity, /private fun nudgePlayback\(reason: String\)/)
+    assert.match(mainActivity, /if \(pipNudges >= MAX_PIP_NUDGES\) return/)
+    // A user pause must stop the nudges instead of being fought.
+    assert.match(
+      mainActivity,
+      /MediaAction\.PAUSE -> \{[\s\S]{0,300}cancelPipNudges\(\)/,
     )
     assert.match(
       mainActivity,
-      /if \(state\.stopForegroundService\) \{\r?\n\s+PlaybackService\.stop\(this\)/,
+      /!playing && pipActive && !activityResumed/,
+    )
+    // A user pause ends the session, and a nudge must then never undo it.
+    assert.match(
+      mainActivity,
+      /!playing && pipActive && !activityResumed &&\r?\n\s+backgroundPlayback\.isServiceRunning\(\)/,
+    )
+  })
+
+  it('keeps the YouTube filter chip row out of the viewport overlay', () => {
+    const style = mainActivity.match(/private const val STYLE_SCRIPT = """([\s\S]*?)"""/)
+    assert.ok(style, 'STYLE_SCRIPT not found in MainActivity.kt')
+    // YouTube pins this row as `position: fixed` so it follows the scroll and
+    // covers feed content right under AdVoid's bar.
+    assert.match(style[1], /ytm-feed-filter-chip-bar-renderer#filter-chip-bar/)
+    assert.match(style[1], /position: static !important/)
+    assert.match(style[1], /z-index: auto !important/)
+    // The YouTube top bar and the Shorts rules must stay untouched.
+    assert.match(style[1], /html\.advoid-shorts ytm-searchbox/)
+    assert.doesNotMatch(style[1], /ytm-mobile-topbar-renderer/)
+  })
+
+  it('starts and stops the service from the coordinator decision, never unconditionally', () => {
+    // Anchored to the decision branches: a bare start/stop anywhere in the
+    // activity must not satisfy this.
+    assert.match(mainActivity, /if \(state\.startForegroundService\) \{/)
+    assert.match(
+      mainActivity,
+      /\} else \{\r?\n\s+requestNotificationPermissionIfNeeded\(\)/,
+    )
+    assert.match(
+      mainActivity,
+      /if \(state\.stopForegroundService && !serviceStopPending\) \{/,
     )
     assert.match(mainActivity, /backgroundPlayback\.onActivityStarted/)
     assert.match(mainActivity, /backgroundPlayback\.onActivityResumed/)
@@ -97,7 +143,7 @@ describe('Android background audio wiring', () => {
     // A refused foreground start must roll the coordinator back, not crash.
     assert.match(
       mainActivity,
-      /catch \(e: IllegalStateException\) \{\r?\n\s+\/\/ [\s\S]*?Log\.w\(TAG, "playback service refused to start/,
+      /catch \(e: RuntimeException\) \{\r?\n\s+\/\/ [\s\S]*?Log\.w\(TAG, "playback service refused to start/,
     )
     assert.match(
       mainActivity,
@@ -120,6 +166,42 @@ describe('Android background audio wiring', () => {
     assert.match(playbackService, /builder\.addAction\(action\)/)
     assert.match(playbackService, /ACTION_PLAY -> dispatch\(MediaAction\.PLAY\)/)
     assert.match(playbackService, /R\.drawable\.ic_advoid_playback/)
+  })
+
+  it('wires the media-card scrubber back into the page', () => {
+    // Without ACTION_SEEK_TO + duration the media card shows "00:00 / 00:00".
+    assert.match(playbackService, /PlaybackState\.ACTION_SEEK_TO/)
+    assert.match(playbackService, /METADATA_KEY_DURATION/)
+    assert.match(playbackService, /override fun onSeekTo\(positionMs: Long\)/)
+    assert.match(playbackService, /var seekListener: \(\(Long\) -> Unit\)\? = null/)
+    assert.match(mainActivity, /PlaybackService\.seekListener = \{ positionMs ->/)
+    assert.match(mainActivity, /evaluateMediaAction\("seek", positionMs\)/)
+  })
+
+  it('enters PiP explicitly as well as leaving auto-enter armed', () => {
+    // Measured on Xiaomi/HyperOS: auto-enter alone produced no PiP window, so
+    // the explicit entry must stay on every API level.
+    assert.match(
+      mainActivity,
+      /schedulePipNudges\(\)\r?\n\s+try \{\r?\n\s+enterPictureInPictureMode\(pipParams\(autoEnter = true\)\)/,
+    )
+  })
+
+  it('never stops and restarts the foreground service in quick succession', () => {    // Measured: a transport pause followed by YouTube flapping pause/play made
+    // the app call stopService and startForegroundService within milliseconds,
+    // and the platform killed it with
+    // RemoteServiceException$ForegroundServiceDidNotStartInTimeException.
+    assert.match(mainActivity, /private var serviceStopPending = false/)
+    assert.match(
+      mainActivity,
+      /if \(state\.stopForegroundService && !serviceStopPending\) \{[\s\S]{0,600}postDelayed\(stopServiceRunnable, SERVICE_STOP_GRACE_MS\)/,
+    )
+    assert.match(
+      mainActivity,
+      /if \(serviceStopPending\) \{[\s\S]{0,1000}keeping the service/,
+    )
+    // The deferred stop must be cancelled when the activity goes away.
+    assert.match(mainActivity, /webView\.removeCallbacks\(stopServiceRunnable\)/)
   })
 
   it('asks for the notification permission at most once per install', () => {
@@ -231,11 +313,14 @@ function makeBackgroundEnv({ videos = [] } = {}) {
       vm.runInContext(`window._advoidSetBackgroundAudio(${literal});`, context),
     setSuppression: (on) =>
       vm.runInContext(`window._advoidSetPagePauseSuppression(${on});`, context),
+    ensurePlaying: () => vm.runInContext('window._advoidEnsurePlaying();', context),
     // Freezes the page clock so the tap allowance can be aged out.
     freezeNowAt: (value) =>
       vm.runInContext(`Date.now = function() { return ${value}; };`, context),
     mediaAction: (action) =>
       vm.runInContext(`window._advoidMediaAction(${JSON.stringify(action)});`, context),
+    seek: (positionMs) =>
+      vm.runInContext(`window._advoidMediaAction('seek', ${positionMs});`, context),
     // A real finger tap: the script records the gesture and allows the pause.
     tap: () => {
       for (const listener of windowListeners.get('pointerdown') || []) {
@@ -357,8 +442,9 @@ describe('AdVoid background audio bridge (BACKGROUND_AUDIO_SCRIPT)', () => {
     env.setup()
     env.setArmed(true)
 
-    // The keep-alive is bounded: exhaust every scheduled attempt.
-    for (let i = 0; i < 12; i += 1) env.runNextTimer()
+    // The keep-alive is bounded: exhaust every scheduled attempt (the budget is
+    // KEEP_ALIVE_ATTEMPTS, currently 20).
+    for (let i = 0; i < 25; i += 1) env.runNextTimer()
 
     assert.equal(unloaded.playCalls, 0)
     // "Stops retrying" is half the contract: no attempt may stay queued.
@@ -573,6 +659,59 @@ describe('AdVoid page pause suppression', () => {
     video.pause()
 
     assert.equal(video.pauseCalls, 0)
+  })
+
+  it('resumes the main player when the page becomes visible again', () => {
+    const { env, video } = envWithVideo()
+    env.setArmed(true)
+    // The PiP transition paused the media while the WebView was hidden; the
+    // window is on screen again but the activity is still paused.
+    video.paused = true
+    env.real.hidden = false
+
+    env.dispatch('visibilitychange')
+
+    assert.equal(video.playCalls, 1)
+    // The retry budget is re-armed, so a slow YouTube state machine still gets
+    // more attempts instead of inheriting an exhausted timer.
+    assert.ok(env.pendingTimerCount() > 0)
+  })
+
+  it('does not resume on a visible transition while no session is armed', () => {
+    const { env, video } = envWithVideo()
+    env.setArmed(false)
+    video.paused = true
+    env.real.hidden = false
+
+    env.dispatch('visibilitychange')
+
+    assert.equal(video.playCalls, 0)
+  })
+
+  it('exposes an ensure-playing hook for the native PiP nudge', () => {
+    const { env, video } = envWithVideo()
+    video.paused = true
+
+    env.ensurePlaying()
+
+    assert.equal(video.playCalls, 1)
+  })
+
+  it('seeks the main player from a media-card scrub', () => {
+    const { env, video } = envWithVideo()
+
+    env.seek(60_000)
+
+    assert.equal(video.currentTime, 60)
+  })
+
+  it('ignores an out-of-range scrub request', () => {
+    const { env, video } = envWithVideo()
+    const before = video.currentTime
+
+    env.seek(-5_000)
+
+    assert.equal(video.currentTime, before)
   })
 
   it('never suppresses videos outside the main watch player', () => {

@@ -66,18 +66,35 @@ class BackgroundAudioScriptTest {
 
     @Test
     fun `media actions drive play and pause on the main player`() {
-        assertTrue(script.contains("window._advoidMediaAction = function(action)"))
+        assertTrue(script.contains("window._advoidMediaAction = function(action, positionMs)"))
         assertTrue(script.contains("action === 'play'"))
         assertTrue(script.contains("action === 'pause'"))
         assertTrue(script.contains("video.pause()"))
         // The page's player must follow the element, or it keeps believing it is
         // playing and pauses again at the next sync.
         assertTrue(script.contains("player.pauseVideo()"))
+        // Lock-screen/media-card scrubbing is wired back into the page.
+        assertTrue(script.contains("action === 'seek'"))
+        assertTrue(script.contains("video.currentTime = seconds"))
+        assertTrue(script.contains("seekPlayer.seekTo(seconds, true)"))
     }
 
     @Test
     fun `a permitted pause is reported to native`() {
         assertTrue(script.contains("window._advoidNotifyUserPause()"))
+    }
+
+    @Test
+    fun `the page resumes when it becomes visible again`() {
+        // The PiP transition can pause the media while the WebView is hidden,
+        // and Chromium throttles hidden-page timers, so the retry budget is
+        // re-armed on every real visibility transition, not just at arming time.
+        assertTrue(script.contains("// Back on screen"))
+        assertTrue(script.contains("window._advoidEnsurePlaying = ensurePlaying"))
+        assertTrue(script.contains("function armKeepAlive()"))
+        assertTrue(script.contains("KEEP_ALIVE_ATTEMPTS = 20"))
+        // pagehide/freeze keep their swallow-only handling.
+        assertTrue(script.contains("function swallowWhileHidden(event)"))
     }
 
     @Test

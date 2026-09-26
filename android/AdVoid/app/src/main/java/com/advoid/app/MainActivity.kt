@@ -45,6 +45,23 @@ class MainActivity : Activity() {
     private var leavingForInternalActivity = false
     private var pipActive = false
     private var activityResumed = false
+
+    /** Last value handed to the system, so params are only pushed on changes. */
+    private var autoEnterEnabled = false
+    private var pipNudges = 0
+    private var pipNudgeRunnable: Runnable? = null
+
+    /**
+     * Stops are deferred: a pause followed by a resume a moment later must not
+     * tear the foreground service down and bring it straight back up.
+     */
+    private var serviceStopPending = false
+    private val stopServiceRunnable = Runnable {
+        if (!serviceStopPending) return@Runnable
+        serviceStopPending = false
+        PlaybackService.stop(this)
+        Log.i(TAG, "background playback service stopped")
+    }
     private var pipActionReceiverRegistered = false
 
     // Latest media state reported by the page; mirrored into the playback
@@ -299,6 +316,11 @@ class MainActivity : Activity() {
         PlaybackService.actionListener = { action ->
             runOnUiThread { handleMediaAction(action) }
         }
+        // Lock-screen/media-card scrubber: forward the requested position into
+        // the WebView player (the session advertises duration for this).
+        PlaybackService.seekListener = { positionMs ->
+            runOnUiThread { evaluateMediaAction("seek", positionMs) }
+        }
 
         setContentView(rootLayout)
     }
@@ -347,6 +369,7 @@ class MainActivity : Activity() {
                         applyBackgroundPlaybackState(
                             backgroundPlayback.onBackgroundAudioEnabledChanged(item.isChecked)
                         )
+                        updatePictureInPictureParams()
                         Log.i(TAG, "background audio enabled=${item.isChecked}")
                         true
                     }
@@ -430,9 +453,28 @@ class MainActivity : Activity() {
             applyBackgroundPlaybackState(backgroundPlayback.onUserPlaybackRequest(false))
         } else {
             applyBackgroundPlaybackState(backgroundPlayback.onMediaStateChanged(playing, ended))
+            if (playing && pipActive) {
+                // Playback is confirmed healthy inside PiP: stop nudging. The
+                // per-session budget is deliberately not reset, so an oscillating
+                // player cannot keep the loop alive forever.
+                cancelPipNudges()
+            }
+            // Inside PiP the window is on screen, so a "paused" report that the
+            // user did not ask for is the platform's pause during the PiP
+            // transition. Nudge playback back — but only while the coordinator
+            // still has a session to defend: after an explicit user pause the
+            // session is already ended, and nudging there would undo the pause
+            // (measured: YouTube reports playing=false again without the
+            // one-shot userPaused flag).
+            if (!playing && pipActive && !activityResumed &&
+                backgroundPlayback.isServiceRunning() &&
+                backgroundPlayback.isBackgroundAudioEnabled()
+            ) {
+                nudgePlayback("pip reported no playback")
+            }
         }
         PlaybackService.updatePlayback(playing, positionMs, durationMs, mediaTitle, mediaArtist)
-        if (pipActive) setPictureInPictureParams(pipParams())
+        updatePictureInPictureParams()
     }
 
     /**
@@ -444,34 +486,61 @@ class MainActivity : Activity() {
      */
     private fun applyBackgroundPlaybackState(state: BackgroundPlaybackState) {
         if (state.startForegroundService) {
-            requestNotificationPermissionIfNeeded()
-            val started = try {
-                PlaybackService.start(
-                    this,
+            if (serviceStopPending) {
+                // Playback resumed inside the stop grace period, so the service
+                // is still alive: refresh it and never restart it. A
+                // startForegroundService immediately after a stop makes the
+                // platform kill the app with
+                // ForegroundServiceDidNotStartInTimeException (measured in the
+                // emulator when YouTube's state flapped pause/play twice after a
+                // transport pause).
+                serviceStopPending = false
+                webView.removeCallbacks(stopServiceRunnable)
+                Log.i(TAG, "playback resumed during the stop grace period; keeping the service")
+                PlaybackService.updatePlayback(
                     mediaPlaying,
                     mediaPositionMs,
                     mediaDurationMs,
                     mediaTitle,
                     mediaArtist,
                 )
-                true
-            } catch (e: IllegalStateException) {
-                // ForegroundServiceStartNotAllowedException on API 31+: the app
-                // was not in a valid state to start a while-in-use service. Roll
-                // the coordinator back so a later foreground attempt can retry
-                // instead of latching "already running".
-                Log.w(TAG, "playback service refused to start: ${e.message}")
-                false
+            } else {
+                requestNotificationPermissionIfNeeded()
+                val started = try {
+                    PlaybackService.start(
+                        this,
+                        mediaPlaying,
+                        mediaPositionMs,
+                        mediaDurationMs,
+                        mediaTitle,
+                        mediaArtist,
+                    )
+                    true
+                } catch (e: RuntimeException) {
+                    // IllegalStateException covers
+                    // ForegroundServiceStartNotAllowedException; RuntimeException
+                    // also covers RemoteServiceException, which the platform
+                    // throws when it refuses to bring a service up. Either way,
+                    // roll the coordinator back so a later foreground attempt can
+                    // retry instead of latching "already running".
+                    Log.w(TAG, "playback service refused to start: ${e.message}")
+                    false
+                }
+                if (!started) {
+                    applyBackgroundPlaybackState(backgroundPlayback.onSessionEnded())
+                    return
+                }
+                Log.i(TAG, "background playback service started")
             }
-            if (!started) {
-                applyBackgroundPlaybackState(backgroundPlayback.onSessionEnded())
-                return
-            }
-            Log.i(TAG, "background playback service started")
         }
-        if (state.stopForegroundService) {
-            PlaybackService.stop(this)
-            Log.i(TAG, "background playback service stopped")
+        if (state.stopForegroundService && !serviceStopPending) {
+            // Stop on a grace period, never synchronously: a pause that is
+            // followed by a resume a moment later must not stop and start the
+            // foreground service in quick succession. The notification already
+            // reflects the paused state through updatePlayback().
+            serviceStopPending = true
+            webView.postDelayed(stopServiceRunnable, SERVICE_STOP_GRACE_MS)
+            Log.i(TAG, "background playback service stop scheduled")
         }
         if (state.visibilitySpoof != visibilitySpoofArmed) {
             visibilitySpoofArmed = state.visibilitySpoof
@@ -518,18 +587,30 @@ class MainActivity : Activity() {
         when (action) {
             MediaAction.PLAY -> {
                 val state = backgroundPlayback.onUserPlaybackRequest(true)
+                pipNudges = 0
                 evaluateMediaAction("play")
                 applyBackgroundPlaybackState(state)
+                updatePictureInPictureParams()
             }
             MediaAction.PAUSE -> {
                 val state = backgroundPlayback.onUserPlaybackRequest(false)
+                // Explicit user intent: stop nudging so the pause is never fought.
+                cancelPipNudges()
+                pipNudges = 0
                 evaluateMediaAction("pause")
                 applyBackgroundPlaybackState(state)
+                updatePictureInPictureParams()
             }
             MediaAction.STOP -> {
+                cancelPipNudges()
                 evaluateMediaAction("pause")
                 applyBackgroundPlaybackState(backgroundPlayback.onUserPlaybackRequest(false))
+                // STOP is explicit: do not wait out the stop grace period.
+                webView.removeCallbacks(stopServiceRunnable)
+                serviceStopPending = false
                 PlaybackService.stop(this)
+                Log.i(TAG, "background playback service stopped")
+                updatePictureInPictureParams()
             }
         }
     }
@@ -538,9 +619,10 @@ class MainActivity : Activity() {
         handleMediaAction(if (mediaPlaying) MediaAction.PAUSE else MediaAction.PLAY)
     }
 
-    private fun evaluateMediaAction(action: String) {
+    private fun evaluateMediaAction(action: String, positionMs: Long = 0L) {
+        val argument = if (action == "seek") positionMs.toString() else "null"
         webView.evaluateJavascript(
-            "window._advoidMediaAction && window._advoidMediaAction('$action');",
+            "window._advoidMediaAction && window._advoidMediaAction('$action', $argument);",
             null,
         )
     }
@@ -548,7 +630,7 @@ class MainActivity : Activity() {
     private fun pipSupported(): Boolean =
         packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
 
-    private fun pipParams(): PictureInPictureParams {
+    private fun pipParams(autoEnter: Boolean): PictureInPictureParams {
         val label = if (mediaPlaying) "Pause" else "Play"
         val icon = Icon.createWithResource(
             this,
@@ -564,10 +646,81 @@ class MainActivity : Activity() {
             Intent(ACTION_TOGGLE_PLAYBACK).setPackage(packageName),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        return PictureInPictureParams.Builder()
+        val builder = PictureInPictureParams.Builder()
             .setAspectRatio(Rational(16, 9))
             .setActions(listOf(RemoteAction(icon, label, label, toggle)))
-            .build()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            // Let the system own the transition (API 31+): measured on a real
+            // device, the system's PiP transition keeps the WebView surface
+            // alive and the audio playing, while entering PiP ourselves hides
+            // the WebView for a moment and Chromium pauses the media natively.
+            builder.setAutoEnterEnabled(autoEnter)
+            builder.setSeamlessResizeEnabled(true)
+        }
+        return builder.build()
+    }
+
+    /**
+     * Keeps the system's PiP parameters in sync with playback. Auto-enter is
+     * only armed while leaving the app should shrink a *playing* video into
+     * PiP, so Home never produces a PiP window around a paused or stale player.
+     *
+     * The system call only happens when the decision changes (or while in PiP,
+     * where the play/pause action icon has to follow playback).
+     */
+    private fun updatePictureInPictureParams() {
+        if (!::webView.isInitialized) return
+        val autoEnter = backgroundPlayback.shouldAutoEnterPictureInPicture(
+            pipSupported(),
+            Build.VERSION.SDK_INT,
+        )
+        if (!pipActive && autoEnter == autoEnterEnabled) return
+        autoEnterEnabled = autoEnter
+        try {
+            setPictureInPictureParams(pipParams(autoEnter))
+        } catch (e: IllegalStateException) {
+            Log.w(TAG, "picture-in-picture params rejected: ${e.message}")
+        }
+        if (!pipActive) {
+            Log.i(TAG, "picture-in-picture: auto-enter enabled=$autoEnter")
+        }
+    }
+
+    /**
+     * Asks the page to resume the main player after a PiP transition, with a few
+     * bounded retries because YouTube's own player state settles asynchronously.
+     * A user pause resets the budget, so this can never fight a deliberate pause.
+     */
+    private fun nudgePlayback(reason: String) {
+        if (!::webView.isInitialized) return
+        if (!backgroundPlayback.isBackgroundAudioEnabled()) return
+        if (pipNudges >= MAX_PIP_NUDGES) return
+        pipNudges++
+        Log.i(TAG, "picture-in-picture: nudging playback (attempt $pipNudges, $reason)")
+        webView.evaluateJavascript(
+            "window._advoidEnsurePlaying && window._advoidEnsurePlaying();",
+            null,
+        )
+    }
+
+    private fun schedulePipNudges() {
+        // The WebView is hidden for part of the manual PiP transition, so the
+        // immediate nudge can land too early; repeat while the PiP window is up.
+        pipNudgeRunnable = Runnable {
+            if (!pipActive) return@Runnable
+            nudgePlayback("PiP transition")
+            if (pipNudges < MAX_PIP_NUDGES) {
+                webView.postDelayed(pipNudgeRunnable, PIP_NUDGE_INTERVAL_MS)
+            }
+        }
+        webView.postDelayed(pipNudgeRunnable, PIP_NUDGE_FIRST_DELAY_MS)
+    }
+
+    private fun cancelPipNudges() {
+        val pending = pipNudgeRunnable ?: return
+        Log.d(TAG, "picture-in-picture: stopping pending nudges")
+        webView.removeCallbacks(pending)
+        pipNudgeRunnable = null
     }
 
     private val pipActionReceiver = object : BroadcastReceiver() {
@@ -610,16 +763,21 @@ class MainActivity : Activity() {
         applyBackgroundPlaybackState(
             backgroundPlayback.onActivityStarted(true)
         )
+        updatePictureInPictureParams()
     }
 
     override fun onResume() {
         super.onResume()
         activityResumed = true
+        // The user is back: stop nudging and let the page report the real state.
+        cancelPipNudges()
+        pipNudges = 0
         // Resumed means the user is actually interacting with the app: page
         // pause suppression is released and page reports become authoritative.
         applyBackgroundPlaybackState(
             backgroundPlayback.onActivityResumed(true)
         )
+        updatePictureInPictureParams()
         webView.evaluateJavascript(
             "window._advoidSyncVideoState && window._advoidSyncVideoState();",
             null,
@@ -661,10 +819,16 @@ class MainActivity : Activity() {
             return
         }
         if (!backgroundPlayback.shouldEnterPictureInPicture(pipSupported())) return
+        // Enter PiP explicitly on every API level, and keep auto-enter armed as
+        // well. Measured on a Xiaomi/HyperOS phone: auto-enter alone produced no
+        // PiP window at all, so the backgrounded WebView was suspended and the
+        // audio died. The explicit call is what MIUI honours; where the system
+        // transition is used instead, our call either wins first or is ignored.
+        schedulePipNudges()
         try {
-            enterPictureInPictureMode(pipParams())
+            enterPictureInPictureMode(pipParams(autoEnter = true))
         } catch (e: IllegalStateException) {
-            Log.w(TAG, "picture-in-picture unavailable: ${e.message}")
+            Log.w(TAG, "picture-in-picture entry failed: ${e.message}")
         }
     }
 
@@ -673,6 +837,7 @@ class MainActivity : Activity() {
         newConfig: Configuration,
     ) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        Log.i(TAG, "picture-in-picture mode changed: inPip=$isInPictureInPictureMode")
         pipActive = isInPictureInPictureMode
         // The PiP window is only as big as the video: drop the native bar so the
         // player gets every pixel, and let the page hide its own chrome.
@@ -681,15 +846,29 @@ class MainActivity : Activity() {
             "window._advoidSetPipPresentation && window._advoidSetPipPresentation($isInPictureInPictureMode);",
             null,
         )
-        setPictureInPictureParams(pipParams())
+        updatePictureInPictureParams()
+        if (isInPictureInPictureMode) {
+            // The platform may have paused the media while the WebView was
+            // hidden for the transition; ask the page to resume it.
+            pipNudges = 0
+            nudgePlayback("PiP entered")
+            schedulePipNudges()
+        } else {
+            cancelPipNudges()
+            pipNudges = 0
+        }
     }
 
     override fun onDestroy() {
         // Persist login cookies and release the WebView so it can't leak and
         // keep running after the activity is gone.
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        cancelPipNudges()
+        webView.removeCallbacks(stopServiceRunnable)
+        serviceStopPending = false
         unregisterPipActions()
         PlaybackService.actionListener = null
+        PlaybackService.seekListener = null
         // The WebView is the only thing that can produce the audio, and it is
         // about to be destroyed: never strand a media notification over silence.
         PlaybackService.stop(this)
@@ -758,6 +937,14 @@ class MainActivity : Activity() {
         private const val ACTION_TOGGLE_PLAYBACK = "com.advoid.app.action.TOGGLE_PLAYBACK"
         private const val REQUEST_PIP_TOGGLE = 21
         private const val REQUEST_NOTIFICATIONS = 22
+
+        /** Bounded playback nudges after a PiP transition (never a user pause). */
+        private const val MAX_PIP_NUDGES = 10
+        private const val PIP_NUDGE_FIRST_DELAY_MS = 250L
+        private const val PIP_NUDGE_INTERVAL_MS = 1500L
+
+        /** Grace period before a pause actually tears the service down. */
+        private const val SERVICE_STOP_GRACE_MS = 2000L
 
         /** On-device only; see public/privacy.html ("AdVoid app preferences"). */
         private const val PREFERENCES_NAME = "advoid"
@@ -1438,14 +1625,33 @@ class MainActivity : Activity() {
                 // immediately, in the same task as the event: waiting for the
                 // native round trip would let YouTube's first pauseVideo() slip
                 // through as if it were a user pause.
-                ['visibilitychange', 'webkitvisibilitychange', 'pagehide', 'freeze']
-                    .forEach(function(type) {
-                        window.addEventListener(type, function(event) {
-                            if (!window._advoidBgAudioArmed || !reallyHidden()) return;
-                            window._advoidSuppressPagePause = true;
-                            event.stopImmediatePropagation();
-                        }, true);
-                    });
+                function swallowWhileHidden(event) {
+                    if (!window._advoidBgAudioArmed || !reallyHidden()) return;
+                    window._advoidSuppressPagePause = true;
+                    event.stopImmediatePropagation();
+                }
+
+                ['pagehide', 'freeze'].forEach(function(type) {
+                    window.addEventListener(type, swallowWhileHidden, true);
+                });
+
+                ['visibilitychange', 'webkitvisibilitychange'].forEach(function(type) {
+                    window.addEventListener(type, function(event) {
+                        if (!window._advoidBgAudioArmed) return;
+                        if (reallyHidden()) {
+                            swallowWhileHidden(event);
+                            return;
+                        }
+                        // Back on screen: in PiP (and after a background hop) the
+                        // document is visible again even though the activity may
+                        // still be paused. The transition can have paused the
+                        // media while the WebView was hidden — and Chromium's
+                        // hidden-page throttling can starve the keep-alive — so
+                        // resume here and re-arm the retry budget.
+                        ensurePlaying();
+                        armKeepAlive();
+                    }, true);
+                });
 
                 function mainPlayerVideo() {
                     var videos = document.querySelectorAll('.html5-video-player video');
@@ -1458,11 +1664,14 @@ class MainActivity : Activity() {
                 }
 
                 // Bounded keep-alive: some platforms pause the media element
-                // itself when the WebView is hidden. Retry a few times, then give
-                // up rather than fight the platform forever or restart playback
-                // from the beginning (readyState 0 means YouTube unloaded it).
+                // itself when the WebView is hidden. Retry a bounded number of
+                // times, then give up rather than fight the platform forever or
+                // restart playback from the beginning (readyState 0 means
+                // YouTube unloaded it). Every real visibility transition and
+                // every PiP entry re-arms the budget.
                 var keepAliveTimer = null;
                 var keepAliveLeft = 0;
+                var KEEP_ALIVE_ATTEMPTS = 20;
                 function resume(video) {
                     // A rejected play() is this feature's failure mode, so it is
                     // never swallowed: it shows up in logcat for QA.
@@ -1476,16 +1685,20 @@ class MainActivity : Activity() {
                         keepAliveTimer = null;
                     }
                 }
+                function armKeepAlive() {
+                    keepAliveLeft = KEEP_ALIVE_ATTEMPTS;
+                    clearKeepAlive();
+                    tickKeepAlive();
+                }
                 function tickKeepAlive() {
                     if (!window._advoidBgAudioArmed || keepAliveLeft <= 0) return;
                     keepAliveLeft--;
                     keepAliveTimer = setTimeout(function() {
                         keepAliveTimer = null;
                         if (!window._advoidBgAudioArmed) return;
-                        var video = mainPlayerVideo();
-                        if (video && video.paused && !video.ended && video.readyState > 0) {
-                            resume(video);
-                        }
+                        // ensurePlaying also repairs YouTube's own player state,
+                        // which a bare play() on the element would not.
+                        ensurePlaying();
                         tickKeepAlive();
                     }, 1000);
                 }
@@ -1496,8 +1709,7 @@ class MainActivity : Activity() {
                     window._advoidBgAudioArmed = armed;
                     clearKeepAlive();
                     if (armed) {
-                        keepAliveLeft = 8;
-                        tickKeepAlive();
+                        armKeepAlive();
                     }
                 };
 
@@ -1615,18 +1827,41 @@ class MainActivity : Activity() {
                     if (window._advoidSuppressPagePause && !wasOn) {
                         // The pause that put us here already landed.
                         ensurePlaying();
-                        keepAliveLeft = 8;
-                        tickKeepAlive();
+                        armKeepAlive();
                     } else if (!window._advoidSuppressPagePause && wasOn) {
                         syncPlayerState();
                     }
                 };
 
-                window._advoidMediaAction = function(action) {
+                // Native nudge after a PiP transition (see nudgePlayback).
+                window._advoidEnsurePlaying = ensurePlaying;
+
+                window._advoidMediaAction = function(action, positionMs) {
                     var video = mainPlayerVideo();
                     if (!video) return;
                     if (action === 'play') {
                         resume(video);
+                    } else if (action === 'seek') {
+                        // Lock screen / media card scrubber.
+                        var seconds = Number(positionMs) / 1000;
+                        if (!Number.isFinite(seconds) || seconds < 0) return;
+                        if (Number.isFinite(video.duration) && video.duration > 0) {
+                            seconds = Math.min(seconds, video.duration);
+                        }
+                        try {
+                            video.currentTime = seconds;
+                        } catch (e) {
+                            console.warn('[AdVoid] seek failed: ' + e);
+                        }
+                        // Keep YouTube's own player in step with the element.
+                        var seekPlayer = playerApi();
+                        if (seekPlayer && typeof seekPlayer.seekTo === 'function') {
+                            try {
+                                seekPlayer.seekTo(seconds, true);
+                            } catch (e) {
+                                console.warn('[AdVoid] player.seekTo failed: ' + e);
+                            }
+                        }
                     } else if (action === 'pause') {
                         // The user asked for this explicitly: it must win over
                         // the suppression above, and the page's player state has
@@ -2254,6 +2489,19 @@ class MainActivity : Activity() {
                     'html.advoid-shorts ytm-searchbox,',
                     'html.advoid-shorts button[aria-label="Search"] {',
                     '  display: none !important;',
+                    '}',
+                    // YouTube pins its feed filter row as a fixed overlay
+                    // (`ytm-feed-filter-chip-bar-renderer#filter-chip-bar`,
+                    // position: fixed, z-index 3), so it follows the scroll and
+                    // covers feed content right under AdVoid's bar. Keep it in
+                    // document flow: it still works, it just scrolls away with
+                    // the feed. Two selectors plus the id, so a markup rename is
+                    // inert instead of breaking anything.
+                    'ytm-feed-filter-chip-bar-renderer,',
+                    'ytm-feed-filter-chip-bar-renderer#filter-chip-bar {',
+                    '  position: static !important;',
+                    '  top: auto !important;',
+                    '  z-index: auto !important;',
                     '}',
                     // Android's landscape mandatory-gesture inset is about 52
                     // CSS px on the Pixel emulator (137 physical px at 2.625

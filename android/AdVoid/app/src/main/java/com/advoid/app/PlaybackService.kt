@@ -127,6 +127,15 @@ class PlaybackService : Service() {
                 override fun onPlay() = dispatch(MediaAction.PLAY)
                 override fun onPause() = dispatch(MediaAction.PAUSE)
                 override fun onStop() = dispatch(MediaAction.STOP)
+                override fun onSeekTo(positionMs: Long) {
+                    val listener = seekListener
+                    if (listener == null) {
+                        Log.w(TAG, "seek request with no attached listener; ignoring")
+                        return
+                    }
+                    // Reported position ms, forwarded to the WebView's player.
+                    listener(positionMs.coerceAtLeast(0L))
+                }
             })
             setSessionActivity(openAppIntent())
             isActive = true
@@ -147,12 +156,14 @@ class PlaybackService : Service() {
 
     private fun publishState() {
         val mediaSession = session ?: return
-        // No duration/seek metadata: the session does not expose ACTION_SEEK_TO,
-        // so advertising a length would render a lock-screen scrubber that
-        // cannot move the WebView's playback position.
         val metadata = MediaMetadata.Builder()
             .putString(MediaMetadata.METADATA_KEY_TITLE, title ?: DEFAULT_TITLE)
             .putString(MediaMetadata.METADATA_KEY_ARTIST, artist ?: DEFAULT_ARTIST)
+        // Advertised because ACTION_SEEK_TO is wired back into the WebView;
+        // without it the media card shows "00:00 / 00:00".
+        if (durationMs > 0L) {
+            metadata.putLong(MediaMetadata.METADATA_KEY_DURATION, durationMs)
+        }
         mediaSession.setMetadata(metadata.build())
         mediaSession.setPlaybackState(
             PlaybackState.Builder()
@@ -160,7 +171,8 @@ class PlaybackService : Service() {
                     PlaybackState.ACTION_PLAY or
                         PlaybackState.ACTION_PAUSE or
                         PlaybackState.ACTION_PLAY_PAUSE or
-                        PlaybackState.ACTION_STOP
+                        PlaybackState.ACTION_STOP or
+                        PlaybackState.ACTION_SEEK_TO
                 )
                 .setState(
                     if (playing) PlaybackState.STATE_PLAYING else PlaybackState.STATE_PAUSED,
@@ -284,6 +296,10 @@ class PlaybackService : Service() {
          */
         @Volatile
         var actionListener: ((MediaAction) -> Unit)? = null
+
+        /** Lock-screen/notification scrubber requests, in milliseconds. */
+        @Volatile
+        var seekListener: ((Long) -> Unit)? = null
 
         fun start(
             context: Context,

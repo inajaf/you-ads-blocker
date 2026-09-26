@@ -1,5 +1,96 @@
 # Architectural decisions
 
+## 2026-09-26 — Android background audio requires PiP; explicit entry + media-card seek
+
+Reason: a Xiaomi/HyperOS phone showed **no PiP window at all** when the Home
+button was pressed, and the media card sat paused at `00:00 / 00:00`. Two
+separate causes were measured on the API 37 emulator.
+
+Decisions:
+- **Enter PiP explicitly on every API level**, keeping `setAutoEnterEnabled`
+  armed as well. The previous revision relied on the system's auto-enter alone on
+  Android 12+; MIUI/HyperOS evidently does not honour it, so no PiP appeared and
+  the backgrounded WebView was suspended. The explicit
+  `enterPictureInPictureMode()` is what MIUI accepts, and where the system
+  transition does run it either wins first or our call is ignored. The resume
+  nudges from the same day keep the audio alive across either transition.
+- **Background audio without PiP is impossible in a WebView — do not chase it.**
+  Measured with PiP entry disabled in a scratch build: on Home the video stayed
+  `paused=true` at its position for 15 s with `readyState=4` (no unload), the
+  page's `ensurePlaying()`/keep-alive/`playVideo()` attempts all failed to stick,
+  and the platform additionally logged
+  `AudioHardening background playback muted … level: partial`. Chromium suspends
+  the media pipeline of a hidden WebView at the native layer; JS cannot resume
+  it. PiP (or the already-rejected native ExoPlayer pipeline) is therefore
+  mandatory for background audio, and a device that cannot show PiP is a support
+  case, not a code path: on MIUI the app also needs the
+  "Display pop-up windows while running in the background" permission before PiP
+  is allowed to appear.
+- **Advertise duration and support seeking** so the media card shows real times
+  instead of `00:00 / 00:00` and its scrubber works:
+  `METADATA_KEY_DURATION` is reported again, `PlaybackState.ACTION_SEEK_TO` is
+  advertised, `MediaSession.Callback.onSeekTo` forwards the position through a
+  new `PlaybackService.seekListener` into `_advoidMediaAction('seek', ms)`, and
+  the page sets `video.currentTime` plus YouTube's `player.seekTo(seconds, true)`
+  so the element and the player agree.
+
+Verification: `npm test` 266/266, `npm run build`, `./scripts/ui-check.sh` 12/12,
+`npx oxlint` 0 errors, Android `testDebugUnitTest` 43/43. Emulator: Home button →
+`mode=pinned` with `paused=false` and `currentTime` advancing 1 s/s for 12 s,
+audio `state:started mutedState:none`, session `state=PLAYING` with
+`actions=775` (includes seek) and title/artist/duration metadata.
+
+## 2026-09-26 — Android background audio follow-ups: real-device PiP, filter row, FGS churn crash
+
+Reason: real-device testing of the background-audio change reported two defects.
+(1) Collapsing with the **Home button** showed the PiP window/audio chip but the
+audio stopped, while collapsing with the **finger gesture** kept playing.
+(2) YouTube's feed filter row followed the scroll and covered feed content.
+
+Decisions:
+- **The system owns the PiP transition on Android 12+.** PiP was entered only by
+  our own `enterPictureInPictureMode()` from `onUserLeaveHint`; the gesture path
+  uses the system's transition, which keeps the WebView surface alive. The
+  params are now state-driven and arm `setAutoEnterEnabled(true)` (plus
+  `setSeamlessResizeEnabled`) whenever leaving the app should shrink a *playing*
+  main watch video, so the Home button takes the same path as the gesture. The
+  legacy call stays for API 26-30.
+- **Resume safety net for the hidden window.** Even the system transition can
+  hide the WebView for a moment, and Chromium both pauses the media and throttles
+  hidden-page timers. The page now re-arms its keep-alive (budget raised to 20)
+  and calls `ensurePlaying()` on every real visibility → visible transition, and
+  exposes `_advoidEnsurePlaying` so native can nudge it after PiP entry (bounded
+  retries, stopped as soon as playback is confirmed, and gated on the coordinator
+  still having a session so a nudge can never undo a user pause).
+- **YouTube's filter chip row stops following the scroll.** Measured on the home
+  feed: `ytm-feed-filter-chip-bar-renderer#filter-chip-bar` is `position: fixed`,
+  z-index 3, 48 px tall. `STYLE_SCRIPT` forces it back into document flow
+  (`position: static`, `top: auto`, `z-index: auto`), so it scrolls away with the
+  feed instead of overlaying thumbnails below AdVoid's bar. Two selectors plus the
+  id: a markup rename makes the rule inert rather than breaking anything.
+- **Never stop and restart the foreground service in quick succession.** Found
+  while verifying (1) in the emulator: a transport pause followed by YouTube
+  flapping pause/play made the app call `stopService` and
+  `startForegroundService` within milliseconds, and Android killed the app with
+  `RemoteServiceException$ForegroundServiceDidNotStartInTimeException` (the
+  system was "bringing down service while still waiting for start foreground").
+  Stops are now deferred by a 2 s grace period, a start arriving inside that
+  window refreshes the *running* service instead of restarting it, explicit STOP
+  still stops immediately, and the start call catches `RuntimeException`
+  (`RemoteServiceException`, `ForegroundServiceStartNotAllowedException`) before
+  rolling the coordinator back. The notification already flips to PAUSED through
+  `updatePlayback`, so the deferred stop is not visible as a stale "playing".
+
+Verification: `npm test` 262/262, `npm run build`, `./scripts/ui-check.sh` 12/12,
+`npx oxlint` 0 errors, Android `testDebugUnitTest` 43/43. Emulator (API 37):
+`auto-enter enabled=true`, Home button → `mode=pinned` with `paused=false` and
+`currentTime` advancing 1 s/s for 15-30 s, audio `state:started mutedState:none`,
+no new `AudioHardening` entries, nudges stopping ~1.5 s after PiP entry; transport
+pause keeps the position, ends the session, removes the notification 2 s later
+and no longer crashes; resuming starts a fresh foreground service; Shorts still
+never arm the session; feed chip bar computed `position: static` and rect moving
+with the scroll (`y=48 → -552 → -1152`).
+
 ## 2026-09-26 — Android background audio: foreground service + page bridge + Picture-in-Picture
 
 Decision: background audio in `android/AdVoid` is three cooperating layers, all
