@@ -68,6 +68,19 @@ class FakeElement {
     this._listeners = new Map()
     this.innerHTML = ''
     this.isConnected = true
+    // Inline styles + a settable rect, so the hidden-video repair can be driven.
+    this.style = {}
+    this.rect = { left: 0, top: 0, width: 448, height: 252 }
+  }
+  getBoundingClientRect() {
+    return {
+      left: this.rect.left,
+      top: this.rect.top,
+      right: this.rect.left + this.rect.width,
+      bottom: this.rect.top + this.rect.height,
+      width: this.rect.width,
+      height: this.rect.height,
+    }
   }
   appendChild(child) {
     child.parentNode = this
@@ -237,6 +250,9 @@ function makeEnv(pathname = '/watch') {
     bridge,
     navigate: (nextPathname) => {
       location.pathname = nextPathname
+    },
+    setScrollY: (value) => {
+      sandbox.scrollY = value
     },
     sync: () => vm.runInContext('window._advoidSyncVideoState();', context),
     notifyUserPause: () => vm.runInContext('window._advoidNotifyUserPause();', context),
@@ -528,6 +544,61 @@ describe('AdVoid media state reporting (VIDEO_WATCH_SCRIPT → native)', () => {
     // The hint is consumed by the report: it must not keep ending new sessions.
     env.sync()
     assert.equal(env.bridge.states.at(-1).userPaused, false)
+  })
+})
+
+describe('AdVoid hidden-video repair (VIDEO_WATCH_SCRIPT)', () => {
+  // YouTube caches an inline `top: -<height>` on the <video> element when it
+  // believes the video should not be shown. That leaves the player black,
+  // off-screen and untappable — the reported "player is not playing and forcing
+  // the play button does nothing".
+  function brokenEnv() {
+    const env = makeEnv()
+    const video = env.addVideo({ readyState: 4, paused: true, currentTime: 30 })
+    env.player.rect = { left: 0, top: 48, width: 448, height: 252 }
+    video.style.top = '-252px'
+    video.rect = { left: 0, top: -204, width: 448, height: 252 }
+    return { env, video }
+  }
+
+  it('restores a video that sits entirely above its player', () => {
+    const { env, video } = brokenEnv()
+
+    env.setup()
+
+    assert.equal(video.style.top, '0px')
+  })
+
+  it('leaves the mini-player alone once the page is scrolled', () => {
+    const { env, video } = brokenEnv()
+    env.setScrollY(600)
+
+    env.setup()
+
+    // A scrolled watch page legitimately hides the video in the mini-player.
+    assert.equal(video.style.top, '-252px')
+  })
+
+  it('does not touch a healthy player', () => {
+    const env = makeEnv()
+    const video = env.addVideo({ readyState: 4, paused: true, currentTime: 10 })
+    env.player.rect = { left: 0, top: 48, width: 448, height: 252 }
+    video.style.top = '0px'
+    video.rect = { left: 0, top: 48, width: 448, height: 252 }
+
+    env.setup()
+
+    assert.equal(video.style.top, '0px')
+  })
+
+  it('repairs on the resume-time sync as well', () => {
+    const { env, video } = brokenEnv()
+    env.setup()
+    video.style.top = '-252px'
+
+    env.sync()
+
+    assert.equal(video.style.top, '0px')
   })
 })
 

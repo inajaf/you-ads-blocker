@@ -1,5 +1,55 @@
 # Architectural decisions
 
+## 2026-09-26 — Android: never manipulate YouTube's layout; repair the invisible player
+
+Reason: the reported "the player is not playing, even trying to force the play
+button does nothing, something is stuck", plus "lock the screen and sometimes
+audio works, sometimes not".
+
+Root cause (measured on the API 37 emulator, reproduced and dumped live):
+- The PiP presentation forced inline styles on YouTube's player
+  (`position: fixed; inset: 0; width/height: 100%`) and inline `display: none`
+  on ~144 sibling elements. YouTube reacted by caching an inline
+  **`top: -252px`** (minus its own height) on the `<video>` element, inside an
+  `html5-video-container` of height 0: the video sat entirely **above** the
+  visible player box. The player therefore looked black/dead, taps landed on the
+  page instead of the video (so its controls never appeared and "forcing play"
+  did nothing), and it stayed that way until a full page reload.
+- That isolation could not restore such state reliably either: it only wrote back
+  what it had remembered, so anything YouTube changed *while* isolated was lost.
+
+Decisions:
+- **The PiP presentation is a single CSS class toggle** (`html.advoid-pip`) and
+  writes nothing inline. STYLE_SCRIPT hides the YouTube top bar and bottom pivot
+  bar inside PiP so the player fills the small window; dropping the class
+  restores the page exactly, because the browser does the bookkeeping. Verified:
+  in PiP the class is set and the player renders at the top of the window; after
+  expanding, the class is gone, the player carries no inline styles and playback
+  continues.
+- **Self-healing repair for the hidden-video state** (`repairHiddenVideo` in the
+  watch script): when the page is at the top (never in the mini-player) and the
+  main video's rect ends above its own player box, it resets the element's
+  `top`/`left` offset. It runs every second and on the resume-time sync, and logs
+  `[AdVoid] repaired a hidden video offset`. Verified both ways: forcing
+  `top: -252px` is corrected within ~1 s, and a scrolled (mini-player) page is
+  left untouched.
+- **Nudges are rate limited.** A page report with `playing=false` used to trigger
+  a nudge, which produced another report: measured as **ten nudges in 400 ms**,
+  each a JS evaluation plus a play attempt, exactly while the platform was
+  pausing the media during screen-off. Nudges are now at most one per 1.5 s and
+  still capped per PiP session; the log cadence is ~1.8 s.
+- **A blocked PiP explains itself.** Background audio is impossible without a PiP
+  window in a WebView (platform-level suspend of hidden media, measured), so if
+  the entry is requested and no PiP window appears within 1.2 s the app logs it
+  and shows a one-time toast pointing at MIUI's "Display pop-up windows while
+  running in the background" permission, instead of leaving a silent player.
+
+Verified end to end on the emulator: real taps reach the video
+(`videoTop 48`), tapping the ended player replays from 0 (`ended:false`, `ct:0`),
+Home → PiP keeps playing with `pipClass:true`, screen-off for 8 s then screen-on
+resumes playback, expanding gives `pipClass:false` with no leftover inline
+styles, and the nudge log is ~1.8 s apart.
+
 ## 2026-09-26 — Android background audio requires PiP; explicit entry + media-card seek
 
 Reason: a Xiaomi/HyperOS phone showed **no PiP window at all** when the Home
