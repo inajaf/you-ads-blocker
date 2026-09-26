@@ -1,5 +1,42 @@
 # Project status
 
+## 2026-09-26 — Real-device (Xiaomi, Android 16, WebView 153) findings and fixes
+
+Tested on the user's own phone (`2306EPN60G`, HyperOS V816, Android 16, **WebView
+153** — much newer than the emulator), with the debug build installed from Studio.
+Four device-specific problems appeared that the emulator never showed:
+
+1. **`sourceopen` fires again for the same MediaSource** on WebView 153, so a second
+   `addSourceBuffer` hit Chromium's per-MediaSource limit
+   (`QuotaExceededError`) and killed the element. Now only one SourceBuffer is ever
+   added per source (`source.__advoidSourceBufferAdded`).
+2. **YouTube's `remove()` evictions deleted audio the shadow had not played yet.**
+   Measured live: shadow at 72.4 s with its only buffered range starting at 90 s →
+   `readyState 1`, metadata only, silence while locked. Evictions are now clamped to
+   at least 30 s behind the shadow's play head (`SHADOW_KEEP_BEHIND_S`).
+3. **Repeated failures switched the renderer off for the rest of the page**, leaving
+   the user with no background audio at all and a play button that did nothing. It
+   now backs off for the failing source only and a fresh source clears it.
+4. **Pressing Play on the media card did nothing once the buffered audio was gone.**
+   A hardware media *key* cannot launch an activity from the background (Android
+   blocks it — verified: `focus=false`), but a **notification action** can, so while
+   background playback cannot continue the card's Play is an activity PendingIntent
+   that opens the app, where playback resumes from where the audio stopped.
+
+Acceptance on the phone: **14/14** —
+`node scripts/android-acceptance.mjs` with `ADB_SERIAL` (and `DEVICE_PIN` when the
+device has a lockscreen PIN; the PIN is only ever read from the environment).
+It covers play → lock (shadow audible, started unmuted player, audio advancing) →
+return (resumes past the audio) → second lock → media-card Play behaviour →
+transport pause → no crash/failure cascade.
+
+Harness notes for automation on HyperOS: an injected `KEYCODE_POWER` is **ignored**
+(use `KEYCODE_SLEEP`, 223) and the lockscreen needs the PIN to be entered after a
+swipe, otherwise the app comes back behind the keyguard and nothing can play.
+
+Validation: `npm test` 291/291, Android `testDebugUnitTest` 45/45, build, UI check
+12/12, `npx oxlint` 0 errors.
+
 ## 2026-09-26 — Acceptance suite added; every reported symptom verified (round 9)
 
 - **`scripts/android-acceptance.mjs`** drives the installed debug build over adb
