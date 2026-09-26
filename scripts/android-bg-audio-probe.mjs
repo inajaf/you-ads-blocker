@@ -48,18 +48,70 @@ const evaluate = async (expression) =>
 const PROBE = `(() => {
   var videos = Array.prototype.slice.call(document.querySelectorAll('.html5-video-player video'));
   var video = videos.filter(function(v) { return !v.paused; })[0] || videos[0] || null;
+  var player = video && video.closest ? video.closest('.html5-video-player') : null;
+  var videoRect = video ? video.getBoundingClientRect() : null;
+  var playerRect = player ? player.getBoundingClientRect() : null;
   return JSON.stringify({
-    url: location.pathname + location.search,
+    url: location.pathname,
     visibility: document.visibilityState,
     hidden: document.hidden,
     armed: window._advoidBgAudioArmed === true,
     suppressPause: window._advoidSuppressPagePause === true,
+    pipClass: document.documentElement.classList.contains('advoid-pip'),
     paused: video ? video.paused : null,
     currentTime: video ? Number(video.currentTime.toFixed(2)) : null,
     readyState: video ? video.readyState : null,
+    // The "player is dead" signature: a video pushed above its own player box.
+    videoTop: videoRect ? Math.round(videoRect.top) : null,
+    playerTop: playerRect ? Math.round(playerRect.top) : null,
+    videoInlineTop: video ? (video.style.top || '') : null,
     playingMode: document.querySelectorAll('.html5-video-player.playing-mode').length
   });
 })()`
+
+/** Taps the video centre through CDP, which produces a trusted gesture. */
+async function tapVideoCentre() {
+  const rect = await evaluate(`(() => {
+    var v = document.querySelector('.html5-video-player video');
+    if (!v) return null;
+    var r = v.getBoundingClientRect();
+    return JSON.stringify([Math.round(r.left + r.width / 2), Math.round(r.top + r.height / 2)]);
+  })()`)
+  if (!rect) {
+    console.error('no video to tap')
+    return
+  }
+  const [x, y] = JSON.parse(rect)
+  await send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] })
+  await send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+  await new Promise((resolve) => setTimeout(resolve, 1500))
+  console.log(`tapped ${x},${y}`)
+  console.log('state:', await evaluate(PROBE))
+}
+
+/** Taps YouTube's own play/pause control, the "force the play button" path. */
+async function tapPlayControl() {
+  const rect = await evaluate(`(() => {
+    var b = document.querySelector('.player-control-play-pause-icon') ||
+      document.querySelector('button[aria-label="play video"]') ||
+      document.querySelector('button[aria-label="pause video"]') ||
+      document.querySelector('.ytp-play-button');
+    if (!b) return null;
+    var r = b.getBoundingClientRect();
+    if (r.width === 0 || r.height === 0) return null;
+    return JSON.stringify([Math.round(r.left + r.width / 2), Math.round(r.top + r.height / 2)]);
+  })()`)
+  if (!rect) {
+    console.error('no play/pause control reachable')
+    return
+  }
+  const [x, y] = JSON.parse(rect)
+  await send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] })
+  await send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+  await new Promise((resolve) => setTimeout(resolve, 2000))
+  console.log(`tapped play control ${x},${y}`)
+  console.log('state:', await evaluate(PROBE))
+}
 
 if (mode === 'play') {
   if (!argument) {
@@ -87,6 +139,10 @@ if (mode === 'play') {
     console.log(`t+${i}`, await evaluate(PROBE))
     await new Promise((resolve) => setTimeout(resolve, 1000))
   }
+} else if (mode === 'tap') {
+  await tapVideoCentre()
+} else if (mode === 'playbutton') {
+  await tapPlayControl()
 } else {
   console.log('state:', await evaluate(PROBE))
 }

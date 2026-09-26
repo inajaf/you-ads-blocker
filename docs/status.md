@@ -1,5 +1,36 @@
 # Project status
 
+## 2026-09-26 — Android: invisible-player bug fixed (the "player not playing / force play does nothing")
+
+- **Root cause found and reproduced live:** the PiP presentation forced inline
+  styles on YouTube's player (`position: fixed; inset: 0; width/height: 100%`)
+  and inline `display: none` on ~144 siblings. YouTube reacted by caching an
+  inline `top: -252px` on the `<video>` element inside a zero-height container,
+  so the video sat entirely above the visible player: black/dead player, taps
+  landed on the page instead of the video, and "forcing play" did nothing. It
+  persisted until a full page reload — exactly the reported symptom.
+- **Fixed by not manipulating YouTube's layout at all:** the PiP presentation is
+  now a single CSS class (`html.advoid-pip`) with no inline writes, plus a
+  self-healing `repairHiddenVideo()` that detects a video pushed above its own
+  player (never in the mini-player) and resets the offset — every second and on
+  the resume-time sync.
+- **Also fixed:** the nudge loop could fire ten times in 400 ms (each a JS
+  evaluation plus a play attempt) because a page report triggered a nudge that
+  produced another report; nudges are now rate limited to one per 1.5 s.
+- **Also added:** a one-time toast when PiP is requested but no PiP window
+  appears, explaining that background audio needs it (MIUI: allow "Display
+  pop-up windows while running in the background").
+- Verified on the API 37 emulator: forcing `top: -252px` is repaired within ~1 s;
+  `videoTop` stays 48 through play → Home/PiP → screen-off 8 s → screen-on →
+  expand; `pipClass` true only in PiP; expanding leaves no inline styles; tapping
+  the ended player replays from 0; nudge log ~1.8 s apart. `npm test` 270/270,
+  `npm run build`, `./scripts/ui-check.sh` 12/12, `npx oxlint` 0 errors, Android
+  `testDebugUnitTest` 43/43; the probe script gained `tap`/`playbutton` modes.
+- Remaining for the user: install and re-test on the phone (Home button → PiP +
+  audio; tap the player to reveal controls; replay after the end). Screen-off
+  audio still cannot work in a WebView; the position is preserved and playback
+  resumes on screen-on.
+
 ## 2026-09-26 — Android background audio: PiP must actually appear (Xiaomi), media-card seek
 
 - **Explicit PiP entry restored alongside auto-enter.** The previous revision

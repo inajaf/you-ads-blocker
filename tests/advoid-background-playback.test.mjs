@@ -119,9 +119,10 @@ describe('Android background audio wiring', () => {
     assert.match(style[1], /ytm-feed-filter-chip-bar-renderer#filter-chip-bar/)
     assert.match(style[1], /position: static !important/)
     assert.match(style[1], /z-index: auto !important/)
-    // The YouTube top bar and the Shorts rules must stay untouched.
+    // The Shorts rules must stay untouched, and the YouTube top bar may only be
+    // hidden inside the PiP window, never globally.
     assert.match(style[1], /html\.advoid-shorts ytm-searchbox/)
-    assert.doesNotMatch(style[1], /ytm-mobile-topbar-renderer/)
+    assert.doesNotMatch(style[1], /^\s*'ytm-mobile-topbar-renderer/m)
   })
 
   it('starts and stops the service from the coordinator decision, never unconditionally', () => {
@@ -185,6 +186,16 @@ describe('Android background audio wiring', () => {
       mainActivity,
       /schedulePipNudges\(\)\r?\n\s+try \{\r?\n\s+enterPictureInPictureMode\(pipParams\(autoEnter = true\)\)/,
     )
+  })
+
+  it('explains a blocked PiP instead of silently stopping the audio', () => {
+    // Without a PiP window the WebView is suspended by the platform, so tell the
+    // user once (MIUI needs its "Display pop-up windows" permission).
+    assert.match(mainActivity, /PIP_ENTRY_CHECK_DELAY_MS/)
+    assert.match(mainActivity, /if \(pipActive \|\| !backgroundPlayback\.isBackgroundAudioEnabled\(\)\) return@Runnable/)
+    assert.match(mainActivity, /PREFERENCE_PIP_HINT_SHOWN/)
+    assert.match(mainActivity, /Display pop-up windows while running in the background/)
+    assert.match(mainActivity, /postDelayed\(pipEntryCheckRunnable, PIP_ENTRY_CHECK_DELAY_MS\)/)
   })
 
   it('never stops and restarts the foreground service in quick succession', () => {    // Measured: a transport pause followed by YouTube flapping pause/play made
@@ -738,171 +749,73 @@ describe('AdVoid page pause suppression', () => {
   })
 })
 
+
 // ---------------------------------------------------------------------------
-// Layer C: the PiP presentation must be reversible and must not depend on
-// YouTube's class names.
+// Layer C: the PiP presentation is a class toggle and must never write inline
+// styles. The inline-styling version made YouTube cache a hidden-video offset
+// (`top: -<height>` on the <video>), which left a black, untappable player.
 // ---------------------------------------------------------------------------
 
-class FakeNode {
-  constructor(classes = []) {
-    this.classes = new Set(classes)
-    this.children = []
-    this.parentElement = null
-    this.style = {}
-    this.tagName = 'DIV'
+function makePipEnv() {
+  const classes = new Set()
+  const sandbox = {
+    document: {
+      documentElement: {
+        classList: {
+          toggle(name, on) {
+            if (on) classes.add(name)
+            else classes.delete(name)
+            return Boolean(on)
+          },
+        },
+      },
+    },
+    console,
   }
-
-  appendChild(child) {
-    child.parentElement = this
-    this.children.push(child)
-    return child
-  }
-
-  closest(selector) {
-    const wanted = selector.startsWith('.') ? selector.slice(1) : null
-    let node = this
-    while (node) {
-      if (wanted && node.classes.has(wanted)) return node
-      node = node.parentElement
-    }
-    return null
-  }
-}
-
-function makePipEnv({ withVideo = true } = {}) {
-  const html = new FakeNode()
-  const body = new FakeNode()
-  const masthead = new FakeNode()
-  const app = new FakeNode()
-  const playerContainer = new FakeNode(['player-container'])
-  const player = new FakeNode(['html5-video-player'])
-  const video = new FakeNode()
-  video.tagName = 'VIDEO'
-  video.closest = FakeNode.prototype.closest.bind(video)
-
-  html.appendChild(body)
-  body.appendChild(masthead)
-  body.appendChild(app)
-  app.appendChild(playerContainer)
-  app.appendChild(new FakeNode(['comments']))
-  playerContainer.appendChild(player)
-  player.appendChild(video)
-  video.parentElement = player
-
-  // Mutable so a test can simulate YouTube replacing the player subtree on an
-  // SPA navigation inside PiP.
-  const videos = withVideo ? [video] : []
-  const windowListeners = new Map()
-  const document = {
-    documentElement: html,
-    querySelectorAll: (selector) =>
-      selector === '.html5-video-player video' ? videos : [],
-  }
-  const sandbox = { document, console }
   sandbox.window = sandbox
-  sandbox.window.addEventListener = (type, listener) => {
-    if (!windowListeners.has(type)) windowListeners.set(type, [])
-    windowListeners.get(type).push(listener)
-  }
   const context = vm.createContext(sandbox)
   return {
-    nodes: { body, masthead, app, playerContainer, comments: app.children[1] },
-    videos,
-    addVideo: (element) => {
-      element.closest = FakeNode.prototype.closest.bind(element)
-      player.appendChild(element)
-      element.parentElement = player
-      videos.push(element)
-      return element
-    },
-    replacePlayerContainer: () => {
-      const nextContainer = new FakeNode(['player-container'])
-      const nextPlayer = new FakeNode(['html5-video-player'])
-      const nextVideo = new FakeNode()
-      nextVideo.tagName = 'VIDEO'
-      nextVideo.closest = FakeNode.prototype.closest.bind(nextVideo)
-      nextContainer.appendChild(nextPlayer)
-      nextPlayer.appendChild(nextVideo)
-      nextVideo.parentElement = nextPlayer
-      nextContainer.parentElement = app
-      app.appendChild(nextContainer)
-      videos.length = 0
-      videos.push(nextVideo)
-      return nextContainer
-    },
+    classes,
     setup: () => vm.runInContext(PIP_SCRIPT, context),
-    setPip: (on) =>
-      vm.runInContext(`window._advoidSetPipPresentation(${on});`, context),
-    navigate: () => {
-      for (const listener of windowListeners.get('yt-navigate-finish') || []) {
-        listener({ type: 'yt-navigate-finish' })
-      }
-    },
+    setPip: (on) => vm.runInContext(`window._advoidSetPipPresentation(${on});`, context),
     pipActive: () => vm.runInContext('window._advoidPipActive === true;', context),
   }
 }
 
 describe('AdVoid PiP presentation (PIP_PRESENTATION_SCRIPT)', () => {
-  it('hides the page chrome around the player and restores it on exit', () => {
+  it('adds and removes the PiP class', () => {
     const env = makePipEnv()
     env.setup()
 
     env.setPip(true)
-    assert.equal(env.nodes.masthead.style.display, 'none')
-    assert.equal(env.nodes.comments.style.display, 'none')
-    assert.equal(env.nodes.playerContainer.style.position, 'fixed')
-    assert.equal(env.nodes.playerContainer.style.zIndex, '2147483000')
-
-    env.setPip(false)
-    assert.equal(env.nodes.masthead.style.display, undefined)
-    assert.equal(env.nodes.comments.style.display, undefined)
-    assert.equal(env.nodes.playerContainer.style.position, undefined)
-    assert.equal(env.nodes.playerContainer.style.zIndex, undefined)
-  })
-
-  it('is idempotent across repeated PiP transitions', () => {
-    const env = makePipEnv()
-    env.setup()
-
-    env.setPip(true)
-    env.setPip(true)
-    env.setPip(false)
-
-    assert.equal(env.nodes.masthead.style.display, undefined)
-    assert.equal(env.nodes.playerContainer.style.position, undefined)
-  })
-
-  it('does nothing when the PiP window has no watch player yet', () => {
-    const env = makePipEnv({ withVideo: false })
-    env.setup()
-
-    // Must not throw while YouTube is still building the player.
-    env.setPip(true)
-    assert.equal(env.nodes.masthead.style.display, undefined)
+    assert.equal(env.classes.has('advoid-pip'), true)
     assert.equal(env.pipActive(), true)
-  })
 
-  it('re-isolates the player after an SPA navigation inside PiP', () => {
-    const env = makePipEnv()
-    env.setup()
-    env.setPip(true)
-
-    const nextContainer = env.replacePlayerContainer()
-    env.navigate()
-
-    assert.equal(env.nodes.masthead.style.display, 'none')
-    assert.equal(nextContainer.style.position, 'fixed')
-  })
-
-  it('stops re-applying once PiP is left', () => {
-    const env = makePipEnv()
-    env.setup()
-    env.setPip(true)
     env.setPip(false)
-
-    env.navigate()
-
-    assert.equal(env.nodes.masthead.style.display, undefined)
+    assert.equal(env.classes.has('advoid-pip'), false)
     assert.equal(env.pipActive(), false)
+  })
+
+  it('coerces a non-boolean argument to off', () => {
+    const env = makePipEnv()
+    env.setup()
+
+    env.setPip("'yes'")
+    assert.equal(env.classes.has('advoid-pip'), false)
+    assert.equal(env.pipActive(), false)
+  })
+
+  it('never writes inline styles anywhere', () => {
+    // A class toggle cannot leak player styling into the page.
+    assert.doesNotMatch(PIP_SCRIPT, /\.style\./)
+    assert.doesNotMatch(PIP_SCRIPT, /setProperty/)
+    assert.match(PIP_SCRIPT, /classList\.toggle\('advoid-pip'/)
+  })
+
+  it('ships the PiP presentation as a class rule', () => {
+    const style = mainActivity.match(/private const val STYLE_SCRIPT = """([\s\S]*?)"""/)
+    assert.ok(style, 'STYLE_SCRIPT not found in MainActivity.kt')
+    assert.match(style[1], /html\.advoid-pip ytm-mobile-topbar-renderer/)
+    assert.match(style[1], /html\.advoid-pip ytm-pivot-bar-renderer/)
   })
 })

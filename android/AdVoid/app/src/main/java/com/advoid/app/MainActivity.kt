@@ -49,6 +49,7 @@ class MainActivity : Activity() {
     /** Last value handed to the system, so params are only pushed on changes. */
     private var autoEnterEnabled = false
     private var pipNudges = 0
+    private var lastNudgeAt = 0L
     private var pipNudgeRunnable: Runnable? = null
 
     /**
@@ -695,6 +696,13 @@ class MainActivity : Activity() {
         if (!::webView.isInitialized) return
         if (!backgroundPlayback.isBackgroundAudioEnabled()) return
         if (pipNudges >= MAX_PIP_NUDGES) return
+        // Rate limit: a page report with playing=false used to trigger a nudge,
+        // and the nudge itself produced another report — measured as ten nudges
+        // in 400 ms (each one a JS evaluation plus a play attempt) while the
+        // platform was pausing the media.
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastNudgeAt < PIP_NUDGE_INTERVAL_MS) return
+        lastNudgeAt = now
         pipNudges++
         Log.i(TAG, "picture-in-picture: nudging playback (attempt $pipNudges, $reason)")
         webView.evaluateJavascript(
@@ -772,12 +780,21 @@ class MainActivity : Activity() {
         // The user is back: stop nudging and let the page report the real state.
         cancelPipNudges()
         pipNudges = 0
+        lastNudgeAt = 0L
         // Resumed means the user is actually interacting with the app: page
         // pause suppression is released and page reports become authoritative.
         applyBackgroundPlaybackState(
             backgroundPlayback.onActivityResumed(true)
         )
         updatePictureInPictureParams()
+        // Defensive: re-assert the PiP presentation from the truth we know. On
+        // some OEM builds onPictureInPictureModeChanged(false) is not delivered
+        // when PiP closes, and a stale "in PiP" presentation would leave the page
+        // carrying PiP-only styling.
+        webView.evaluateJavascript(
+            "window._advoidSetPipPresentation && window._advoidSetPipPresentation($pipActive);",
+            null,
+        )
         webView.evaluateJavascript(
             "window._advoidSyncVideoState && window._advoidSyncVideoState();",
             null,
@@ -830,6 +847,27 @@ class MainActivity : Activity() {
         } catch (e: IllegalStateException) {
             Log.w(TAG, "picture-in-picture entry failed: ${e.message}")
         }
+        // If no PiP window appears, background audio cannot work in a WebView
+        // (the platform suspends hidden media). Say so once instead of leaving
+        // the user with a silent player and no explanation.
+        webView.postDelayed(pipEntryCheckRunnable, PIP_ENTRY_CHECK_DELAY_MS)
+    }
+
+    private val pipEntryCheckRunnable = Runnable {
+        if (pipActive || !backgroundPlayback.isBackgroundAudioEnabled()) return@Runnable
+        Log.w(
+            TAG,
+            "picture-in-picture did not start; background audio cannot continue in a WebView",
+        )
+        val preferences = getSharedPreferences(PREFERENCES_NAME, MODE_PRIVATE)
+        if (preferences.getBoolean(PREFERENCE_PIP_HINT_SHOWN, false)) return@Runnable
+        preferences.edit().putBoolean(PREFERENCE_PIP_HINT_SHOWN, true).apply()
+        Toast.makeText(
+            this,
+            "AdVoid could not show Picture-in-Picture, so background audio stops. " +
+                "Allow \"Display pop-up windows while running in the background\" for AdVoid.",
+            Toast.LENGTH_LONG,
+        ).show()
     }
 
     override fun onPictureInPictureModeChanged(
@@ -851,6 +889,7 @@ class MainActivity : Activity() {
             // The platform may have paused the media while the WebView was
             // hidden for the transition; ask the page to resume it.
             pipNudges = 0
+            lastNudgeAt = 0L
             nudgePlayback("PiP entered")
             schedulePipNudges()
         } else {
@@ -949,6 +988,10 @@ class MainActivity : Activity() {
         /** On-device only; see public/privacy.html ("AdVoid app preferences"). */
         private const val PREFERENCES_NAME = "advoid"
         private const val PREFERENCE_NOTIFICATION_ASKED = "notificationPermissionAsked"
+        private const val PREFERENCE_PIP_HINT_SHOWN = "pipBlockedHintShown"
+
+        /** How long to wait for a PiP window before telling the user it failed. */
+        private const val PIP_ENTRY_CHECK_DELAY_MS = 1200L
 
         /**
          * Element to fullscreen for rotation auto-fullscreen. Must be the
@@ -1524,9 +1567,36 @@ class MainActivity : Activity() {
                     });
                 }
 
+                /**
+                 * Repairs the "invisible player" state: YouTube caches an inline
+                 * `top: -<height>` on the <video> element when it believes the
+                 * video should not be shown, which leaves the player black,
+                 * off-screen and untappable until a full page reload (the
+                 * reported "player is not playing, forcing play does nothing").
+                 * Only the exact signature is repaired, and never in the
+                 * mini-player (a scrolled page legitimately hides the video).
+                 */
+                function repairHiddenVideo() {
+                    if (!isOnWatchPage() || window.scrollY > 0) return;
+                    var video = currentWatchVideo();
+                    if (!video) return;
+                    var player = playerOf(video);
+                    if (!player) return;
+                    var videoRect = video.getBoundingClientRect();
+                    var playerRect = player.getBoundingClientRect();
+                    if (playerRect.height <= 0 || videoRect.height <= 0) return;
+                    if (videoRect.bottom > playerRect.top + 1) return;
+                    video.style.top = '0px';
+                    if (parseFloat(video.style.left || '0') < 0) {
+                        video.style.left = '0px';
+                    }
+                    console.warn('[AdVoid] repaired a hidden video offset');
+                }
+
                 window._advoidSyncVideoState = function() {
                     setupVideoListeners();
                     refreshAllLoading();
+                    repairHiddenVideo();
                     reportPlaybackState(true);
                     reportMediaState(true);
                 };
@@ -1545,6 +1615,9 @@ class MainActivity : Activity() {
                 // swaps the <video> element mid-load, which would otherwise leave
                 // the spinner running over a playing video.
                 setInterval(refreshAllLoading, 1000);
+                // Self-heal the invisible-player state even if the native side
+                // never gets a chance to re-sync (see repairHiddenVideo).
+                setInterval(repairHiddenVideo, 1000);
                 // Sampled progress for the notification/lock screen; property
                 // changes still arrive immediately through reportMediaState(true).
                 setInterval(reportMediaState, 1000);
@@ -1887,83 +1960,25 @@ class MainActivity : Activity() {
         """
 
         /**
-         * Picture-in-Picture presentation. The PiP window is only as big as the
-         * video, so every sibling along the path from the player to <body> is
-         * hidden while PiP is active and restored afterwards. YouTube's class
-         * names are deliberately not used: they change without notice, while the
-         * `.player-container`/`.html5-video-player` wrapper hierarchy is the
-         * same structure the auto-fullscreen code already depends on.
+         * Picture-in-Picture presentation.
+         *
+         * One CSS class toggle on `<html>` (the rules live in STYLE_SCRIPT) and
+         * deliberately nothing inline. The previous version forced
+         * `position: fixed; inset: 0; width/height: 100%` on YouTube's player
+         * plus per-sibling inline `display: none`; YouTube reacted by caching an
+         * inline `top: -<height>` on the `<video>` element, leaving the player
+         * invisible, off-screen and untappable until a full page reload (the
+         * "player is not playing / taps do nothing" bug). A class toggle cannot
+         * leak that state: dropping the class restores the page exactly.
          */
         internal const val PIP_PRESENTATION_SCRIPT = """
             (function() {
                 if (window._advoidPipSetup) return;
                 window._advoidPipSetup = true;
-                var restore = [];
-
-                function remember(el, prop) {
-                    restore.push({ el: el, prop: prop, value: el.style[prop] });
-                }
-
-                function pipVideo() {
-                    // Follow the same convention as the rest of the bridge: the
-                    // playing video wins, falling back to the first one.
-                    var videos = document.querySelectorAll('.html5-video-player video');
-                    for (var i = 0; i < videos.length; i++) {
-                        if (!videos[i].paused && !videos[i].ended) return videos[i];
-                    }
-                    return videos && videos.length ? videos[0] : null;
-                }
-
-                function isolate() {
-                    var video = pipVideo();
-                    if (!video || !video.closest) return;
-                    var player = video.closest('.player-container') ||
-                        video.closest('.html5-video-player');
-                    if (!player) return;
-
-                    var node = player;
-                    while (node && node.parentElement &&
-                            node.parentElement !== document.documentElement) {
-                        var parent = node.parentElement;
-                        for (var i = 0; i < parent.children.length; i++) {
-                            var sibling = parent.children[i];
-                            if (sibling === node) continue;
-                            remember(sibling, 'display');
-                            sibling.style.display = 'none';
-                        }
-                        node = parent;
-                    }
-
-                    ['position', 'left', 'top', 'right', 'bottom', 'width', 'height', 'zIndex']
-                        .forEach(function(prop) { remember(player, prop); });
-                    player.style.position = 'fixed';
-                    player.style.left = '0';
-                    player.style.top = '0';
-                    player.style.right = '0';
-                    player.style.bottom = '0';
-                    player.style.width = '100%';
-                    player.style.height = '100%';
-                    player.style.zIndex = '2147483000';
-                }
-
                 window._advoidSetPipPresentation = function(on) {
                     window._advoidPipActive = on === true;
-                    for (var i = restore.length - 1; i >= 0; i--) {
-                        restore[i].el.style[restore[i].prop] = restore[i].value;
-                    }
-                    restore = [];
-                    if (window._advoidPipActive) isolate();
+                    document.documentElement.classList.toggle('advoid-pip', on === true);
                 };
-
-                // An SPA navigation inside the PiP window replaces the player
-                // subtree; re-isolate so the new chrome does not fill the window.
-                ['yt-navigate-finish', 'popstate'].forEach(function(type) {
-                    window.addEventListener(type, function() {
-                        if (window._advoidPipActive) {
-                            window._advoidSetPipPresentation(true);
-                        }
-                    }, true);
-                });
             })();
         """
 
@@ -2502,6 +2517,16 @@ class MainActivity : Activity() {
                     '  position: static !important;',
                     '  top: auto !important;',
                     '  z-index: auto !important;',
+                    '}',
+                    // PiP window presentation: hide the page chrome so the player
+                    // fills the small window. A class toggle only — nothing is
+                    // written inline, so leaving PiP restores the page exactly
+                    // and YouTube's own layout is never lied to (forcing the
+                    // player to a foreign size made YouTube cache a hidden-video
+                    // offset and left the player dead until a reload).
+                    'html.advoid-pip ytm-mobile-topbar-renderer,',
+                    'html.advoid-pip ytm-pivot-bar-renderer {',
+                    '  display: none !important;',
                     '}',
                     // Android's landscape mandatory-gesture inset is about 52
                     // CSS px on the Pixel emulator (137 physical px at 2.625

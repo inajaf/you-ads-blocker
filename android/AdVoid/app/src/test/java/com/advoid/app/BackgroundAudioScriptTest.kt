@@ -138,20 +138,13 @@ class BackgroundAudioScriptTest {
     }
 
     @Test
-    fun `the pip presentation is reversible and class-name independent`() {
+    fun `the pip presentation is a reversible class toggle`() {
         assertTrue(pipScript.contains("window._advoidSetPipPresentation = function(on)"))
-        assertTrue(
-            "every hidden element and forced style must be restored",
-            pipScript.contains("restore.push({ el: el, prop: prop, value: el.style[prop] })"),
-        )
-        // The player is located through the same wrapper hierarchy fullscreen
-        // already uses, never through YouTube's unstable class names, and the
-        // playing video wins over an arbitrary first one.
-        assertTrue(pipScript.contains("video.closest('.player-container')"))
-        assertTrue(pipScript.contains("video.closest('.html5-video-player')"))
-        assertTrue(pipScript.contains("if (!videos[i].paused && !videos[i].ended) return videos[i]"))
-        // SPA navigation inside the PiP window re-isolates the new subtree.
-        assertTrue(pipScript.contains("window._advoidPipActive"))
-        assertTrue(pipScript.contains("'yt-navigate-finish'"))
+        assertTrue(pipScript.contains("classList.toggle('advoid-pip'"))
+        assertTrue(pipScript.contains("window._advoidPipActive = on === true"))
+        // Inline styling is what made YouTube cache a hidden-video offset on the
+        // <video> element, which left a black, untappable player behind.
+        assertFalse(pipScript.contains(".style."))
+        assertFalse(pipScript.contains("position"))
     }
 }
