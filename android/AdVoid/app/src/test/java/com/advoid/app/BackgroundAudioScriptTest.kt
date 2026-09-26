@@ -138,6 +138,21 @@ class BackgroundAudioScriptTest {
     }
 
     @Test
+    fun `stands down while the screen is locked`() {
+        // Measured on a locked screen: Chromium suspends the video element
+        // natively and re-pauses it on every play() attempt (21 pause events in
+        // 17 s, lock-screen card flapping between playing and paused), while a
+        // plain <audio> element in the same page keeps playing. Nothing the page
+        // can do brings the video back, so the retry loop waits for the screen
+        // instead of fighting it.
+        assertTrue(script.contains("window._advoidSetScreenInteractive = function(on)"))
+        assertTrue(script.contains("window._advoidScreenInteractive = true"))
+        assertTrue(script.contains("if (window._advoidScreenInteractive === false) return"))
+        assertTrue(script.contains("if (interactive && window._advoidBgAudioArmed)"))
+        assertTrue(script.contains("armKeepAlive();"))
+    }
+
+    @Test
     fun `the pip presentation is a reversible class toggle`() {
         assertTrue(pipScript.contains("window._advoidSetPipPresentation = function(on)"))
         assertTrue(pipScript.contains("classList.toggle('advoid-pip'"))

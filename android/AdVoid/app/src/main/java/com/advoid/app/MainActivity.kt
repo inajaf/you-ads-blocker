@@ -15,6 +15,7 @@ import android.net.Uri
 import android.graphics.*
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
 import android.os.SystemClock
 import android.util.Base64
 import android.util.Log
@@ -44,6 +45,9 @@ class MainActivity : Activity() {
     private var notificationPermissionRequested = false
     private var leavingForInternalActivity = false
     private var pipActive = false
+    /** Screen on/off, tracked natively: locked screens cannot play WebView video. */
+    private var screenInteractive = true
+    private var screenReceiverRegistered = false
     private var activityResumed = false
 
     /** Last value handed to the system, so params are only pushed on changes. */
@@ -99,6 +103,8 @@ class MainActivity : Activity() {
         // only reachable while the activity is in PiP (still started), but the
         // registration must not race the PiP transition.
         registerPipActions()
+        registerScreenStateReceiver()
+        screenInteractive = (getSystemService(Context.POWER_SERVICE) as PowerManager).isInteractive
 
         // Expose the WebView to chrome://inspect on every build (debug and
         // release) so QA can verify page state without a debug-only socket.
@@ -405,6 +411,11 @@ class MainActivity : Activity() {
         view?.evaluateJavascript(LIVE_CHAT_SCRIPT, null)
         view?.evaluateJavascript(BACKGROUND_AUDIO_SCRIPT, null)
         view?.evaluateJavascript(PIP_PRESENTATION_SCRIPT, null)
+        // Keep the page's screen state in step after every injection/navigation.
+        view?.evaluateJavascript(
+            "window._advoidSetScreenInteractive && window._advoidSetScreenInteractive($screenInteractive);",
+            null,
+        )
         // Keep the Shorts marker class + reel-entry tracking current on SPA navs.
         view?.evaluateJavascript("window._advoidTrackNav && window._advoidTrackNav();", null)
     }
@@ -696,6 +707,9 @@ class MainActivity : Activity() {
         if (!::webView.isInitialized) return
         if (!backgroundPlayback.isBackgroundAudioEnabled()) return
         if (pipNudges >= MAX_PIP_NUDGES) return
+        // With the screen off Chromium suspends the video element natively and
+        // re-pauses it on every attempt, so retrying only churns the lock screen.
+        if (!screenInteractive) return
         // Rate limit: a page report with playing=false used to trigger a nudge,
         // and the nudge itself produced another report — measured as ten nudges
         // in 400 ms (each one a JS evaluation plus a play attempt) while the
@@ -709,6 +723,54 @@ class MainActivity : Activity() {
             "window._advoidEnsurePlaying && window._advoidEnsurePlaying();",
             null,
         )
+    }
+
+    /**
+     * Screen on/off. Locking the phone stops the activity, PiP is hidden and
+     * Chromium suspends video media natively, so nothing can keep the audio
+     * alive from the page; the bridge is told to stand down instead of retrying
+     * forever, and playback is resumed once when the screen comes back.
+     */
+    private val screenStateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when (intent?.action) {
+                Intent.ACTION_SCREEN_OFF -> setScreenInteractive(false)
+                Intent.ACTION_SCREEN_ON -> setScreenInteractive(true)
+            }
+        }
+    }
+
+    private fun setScreenInteractive(interactive: Boolean) {
+        if (screenInteractive == interactive) return
+        screenInteractive = interactive
+        Log.i(TAG, "screen interactive=$interactive")
+        if (!::webView.isInitialized) return
+        if (!interactive) {
+            cancelPipNudges()
+        }
+        webView.evaluateJavascript(
+            "window._advoidSetScreenInteractive && window._advoidSetScreenInteractive($interactive);",
+            null,
+        )
+        if (interactive && backgroundPlayback.isServiceRunning()) {
+            // One attempt, not a budget: the page resumes on the screen-on signal
+            // itself, this covers the report that arrives a moment later.
+            lastNudgeAt = 0L
+            nudgePlayback("screen on")
+        }
+    }
+
+    private fun registerScreenStateReceiver() {
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_ON)
+            addAction(Intent.ACTION_SCREEN_OFF)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(screenStateReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(screenStateReceiver, filter)
+        }
+        screenReceiverRegistered = true
     }
 
     private fun schedulePipNudges() {
@@ -903,6 +965,10 @@ class MainActivity : Activity() {
         // keep running after the activity is gone.
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         cancelPipNudges()
+        if (screenReceiverRegistered) {
+            unregisterReceiver(screenStateReceiver)
+            screenReceiverRegistered = false
+        }
         webView.removeCallbacks(stopServiceRunnable)
         serviceStopPending = false
         unregisterPipActions()
@@ -1765,6 +1831,13 @@ class MainActivity : Activity() {
                 }
                 function tickKeepAlive() {
                     if (!window._advoidBgAudioArmed || keepAliveLeft <= 0) return;
+                    // With the screen off Chromium suspends the video element
+                    // natively (measured: a plain <audio> element in the same
+                    // page keeps playing, the <video> does not) and re-pauses it
+                    // on every play() we attempt. Retrying there achieved nothing
+                    // but 21 pause events in 17 s and a lock-screen card that
+                    // flapped between playing and paused. Wait for the screen.
+                    if (window._advoidScreenInteractive === false) return;
                     keepAliveLeft--;
                     keepAliveTimer = setTimeout(function() {
                         keepAliveTimer = null;
@@ -1783,6 +1856,23 @@ class MainActivity : Activity() {
                     clearKeepAlive();
                     if (armed) {
                         armKeepAlive();
+                    }
+                };
+
+                // Screen state, pushed by the native side (ACTION_SCREEN_ON/OFF).
+                // Locked screens cannot play WebView video at all, so the retry
+                // loop stands down and resumes from a single attempt when the
+                // screen comes back.
+                window._advoidScreenInteractive = true;
+                window._advoidSetScreenInteractive = function(on) {
+                    var interactive = on !== false;
+                    if (window._advoidScreenInteractive === interactive) return;
+                    window._advoidScreenInteractive = interactive;
+                    if (interactive && window._advoidBgAudioArmed) {
+                        ensurePlaying();
+                        armKeepAlive();
+                    } else {
+                        clearKeepAlive();
                     }
                 };
 

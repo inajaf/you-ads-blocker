@@ -1,5 +1,44 @@
 # Architectural decisions
 
+## 2026-09-26 — Locked screens: stand down instead of fighting the platform
+
+Reason: "if I lock AdVoid while a video plays, I need the audio to keep playing."
+
+Measured on the API 37 emulator with a live page inspection:
+- Locking stops the activity, hides PiP, and Chromium suspends the `<video>`
+  element **natively**: it ends up `paused` with `readyState 4` and the position
+  frozen, with **no JS pause call** involved (our prototype `pause` wrapper and
+  its stack capture never fired).
+- An `<audio>` element in the same page **keeps playing** through the lock and
+  shows as `state:started mutedState:none` in `dumpsys audio` — the app keeps
+  audio focus and nothing is muted. So the suspend rule is per element: media
+  **with a video track** is suspended on a hidden page, audio-only media is not.
+- Our retry loop fought that suspend: 21 `pause` events in 17 s and a lock-screen
+  media card flapping PLAYING/PAUSED (dozens of `onSessionPlaybackStateChanged`
+  per minute), for no gain — the position never advanced.
+- Android WebView here exposes **no `navigator.mediaSession`/`MediaMetadata`** to
+  pages (`'mediaSession' in navigator === false`), so a page cannot claim
+  Chromium's background-media exemption the way a browser tab can.
+- YouTube's MSE runs on the **main thread** with a separate
+  `audio/webm; codecs="opus"` SourceBuffer (observed through
+  `MediaSource.prototype.addSourceBuffer`), which is what would make a "shadow"
+  audio-only renderer of the same segments conceivable.
+
+Decision: the activity tracks screen on/off (`ACTION_SCREEN_ON`/`ACTION_SCREEN_OFF`
+plus `PowerManager.isInteractive`) and pushes it to the page
+(`_advoidSetScreenInteractive`). While the screen is off the page's keep-alive
+stands down and native nudges stop, so the lock-screen card settles on **one
+stable PAUSED state** with the position preserved; on screen-on the page resumes
+once and the native side nudges once. Verified: session state changes while
+locked fell from dozens per minute to **1**, and playback resumed
+(19.99 s → 23.05 s) after unlocking, with `videoTop` still 48 and no crash.
+
+Unchanged limitation: audio cannot actually play while the screen is off in a
+WebView. Options for real locked-screen audio are the native ExoPlayer pipeline
+(rejected: expiring IP-bound URLs, DASH `n` churn, bypasses YouTube playback
+accounting) or a shadow audio-only renderer mirroring YouTube's audio
+SourceBuffer into an element that has no video track (experimental, unproven).
+
 ## 2026-09-26 — Android: never manipulate YouTube's layout; repair the invisible player
 
 Reason: the reported "the player is not playing, even trying to force the play
