@@ -1,5 +1,32 @@
 # Project status
 
+## 2026-09-26 — Locked-screen audio: honest limits measured and handled
+
+- **How long it lasts:** locked audio plays out the audio that was already
+  buffered when the screen locked. Measured: 34 → 89.7 s (≈56 s) and then the
+  shadow starved. While locked YouTube fetches nothing (player stuck in
+  `BUFFERING`, element suspended; moving the play head and re-calling
+  `playVideo()` produced no data, `videoBufferedEnd` frozen) and the page's timers
+  are throttled/frozen — a 500 ms interval registered while locked ran **0 times
+  in 30 s** — so nothing page-side can extend it.
+- **Starvation no longer lies:** `_advoidShadowPlaying()` requires
+  `readyState >= 3`, so a starved shadow stops counting as playback; the session
+  settles on a stable PAUSED at the *audio's* position (verified
+  `position=59801` when the audio stopped at 59.8 s) rather than reporting
+  playing over silence, and the notification stays for the user to return.
+- **Unlock resumes exactly where the audio stopped** (verified: video resumed at
+  66.25 s / 43.69 s in two runs, with fetching back on and the buffer growing
+  again, no crash).
+- **Also hardened:** mid-lock rebuilds (ads/quality switches) come back audible
+  instead of muted, and the rebuild budget was raised from 6 to 20 because
+  YouTube re-creates its MediaSource on post-seek reloads.
+- Validation: `npm test` 281/281 (10 shadow tests), Android
+  `testDebugUnitTest` 45/45, build/UI/lint green.
+- **Open decision for the user:** a WebView cannot fetch more media with the
+  screen off, so locked listening is buffer-limited (~1 minute in practice). For
+  unlimited locked playback the options are the rejected native ExoPlayer
+  pipeline or leaving the screen on while playing.
+
 ## 2026-09-26 — Locked-screen audio now works (shadow audio renderer)
 
 - **Done: audio keeps playing while the phone is locked.** Chromium suspends the

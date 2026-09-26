@@ -51,6 +51,23 @@ disables itself and the previous behaviour returns); a second audio decode runs
 while the screen is on (small CPU, no extra network — buffers are copied, not
 re-fetched); Shorts and non-MSE playback get no shadow.
 
+**Measured limit (important):** locked audio lasts only as long as the audio that
+was already buffered when the screen locked. While locked YouTube fetches
+nothing — its player sits in `BUFFERING` (3) with the element suspended, moving
+the element's play head and re-calling `playVideo()` produced no new data, and
+`videoBufferedEnd` stayed frozen — and the page's own timers are throttled or
+frozen (a 500 ms `setInterval` registered while locked ran **0 times in 30 s**),
+so no page-side strategy can extend it. In the measurement the shadow played
+34 → 89.7 s (≈56 s) and then starved (`readyState` 4 → 1). Starvation is now
+handled honestly: `_advoidShadowPlaying()` requires `readyState >= 3`, so the
+native session settles on a stable **PAUSED at the audio's position** (verified:
+`position=59801` for audio that stopped at 59.8 s) instead of claiming to play
+over silence, and unlocking seeks the video to that position and resumes
+(verified: resumed at 66.25 s, fetching back on, buffer 82.9 → 96.3 s).
+Going beyond that window would need either a page-side fetcher for YouTube's
+audio segments (not reachable from the main thread — only 7 media requests appear
+in resource timing) or the rejected native pipeline.
+
 ## 2026-09-26 — Locked screens: stand down instead of fighting the platform
 
 Reason: "if I lock AdVoid while a video plays, I need the audio to keep playing."

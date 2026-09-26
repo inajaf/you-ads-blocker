@@ -994,6 +994,42 @@ describe('AdVoid locked-screen audio shadow (BACKGROUND_AUDIO_SCRIPT)', () => {
     assert.equal(shadow.paused, true)
   })
 
+  it('treats a starved shadow as not playing, so the session is not kept over silence', () => {
+    // Measured: while the screen is off YouTube fetches nothing and the page's
+    // timers stop, so the shadow plays out the buffered audio and then stalls
+    // (readyState 2). Reporting that as playing kept the notification and the
+    // foreground service alive over silence.
+    const { env, video } = shadowEnv()
+    const { sourceBuffer } = env.attachLiveAudioSource(video)
+    sourceBuffer.appendBuffer({ slice: () => 'init' })
+    const shadow = env.shadowElement()
+    env.setScreenInteractive(false)
+    assert.equal(env.shadowPlaying(), true)
+
+    shadow.readyState = 2
+
+    assert.equal(env.shadowPlaying(), false)
+    shadow.readyState = 4
+    assert.equal(env.shadowPlaying(), true)
+  })
+
+  it('keeps a mid-lock rebuild audible', () => {
+    // YouTube re-creates its MediaSource on quality switches/ads; if that lands
+    // while the screen is off, the fresh shadow must be unmuted immediately or
+    // the audio goes silent until the user unlocks.
+    const { env, video } = shadowEnv()
+    const first = env.attachLiveAudioSource(video)
+    first.sourceBuffer.appendBuffer({ slice: () => 'init' })
+    env.setScreenInteractive(false)
+
+    const second = env.attachLiveAudioSource(video, 'audio/webm; codecs="opus"')
+    second.sourceBuffer.appendBuffer({ slice: () => 'init-2' })
+
+    const shadow = env.shadowElement()
+    assert.equal(shadow.muted, false)
+    assert.equal(env.shadowPlaying(), true)
+  })
+
   it('tears the shadow down when background audio is switched off', () => {
     const { env, video } = shadowEnv()
     const { sourceBuffer } = env.attachLiveAudioSource(video)
