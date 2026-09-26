@@ -101,6 +101,16 @@ class BackgroundPlaybackCoordinator {
     fun shouldEnterPictureInPicture(pipSupported: Boolean): Boolean =
         pipSupported && backgroundAudioEnabled && userPlaybackActive && activityStarted
 
+    /**
+     * On API 31+ the system should own the PiP transition (`setAutoEnterEnabled`).
+     * Measured on a real device: collapsing with the system transition keeps the
+     * WebView surface alive and the audio playing, while entering PiP from
+     * `onUserLeaveHint` hides the WebView for a moment and Chromium pauses the
+     * media natively. The legacy call therefore stays for API 26-30 only.
+     */
+    fun shouldAutoEnterPictureInPicture(pipSupported: Boolean, apiLevel: Int): Boolean =
+        apiLevel >= AUTO_ENTER_API_LEVEL && shouldEnterPictureInPicture(pipSupported)
+
     fun isServiceRunning(): Boolean = serviceRunning
 
     fun isBackgroundAudioEnabled(): Boolean = backgroundAudioEnabled
@@ -123,5 +133,10 @@ class BackgroundPlaybackCoordinator {
             visibilitySpoof = shouldRun,
             suppressPagePause = shouldRun && !activityResumed,
         )
+    }
+
+    companion object {
+        /** Android 12 (S) is the first release with setAutoEnterEnabled. */
+        const val AUTO_ENTER_API_LEVEL = 31
     }
 }

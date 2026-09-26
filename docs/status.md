@@ -1,5 +1,45 @@
 # Project status
 
+## 2026-09-26 — Android background audio: real-device follow-ups (branch fm/android-bg-audio-v2)
+
+Follow-up to the entry below, from testing the branch build on a real Android 12+
+phone (see the matching `docs/decisions.md` entry for the measurements).
+
+- **Fixed: audio died when leaving via the Home button** (the PiP window appeared
+  but was silent), while the finger-drag collapse kept playing. The system now
+  owns the transition on API 31+ (`setAutoEnterEnabled`, state-driven params);
+  the legacy `onUserLeaveHint` entry remains for API 26-30. Both paths are backed
+  by a resume safety net: the page re-arms its keep-alive and resumes on every
+  real visible transition, and native nudges `_advoidEnsurePlaying` after PiP
+  entry with bounded retries that stop once playback is confirmed.
+- **Fixed: YouTube's filter/category row followed the scroll** and covered feed
+  content under AdVoid's bar. The row (`ytm-feed-filter-chip-bar-renderer`,
+  measured `position: fixed`, z-index 3) is forced back into document flow, so it
+  scrolls away with the feed and still works for filtering.
+- **Fixed a crash found while verifying the above (blocker, shipped code):** a
+  transport pause followed by YouTube flapping pause/play made the app stop and
+  start the `mediaPlayback` service within milliseconds; Android killed it with
+  `RemoteServiceException$ForegroundServiceDidNotStartInTimeException`. Stops are
+  now deferred by a 2 s grace period, a start inside that window refreshes the
+  running service instead of restarting it, and the start call catches
+  `RuntimeException` before rolling the coordinator back.
+- **Fixed:** a nudge no longer undoes an explicit user pause — nudges are gated
+  on the coordinator still having a session (YouTube re-reports `playing=false`
+  after a transport pause without the `userPaused` flag).
+- Validation: `npm test` 262/262, `npm run build`, `./scripts/ui-check.sh` 12/12,
+  `npx oxlint` 0 errors, Android `testDebugUnitTest` 43/43 (19 coordinator, 8
+  script, 5 permission gate, plus the existing 11). Emulator QA on API 37:
+  Home-button PiP plays 1 s/s for 15-30 s with the `AAudio` player started and
+  unmuted and no new `AudioHardening` entries; transport pause ends the session,
+  removes the notification and leaves the app alive; resuming starts a fresh
+  service; Shorts never arm it; feed chip bar is `position: static` and scrolls
+  away with the content.
+- Remaining: re-test on the phone (install the debug build, press the round Home
+  button, scroll the home feed), then merge PR #55 and cut the next release. No
+  Play upload was made; `version.properties` stays at `1.4.5`/code 7.
+- Known limitation unchanged: screen-off audio still does not work (session
+  stays paused with the position preserved and resumes on return).
+
 ## 2026-09-26 — Android background audio (branch fm/android-bg-audio-v2)
 
 - Videos now keep playing with sound when the app is minimized. Leaving AdVoid

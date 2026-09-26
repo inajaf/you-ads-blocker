@@ -81,6 +81,19 @@ class BackgroundAudioScriptTest {
     }
 
     @Test
+    fun `the page resumes when it becomes visible again`() {
+        // The PiP transition can pause the media while the WebView is hidden,
+        // and Chromium throttles hidden-page timers, so the retry budget is
+        // re-armed on every real visibility transition, not just at arming time.
+        assertTrue(script.contains("// Back on screen"))
+        assertTrue(script.contains("window._advoidEnsurePlaying = ensurePlaying"))
+        assertTrue(script.contains("function armKeepAlive()"))
+        assertTrue(script.contains("KEEP_ALIVE_ATTEMPTS = 20"))
+        // pagehide/freeze keep their swallow-only handling.
+        assertTrue(script.contains("function swallowWhileHidden(event)"))
+    }
+
+    @Test
     fun `page pauses are suppressed only for the main player and only without a recent tap`() {
         // Measured in PiP: YouTube's player calls pauseVideo() about four times
         // a second while the activity is paused, which is what stopped the audio
