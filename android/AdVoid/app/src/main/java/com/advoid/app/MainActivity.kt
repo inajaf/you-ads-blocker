@@ -2003,6 +2003,8 @@ class MainActivity : Activity() {
                             '[AdVoid] shadow audio disabled: ' + shadowBuildTimes.length +
                                 ' rebuilds within ' + (SHADOW_CHURN_WINDOW_MS / 1000) + 's'
                         );
+                        // Drop any live shadow, restoring the video's mute state.
+                        teardownShadow();
                         return;
                     }
                     if (shadowElement && shadowElement.parentNode) {
@@ -2020,6 +2022,7 @@ class MainActivity : Activity() {
                         var code = shadowElement && shadowElement.error ? shadowElement.error.code : '?';
                         console.warn('[AdVoid] shadow element error: ' + code);
                         shadowDisabled = true;
+                        teardownShadow();
                     });
                     // Starvation is expected once the pre-buffered audio runs out
                     // (nothing new arrives while the screen is off); say so rather
@@ -2051,6 +2054,7 @@ class MainActivity : Activity() {
                         } catch (error) {
                             console.warn('[AdVoid] shadow addSourceBuffer failed: ' + error);
                             shadowDisabled = true;
+                            teardownShadow();
                         }
                     });
                     shadowElement.src = shadowNativeCreateObjectURL.call(URL, shadowMediaSource);
@@ -2146,7 +2150,12 @@ class MainActivity : Activity() {
                     var video = mainPlayerVideo();
                     if (on) {
                         if (video) {
-                            shadowVideoMutedBeforeLock = video.muted;
+                            // Remember the *user's* mute state once. A rebuild while
+                            // the shadow is already audible must not capture our own
+                            // mute, or the later restore would leave a silent player.
+                            if (shadowVideoMutedBeforeLock === null) {
+                                shadowVideoMutedBeforeLock = video.muted;
+                            }
                             video.muted = true;
                             // Keep one continuous timeline: the platform freezes
                             // the video, and the audio carries on from the same
@@ -2241,6 +2250,14 @@ class MainActivity : Activity() {
                 function teardownShadow() {
                     if (shadowElement && shadowElement.parentNode) {
                         shadowElement.parentNode.removeChild(shadowElement);
+                    }
+                    // The shadow silences the video while it is audible; if it goes
+                    // away (toggle off, session ended, churn/error disable) the mute
+                    // must go with it, or the user is left with a silent player.
+                    if (shadowVideoMutedBeforeLock !== null) {
+                        var video = mainPlayerVideo();
+                        if (video) video.muted = shadowVideoMutedBeforeLock;
+                        shadowVideoMutedBeforeLock = null;
                     }
                     shadowElement = null;
                     shadowMediaSource = null;

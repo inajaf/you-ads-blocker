@@ -1,5 +1,28 @@
 # Project status
 
+## 2026-09-26 — Silent-player leak fixed in the shadow teardown (round 7)
+
+- **Bug found by review:** the shadow mutes the video while it is audible, but
+  `teardownShadow()` removed the element without restoring that mute. Any path
+  that dropped the shadow while it was audible — the "Background audio" toggle
+  being switched off, a session ending (e.g. pausing from the lock screen), the
+  churn guard, an element error — left the video muted, i.e. a **silent player**
+  even in the foreground.
+- **Second, subtler bug the new test caught:** a rebuild while the shadow was
+  already audible re-captured the video's *already-muted* state as "the user's
+  mute", so the eventual restore put the mute back instead of removing it. The
+  original state is now captured once.
+- Fixed by restoring the video's mute in `teardownShadow()` and by making the
+  churn/error disable paths tear the shadow down; verified on the device:
+  foreground `videoMuted:false` → locked `videoMuted:true` with the shadow audible
+  → pause from the lock screen ends the session (service stopped, shadow gone) →
+  after returning `videoMuted:false`, no crash.
+- Validation: `npm test` 286/286 (two new tests: mute restored on teardown, mute
+  restored when churn disables the renderer), Android `testDebugUnitTest` 45/45,
+  build, UI check 12/12, `npx oxlint` 0 errors.
+- Still open: the user's phone verification, and whether the ~1 minute buffered
+  window is enough or the native pipeline is wanted.
+
 ## 2026-09-26 — Background audio now works WITHOUT PiP (round 6)
 
 - **Done: the app keeps playing audio when it is merely backgrounded, even if no
