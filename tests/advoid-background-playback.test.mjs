@@ -1058,6 +1058,42 @@ describe('AdVoid locked-screen audio shadow (BACKGROUND_AUDIO_SCRIPT)', () => {
     assert.equal(env.shadowPlaying(), true)
   })
 
+  it('restores the video mute when the shadow goes away', () => {
+    // The shadow mutes the video while audible. If it is torn down (toggle off,
+    // session ended, churn/error disable) the mute has to go with it, or the user
+    // is left with a silent player even in the foreground.
+    const { env, video } = shadowEnv()
+    const { sourceBuffer } = env.attachLiveAudioSource(video)
+    sourceBuffer.appendBuffer({ slice: () => 'init' })
+    video.muted = false
+    env.setPresentable(false)
+    assert.equal(video.muted, true, 'video silenced while the shadow is audible')
+
+    env.setArmed(false)
+
+    assert.equal(env.shadowElement(), null)
+    assert.equal(video.muted, false, 'mute restored with the shadow gone')
+  })
+
+  it('restores the video mute when churn disables the shadow', () => {
+    const { env, video } = shadowEnv()
+    video.muted = false
+    env.freezeNowAt(2_000_000)
+    const first = env.attachLiveAudioSource(video)
+    first.sourceBuffer.appendBuffer({ slice: () => 'init' })
+    env.setPresentable(false)
+    assert.equal(video.muted, true)
+
+    for (let i = 0; i < 11; i += 1) {
+      const next = env.attachLiveAudioSource(video)
+      next.sourceBuffer.appendBuffer({ slice: () => `init-${i}` })
+    }
+
+    assert.equal(env.shadowState().disabled, true)
+    assert.equal(env.shadowElement(), null)
+    assert.equal(video.muted, false)
+  })
+
   it('tears the shadow down when background audio is switched off', () => {
     const { env, video } = shadowEnv()
     const { sourceBuffer } = env.attachLiveAudioSource(video)
