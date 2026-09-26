@@ -607,6 +607,18 @@ class MainActivity : Activity() {
                 evaluateMediaAction("play")
                 applyBackgroundPlaybackState(state)
                 updatePictureInPictureParams()
+                // While the app cannot present video the WebView is suspended, and
+                // once the buffered audio is gone nothing can resume from the page —
+                // so an explicit play returns to the app, where playback continues,
+                // instead of the button appearing dead (measured on a Xiaomi phone).
+                if (!appPresentable) {
+                    Log.i(TAG, "play requested while not presentable; bringing the app forward")
+                    startActivity(
+                        Intent(this, MainActivity::class.java).addFlags(
+                            Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP,
+                        ),
+                    )
+                }
             }
             MediaAction.PAUSE -> {
                 val state = backgroundPlayback.onUserPlaybackRequest(false)
@@ -748,6 +760,10 @@ class MainActivity : Activity() {
             "app presentable=$presentable (activityStarted=$activityStarted " +
                 "screenInteractive=$screenInteractive)",
         )
+        // The notification's Play action depends on this: while the app cannot
+        // present video, Play opens the app instead of dispatching an action the
+        // suspended WebView could never honour.
+        PlaybackService.setAppPresentable(presentable)
         if (!::webView.isInitialized) return
         if (!presentable) {
             cancelPipNudges()
@@ -1968,6 +1984,10 @@ class MainActivity : Activity() {
                 var shadowLastMime = 'none';
                 /** mime -> the stream's init segment, reused by rebuilds. */
                 var shadowInitByMime = {};
+                /** Set after repeated failures for one source; a fresh source clears it. */
+                var shadowSourceBlocked = false;
+                /** Seconds of audio kept behind the shadow's play head when evicting. */
+                var SHADOW_KEEP_BEHIND_S = 30;
                 var shadowUrlOf = new WeakMap();
                 var shadowVideoMutedBeforeLock = null;
 
@@ -2098,6 +2118,13 @@ class MainActivity : Activity() {
                     // next lock.
                     source.addEventListener('sourceopen', function() {
                         if (source !== shadowMediaSource || element !== shadowElement) return;
+                        // WebView 153 fires sourceopen again for the same MediaSource
+                        // (seen on a Xiaomi/HyperOS phone after a reload): a second
+                        // addSourceBuffer then hits Chromium's per-MediaSource limit
+                        // with QuotaExceededError, which killed the element and the
+                        // whole renderer. Only ever add one buffer per source.
+                        if (source.__advoidSourceBufferAdded) return;
+                        source.__advoidSourceBufferAdded = true;
                         try {
                             // The captured original: the shadow must not mirror
                             // itself through the patched prototype.
@@ -2160,8 +2187,17 @@ class MainActivity : Activity() {
                                 video.src === shadowUrlOf.get(owner));
                             if (live && window._advoidBgAudioArmed && !shadowDisabled) {
                                 if (shadowMirroring !== this) {
+                                    // A fresh source is a fresh start: clear the
+                                    // failure backoff so a bad source cannot wedge the
+                                    // renderer for the rest of the page.
                                     shadowMirroring = this;
+                                    shadowSourceBlocked = false;
+                                    shadowErrorTimes = [];
                                     buildShadow(mime);
+                                } else if (shadowSourceBlocked) {
+                                    // Same source that just failed repeatedly: collect
+                                    // nothing, wait for the player to move on.
+                                    return shadowNativeAppendBuffer.apply(this, arguments);
                                 }
                                 if (shadowPending && shadowPending.length < 400) {
                                     try {
@@ -2192,8 +2228,25 @@ class MainActivity : Activity() {
                         buffer.remove = function(start, end) {
                             if (shadowMirroring === this && shadowPending &&
                                 shadowPending.length < 400) {
-                                shadowPending.push({ type: 'remove', start: start, end: end });
-                                shadowFlush(shadowPending, shadowSourceBuffer);
+                                // YouTube evicts ahead of *its* play head; the shadow
+                                // can be behind it. Mirroring the eviction verbatim
+                                // deleted audio the shadow had not played yet —
+                                // measured on a Xiaomi phone (WebView 153) as a shadow
+                                // at 72.4 s whose only buffered range started at 90 s:
+                                // metadata only, readyState 1, silence while locked.
+                                // Keep a margin behind the shadow's play head.
+                                var playHeadAt = shadowElement &&
+                                    Number.isFinite(shadowElement.currentTime)
+                                    ? shadowElement.currentTime
+                                    : 0;
+                                var safeEnd = Math.min(
+                                    end,
+                                    Math.max(0, playHeadAt - SHADOW_KEEP_BEHIND_S)
+                                );
+                                if (safeEnd > start) {
+                                    shadowPending.push({ type: 'remove', start: start, end: safeEnd });
+                                    shadowFlush(shadowPending, shadowSourceBuffer);
+                                }
                             }
                             return shadowNativeRemove.apply(this, arguments);
                         };
@@ -2349,10 +2402,16 @@ class MainActivity : Activity() {
                         return now - at < SHADOW_CHURN_WINDOW_MS;
                     });
                     if (shadowErrorTimes.length > SHADOW_MAX_ERRORS_PER_WINDOW) {
-                        shadowDisabled = true;
+                        // Repeated failures for *this* source: stop trying until the
+                        // player starts a fresh one. Never switch the whole feature
+                        // off for the rest of the page — measured on a Xiaomi phone,
+                        // that left the user with no background audio at all and a
+                        // play button that did nothing.
+                        shadowSourceBlocked = true;
                         console.warn(
-                            '[AdVoid] shadow audio disabled: ' + shadowErrorTimes.length +
-                                ' failures within ' + (SHADOW_CHURN_WINDOW_MS / 1000) + 's'
+                            '[AdVoid] shadow audio backing off (' + shadowErrorTimes.length +
+                                ' failures within ' + (SHADOW_CHURN_WINDOW_MS / 1000) +
+                                's); a fresh source resets it'
                         );
                     }
                     // Do NOT replay the collected segments: after a seek they belong

@@ -222,6 +222,21 @@ describe('Android background audio wiring', () => {
     assert.match(mainActivity, /nudgePlayback\("app presentable"\)/)
   })
 
+  it('opens the app from the media card when background audio cannot continue', () => {
+    // Measured on a Xiaomi/HyperOS phone: with the app off-screen the WebView is
+    // suspended, and Android blocks a background activity launch from a media key —
+    // so the card's Play must be an activity PendingIntent, not a media action the
+    // suspended page could never honour.
+    assert.match(playbackService, /var appPresentable = true/)
+    assert.match(playbackService, /if \(!playing && !appPresentable\) \{/)
+    assert.match(
+      playbackService,
+      /PendingIntent\.getActivity\(\s*this,\s*REQUEST_PLAY_PAUSE,\s*openAppActivityIntent\(\)/,
+    )
+    assert.match(playbackService, /fun setAppPresentable\(presentable: Boolean\)/)
+    assert.match(mainActivity, /PlaybackService\.setAppPresentable\(presentable\)/)
+  })
+
   it('never stops and restarts the foreground service in quick succession', () => {
     // Measured: a transport pause followed by YouTube flapping pause/play made
     // the app call stopService and startForegroundService within milliseconds,
@@ -1215,19 +1230,28 @@ describe('AdVoid locked-screen audio shadow (BACKGROUND_AUDIO_SCRIPT)', () => {
     assert.equal(env.shadowState().disabled, false)
   })
 
-  it('gives up after repeated failures while the shadow is needed', () => {
-    // Failures in the foreground are post-seek churn: they must not switch the
-    // feature off. Repeated failures while the audio depends on the shadow do.
+  it('backs off after repeated failures for one source, then recovers on a fresh one', () => {
+    // Measured on a Xiaomi phone (WebView 153): repeated failures used to switch
+    // the whole renderer off for the rest of the page, so background audio never
+    // worked again in that session and the play button did nothing. The backoff is
+    // per source now, and a fresh source resets it.
     const { env, video } = shadowEnv()
     env.freezeNowAt(4_000_000)
     env.setPresentable(false)
-    for (let i = 0; i < 6; i += 1) {
-      const source = env.attachLiveAudioSource(video)
-      source.sourceBuffer.appendBuffer({ slice: () => `init-${i}` })
+    const first = env.attachLiveAudioSource(video)
+    for (let i = 0; i < 7; i += 1) {
+      first.sourceBuffer.appendBuffer({ slice: () => `init-${i}` })
       if (env.shadowElement()) env.fireShadowEvent('error')
     }
 
-    assert.equal(env.shadowState().disabled, true)
+    assert.equal(env.shadowState().disabled, false, 'the feature is not switched off')
+    assert.equal(env.shadowElement(), null, 'but it stopped trying for this source')
+
+    const second = env.attachLiveAudioSource(video)
+    second.sourceBuffer.appendBuffer({ slice: () => 'fresh-init' })
+
+    assert.ok(env.shadowElement(), 'a fresh source clears the backoff and rebuilds')
+    assert.equal(env.shadowState().disabled, false)
   })
 
   it('tears the shadow down when background audio is switched off', () => {

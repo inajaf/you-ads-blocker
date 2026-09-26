@@ -49,6 +49,14 @@ class PlaybackService : Service() {
     private var positionMs = 0L
     private var durationMs = 0L
 
+    /**
+     * Whether the app can put video on screen. While it cannot, the notification's
+     * Play action opens the app instead of dispatching a media action the suspended
+     * WebView could never honour.
+     */
+    @Volatile
+    var appPresentable = true
+
     override fun onCreate() {
         super.onCreate()
         instance = this
@@ -124,7 +132,19 @@ class PlaybackService : Service() {
                     MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS
             )
             setCallback(object : MediaSession.Callback() {
-                override fun onPlay() = dispatch(MediaAction.PLAY)
+                override fun onPlay() {
+                    if (actionListener == null) {
+                        // Nothing is left to drive the WebView, and dispatch() would
+                        // just stop the service (leaving the button looking dead).
+                        // Open the app so the user's play request does something.
+                        Log.i(TAG, "play with no attached listener; opening the app")
+                        startActivity(
+                            openAppActivityIntent().addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        )
+                        return
+                    }
+                    dispatch(MediaAction.PLAY)
+                }
                 override fun onPause() = dispatch(MediaAction.PAUSE)
                 override fun onStop() = dispatch(MediaAction.STOP)
                 override fun onSeekTo(positionMs: Long) {
@@ -185,6 +205,12 @@ class PlaybackService : Service() {
         manager?.notify(NOTIFICATION_ID, buildNotification())
     }
 
+    /** Re-posts the notification after a state change that alters its actions. */
+    private fun refreshNotification() {
+        val manager = getSystemService(NotificationManager::class.java) ?: return
+        manager.notify(NOTIFICATION_ID, buildNotification())
+    }
+
     private fun startForegroundCompat() {
         val notification = buildNotification()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -210,10 +236,14 @@ class PlaybackService : Service() {
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
 
+    /** The activity intent used for the notification tap and the play fallback. */
+    private fun openAppActivityIntent(): Intent =
+        Intent(this, MainActivity::class.java).setAction(ACTION_OPEN_APP)
+
     private fun openAppIntent(): PendingIntent = PendingIntent.getActivity(
         this,
         0,
-        Intent(this, MainActivity::class.java).setAction(ACTION_OPEN_APP),
+        openAppActivityIntent(),
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
     )
 
@@ -232,14 +262,36 @@ class PlaybackService : Service() {
             .setVisibility(Notification.VISIBILITY_PUBLIC)
         // API 33+ renders media controls from the MediaSession, but older
         // platforms (minSdk 26) only show what the notification itself carries.
-        transportAction(
-            if (playing) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
-            if (playing) "Pause" else "Play",
-            if (playing) ACTION_PAUSE else ACTION_PLAY,
-            REQUEST_PLAY_PAUSE,
-        ).let { action ->
-            builder.addAction(action)
+        if (!playing && !appPresentable) {
+            // Background playback cannot continue here: the app is off-screen, so the
+            // WebView is suspended and (once the buffered audio is gone) nothing can
+            // resume it — and Android blocks a background activity launch from a media
+            // *key* (measured on a Xiaomi/HyperOS phone). A notification action may
+            // launch the activity, so Play opens the app, where playback resumes from
+            // where the audio stopped.
+            builder.addAction(
+                Notification.Action.Builder(
+                    Icon.createWithResource(this, android.R.drawable.ic_media_play),
+                    "Play",
+                    PendingIntent.getActivity(
+                        this,
+                        REQUEST_PLAY_PAUSE,
+                        openAppActivityIntent(),
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                    ),
+                ).build()
+            )
             style.setShowActionsInCompactView(0)
+        } else {
+            transportAction(
+                if (playing) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
+                if (playing) "Pause" else "Play",
+                if (playing) ACTION_PAUSE else ACTION_PLAY,
+                REQUEST_PLAY_PAUSE,
+            ).let { action ->
+                builder.addAction(action)
+                style.setShowActionsInCompactView(0)
+            }
         }
         return builder.build()
     }
@@ -332,6 +384,18 @@ class PlaybackService : Service() {
             artist: String?,
         ) {
             instance?.applyPlayback(playing, positionMs, durationMs, title, artist)
+        }
+
+        /**
+         * Tracks whether the app can put video on screen. While it cannot, the
+         * notification's Play action opens the app instead of dispatching a media
+         * action that the suspended WebView could never honour.
+         */
+        fun setAppPresentable(presentable: Boolean) {
+            val running = instance ?: return
+            if (running.appPresentable == presentable) return
+            running.appPresentable = presentable
+            running.refreshNotification()
         }
     }
 }

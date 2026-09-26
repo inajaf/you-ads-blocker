@@ -1,5 +1,34 @@
 # Architectural decisions
 
+## 2026-09-26 — Audio shadow: what a real device (WebView 153, HyperOS) added
+
+The shadow renderer was verified on an emulator, but the user's phone (Xiaomi
+2306EPN60G, Android 16, HyperOS V816, WebView 153) exposed four things the
+emulator could not:
+
+- **One SourceBuffer per source.** On WebView 153 `sourceopen` fires again for the
+  same MediaSource; the second `addSourceBuffer` threw `QuotaExceededError: This
+  MediaSource has reached the limit of SourceBuffer objects it can handle` and the
+  element died. A source now gets exactly one buffer (`__advoidSourceBufferAdded`).
+- **Never mirror an eviction ahead of the shadow.** YouTube's `remove()` calls are
+  issued for its own play head; mirroring them verbatim deleted audio the shadow had
+  not played (measured: shadow at 72.4 s, buffered range starting at 90 s,
+  `readyState 1` → silence while locked). Evictions are clamped to at least 30 s
+  behind the shadow's play head, which keeps memory bounded without starving it.
+- **Back off per source, never disable the feature.** Repeated failures used to set
+  a page-lifetime `disabled` flag, so background audio never worked again in that
+  session. Failures now block the failing source only; a fresh source clears it.
+- **The media card's Play must open the app when nothing can play.** A hardware
+  media key cannot launch an activity from the background (measured `focus=false`),
+  but a notification action can. While the app cannot present video, Play is an
+  activity `PendingIntent`, so the tap opens the app and playback resumes from where
+  the audio stopped instead of the button appearing dead.
+
+Device automation notes (HyperOS): injected `KEYCODE_POWER` is ignored — use
+`KEYCODE_SLEEP` (223) — and the lockscreen PIN must be entered after a swipe or the
+app returns behind the keyguard, where it cannot play.
+
+Result: `scripts/android-acceptance.mjs` passes **14/14** on the phone.
 ## 2026-09-26 — Audio shadow: survive MediaSource churn (init cache + per-shadow queues)
 
 Reason: the shadow worked on a first lock but not on a later one. A five-minute
