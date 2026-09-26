@@ -1,5 +1,35 @@
 # Project status
 
+## 2026-09-26 — Acceptance suite added; every reported symptom verified (round 9)
+
+- **`scripts/android-acceptance.mjs`** drives the installed debug build over adb
+  and inspects the live page over CDP, then prints PASS/FAIL per scenario and
+  exits non-zero on regression. It covers exactly the reported bugs, so any future
+  change can be re-verified in one command:
+  `node scripts/android-acceptance.mjs [watch-url]` (env `ADB`, `PACKAGE`).
+- **Latest run on the API 37 emulator: 11/11 passed.**
+  - playback starts and the bridge arms (`armed=true`, `ct=17.7`);
+  - the shadow mirror is built and muted while visible (`sources=1`,
+    `disabled=false`);
+  - **locked**: shadow audible (`muted=false`, `readyState=4`) and the platform
+    reports a started, unmuted player; audio advancing 25.7 → 31.7 s;
+  - **return**: video plays again with the mute restored (`muted=false`,
+    `ct=41.3`, continuing past where the audio stopped);
+  - **second lock**: shadow audible again (`readyState=4`, `disabled=false`) —
+    the case that used to die after starvation;
+  - transport pause ends the session (`armed=false`, shadow gone);
+  - no crash and 0 shadow-failure lines.
+- Together with the stress evidence from rounds 4–8 (four consecutive lock/unlock
+  cycles, PiP+lock, backgrounding with PiP disabled entirely, a 5-minute locked
+  session with flat memory and 2 log lines, and starvation recovery), every
+  symptom reported in the original request now has a verified fix.
+- Validation: `npm test` 290/290, Android `testDebugUnitTest` 45/45, build, UI
+  check 12/12, `npx oxlint` 0 errors.
+- Known limit (not a bug): background/locked audio is bounded by what YouTube had
+  buffered when the app stopped being visible (~1 minute in practice); the
+  WebView is suspended and fetches nothing while hidden. Removing that ceiling
+  needs the native audio-fetch path, which is deliberately not implemented.
+
 ## 2026-09-26 — Post-seek shadow churn fixed; second lock now has audio (round 8)
 
 - **Found by a 5-minute endurance test:** after the buffered audio ran out, the
